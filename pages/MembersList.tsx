@@ -84,8 +84,8 @@ const MembersList: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <StatCard title="Especialistas BCT" value={members.filter(m => m.specialty === 'BCT').length.toString()} image="/bct-icon-transp.png" color="indigo" />
-                <StatCard title="Especialistas AIS" value={members.filter(m => m.specialty === 'AIS').length.toString()} image="/ais-icon-transp.png" color="purple" />
+                <StatCard title="Especialistas BCT" value={members.filter(m => m.specialty === 'BCT').length.toString()} image="https://raw.githubusercontent.com/rk-fox/painelgerencial/refs/heads/main/bct-icon-transp.png" color="indigo" />
+                <StatCard title="Especialistas AIS" value={members.filter(m => m.specialty === 'AIS').length.toString()} image="https://raw.githubusercontent.com/rk-fox/painelgerencial/refs/heads/main/ais-icon-transp.png" color="purple" />
                 <StatCard title="Indisponíveis" value={members.filter(m => m.status === 'Indisponível').length.toString()} icon="close" color="red" />
             </div>
 
