@@ -41,7 +41,7 @@ const Layout: React.FC = () => {
       >
         <div className={`p-6 flex items-center gap-3 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
           <img
-            src="/cgna-logo.png"
+            src="https://github.com/rk-fox/painelgerencial/blob/main/cgna-logo.png"
             alt="CGNA"
             className="size-8 min-w-[32px] shadow-lg object-contain"
           />
