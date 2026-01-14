@@ -274,7 +274,7 @@ const MemberRow = ({ initials, initialsColor, avatar, name, email, rank, special
             <td className="px-6 py-4">
                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${badges[specialtyColor]}`}>
                     <img
-                        src={specialty === 'BCT' ? '/bct-icon-transp.png' : '/ais-icon-transp.png'}
+                        src={specialty === 'BCT' ? 'https://raw.githubusercontent.com/rk-fox/painelgerencial/refs/heads/main/bct-icon-transp.png' : 'https://raw.githubusercontent.com/rk-fox/painelgerencial/refs/heads/main/ais-icon-transp.png'}
                         alt={specialty}
                         className="size-4 object-contain"
                     />
