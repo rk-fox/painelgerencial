@@ -170,7 +170,7 @@ const Login: React.FC = () => {
         <header className="flex items-center justify-between px-10 py-6">
           <div className="flex items-center gap-3 text-[#0f172a]">
             <img
-              src="/cgna-logo.png"
+              src="https://raw.githubusercontent.com/rk-fox/painelgerencial/refs/heads/main/cgna-logo.png"
               alt="CGNA"
               className="size-8 shadow-lg object-contain"
             />
