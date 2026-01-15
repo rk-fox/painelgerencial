@@ -1,11 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
+
+interface Member {
+    id: string;
+    name: string;
+}
 
 const TaskForm: React.FC = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [members, setMembers] = useState<Member[]>([]);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -14,7 +20,26 @@ const TaskForm: React.FC = () => {
         periodicity: 'diaria',
         start_date: '',
         end_date: '',
+        assigned_to: '',
     });
+
+    useEffect(() => {
+        const fetchMembers = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('members')
+                    .select('id, name')
+                    .order('name');
+
+                if (error) throw error;
+                setMembers(data || []);
+            } catch (err) {
+                console.error('Error fetching members:', err);
+            }
+        };
+
+        fetchMembers();
+    }, []);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -52,7 +77,8 @@ const TaskForm: React.FC = () => {
                     specialties: formData.specialties,
                     periodicity: formData.periodicity,
                     start_date: formData.start_date,
-                    end_date: formData.periodicity === 'pontual' ? formData.end_date : null
+                    end_date: formData.periodicity === 'pontual' ? formData.end_date : null,
+                    assigned_to: formData.assigned_to || null
                 }]);
 
             if (insertError) throw insertError;
@@ -137,7 +163,7 @@ const TaskForm: React.FC = () => {
                     </div>
 
                     <div className="p-6 bg-slate-50/50 dark:bg-slate-800/20">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="flex flex-col gap-2">
                                 <label className="text-[#0d141b] dark:text-white text-sm font-semibold">Periodicidade</label>
                                 <select
@@ -167,6 +193,25 @@ const TaskForm: React.FC = () => {
                                     <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#4c739a] pointer-events-none text-xl">calendar_today</span>
                                 </div>
                             </div>
+
+
+                            <div className="flex flex-col gap-2">
+                                <label className="text-[#0d141b] dark:text-white text-sm font-semibold">Membro Designado (Opcional)</label>
+                                <select
+                                    name="assigned_to"
+                                    value={formData.assigned_to}
+                                    onChange={handleInputChange}
+                                    className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
+                                >
+                                    <option value="">Em branco (Banco de Tarefas)</option>
+                                    {members.map(member => (
+                                        <option key={member.id} value={member.id}>
+                                            {member.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
                             {formData.periodicity === 'pontual' && (
                                 <div className="flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
                                     <label className="text-[#0d141b] dark:text-white text-sm font-semibold">Prazo de Conclusão</label>
