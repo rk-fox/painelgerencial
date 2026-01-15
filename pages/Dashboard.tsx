@@ -53,6 +53,66 @@ const Dashboard: React.FC = () => {
       alert('Erro ao puxar tarefa: ' + err.message);
     }
   };
+  const unassignTask = async (taskId: string) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ assigned_to: null, status: 'pendente' })
+        .eq('id', taskId);
+
+      if (error) throw error;
+
+      setTasks(prev => prev.map(t =>
+        t.id === taskId ? { ...t, assigned_to: null, status: 'pendente' } : t
+      ));
+    } catch (err: any) {
+      console.error('Error unassigning task:', err.message);
+      alert('Erro ao devolver tarefa: ' + err.message);
+    }
+  };
+
+  const handleStartTask = async (taskId: string) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status: 'iniciada', started_at: new Date().toISOString() })
+        .eq('id', taskId);
+
+      if (error) throw error;
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'iniciada' } : t));
+    } catch (err: any) {
+      console.error('Error starting task:', err.message);
+    }
+  };
+
+  const handleSuspendTask = async (taskId: string) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status: 'pausada' })
+        .eq('id', taskId);
+
+      if (error) throw error;
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'pausada' } : t));
+    } catch (err: any) {
+      console.error('Error suspending task:', err.message);
+    }
+  };
+
+  const handleCompleteTask = async (taskId: string) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status: 'concluida', completed_at: new Date().toISOString() })
+        .eq('id', taskId);
+
+      if (error) throw error;
+      // Remove from list or update status (if we kept concluded tasks, we'd update. Here we might want to remove visually or just let the filter handle it on refetch, but updating local state is smoother)
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+    } catch (err: any) {
+      console.error('Error completing task:', err.message);
+    }
+  };
 
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
     e.dataTransfer.setData('taskId', taskId);
@@ -61,8 +121,19 @@ const Dashboard: React.FC = () => {
   const handleDropToMyActivities = async (e: React.DragEvent) => {
     e.preventDefault();
     const taskId = e.dataTransfer.getData('taskId');
-    if (taskId) {
+    // Prevent dropping if it's already in my tasks
+    const task = tasks.find(t => t.id === taskId);
+    if (taskId && task && task.assigned_to !== currentUser?.id) {
       await pullTask(taskId);
+    }
+  };
+
+  const handleDropToBank = async (e: React.DragEvent) => {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData('taskId');
+    const task = tasks.find(t => t.id === taskId);
+    if (taskId && task && task.assigned_to === currentUser?.id) {
+      await unassignTask(taskId);
     }
   };
 
@@ -70,8 +141,16 @@ const Dashboard: React.FC = () => {
     e.preventDefault();
   };
 
-  const bankTasks = tasks.filter(t => !t.assigned_to);
-  const myTasks = tasks.filter(t => t.assigned_to === currentUser?.id);
+  const bankTasks = tasks.filter(t => !t.assigned_to && t.status !== 'concluida');
+  const myTasks = tasks
+    .filter(t => t.assigned_to === currentUser?.id && t.status !== 'concluida')
+    .sort((a, b) => {
+      // Prioritize 'iniciada' tasks
+      if (a.status === 'iniciada' && b.status !== 'iniciada') return -1;
+      if (a.status !== 'iniciada' && b.status === 'iniciada') return 1;
+      // Stable sort for others
+      return 0;
+    });
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -120,7 +199,11 @@ const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
 
         {/* Task Bank */}
-        <section className="flex flex-col gap-6">
+        <section
+          className="flex flex-col gap-6"
+          onDrop={handleDropToBank}
+          onDragOver={handleDragOver}
+        >
           <div className="flex items-center justify-between px-2">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-slate-200 dark:bg-slate-800 rounded-lg">
@@ -131,7 +214,7 @@ const Dashboard: React.FC = () => {
             <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-slate-200 dark:bg-slate-800 text-[#4c739a] uppercase">{bankTasks.length} DISPONÍVEIS</span>
           </div>
 
-          <div className="grid gap-4 min-h-[100px]">
+          <div className="grid gap-4 min-h-[100px] transition-colors rounded-2xl p-2 border-2 border-dashed border-transparent hover:border-slate-300 dark:hover:border-slate-700">
             {bankTasks.map(task => (
               <TaskCard
                 key={task.id}
@@ -167,7 +250,14 @@ const Dashboard: React.FC = () => {
 
           <div className="grid gap-4 min-h-[200px] p-2 bg-slate-50/50 dark:bg-slate-800/10 rounded-2xl border-2 border-dashed border-transparent hover:border-primary/20 transition-colors">
             {myTasks.map(task => (
-              <MyTaskCard key={task.id} task={task} />
+              <MyTaskCard
+                key={task.id}
+                task={task}
+                onDragStart={(e: React.DragEvent) => handleDragStart(e, task.id)}
+                onStart={() => handleStartTask(task.id)}
+                onSuspend={() => handleSuspendTask(task.id)}
+                onComplete={() => handleCompleteTask(task.id)}
+              />
             ))}
             {myTasks.length === 0 && (
               <div className="text-center py-12 border border-dashed border-[#cfdbe7] dark:border-slate-800 rounded-2xl opacity-50 flex flex-col items-center gap-2">
@@ -254,7 +344,7 @@ const TaskCard = ({ task, onPull, onDragStart }: any) => {
       <div className="flex items-center justify-between border-t border-[#e7edf3] dark:border-slate-800 pt-5 mt-auto">
         <div className="flex items-center gap-2 text-[10px] font-bold text-[#4c739a]">
           <span className="material-symbols-outlined text-lg">calendar_today</span>
-          <span>Início: {new Date(task.start_date).toLocaleDateString()}</span>
+          <span>Início: {task.start_date ? new Date(task.start_date).toLocaleDateString() : 'N/A'}</span>
         </div>
         <button
           onClick={onPull}
@@ -267,46 +357,94 @@ const TaskCard = ({ task, onPull, onDragStart }: any) => {
   );
 };
 
-const MyTaskCard = ({ task }: any) => {
+const MyTaskCard = ({ task, onDragStart, onStart, onSuspend, onComplete }: any) => {
+  const isActive = task.status === 'iniciada';
+
   const periodicityColors: any = {
     diaria: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
     semanal: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
     mensal: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+    temporada: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
     pontual: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
   };
 
+  const periodicityLabels: any = {
+    diaria: 'Diária',
+    semanal: 'Semanal',
+    mensal: 'Mensal',
+    temporada: 'Temporada',
+    pontual: 'Pontual',
+  };
+
+  if (isActive) {
+    // Active State
+    return (
+      <div
+        draggable
+        onDragStart={onDragStart}
+        className="bg-white dark:bg-slate-900 border-2 border-primary rounded-2xl p-6 shadow-xl relative overflow-hidden cursor-grab active:cursor-grabbing"
+      >
+        <div className="absolute top-0 right-0 p-1.5">
+          <div className="bg-primary text-white px-3 py-1 rounded-bl-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
+            Ativo Agora
+            <span className="text-[9px] font-normal opacity-90 ml-1">
+              🕒 Início: {task.started_at ? new Date(task.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Agora'}
+            </span>
+          </div>
+        </div>
+        <div className="flex justify-between items-start mb-4">
+          <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-widest ${periodicityColors[task.periodicity]}`}>
+            {periodicityLabels[task.periodicity]}
+          </span>
+        </div>
+        <h4 className="text-[#0d141b] dark:text-white font-bold text-lg mb-2">{task.name}</h4>
+        <p className="text-[#4c739a] dark:text-slate-400 text-sm mb-4 leading-relaxed">{task.description}</p>
+
+        <div className="flex items-center justify-between border-t border-[#e7edf3] dark:border-slate-800 pt-5">
+          <button
+            onClick={onSuspend}
+            className="text-[#4c739a] hover:text-red-500 text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 group"
+          >
+            <span className="material-symbols-outlined text-lg group-hover:rotate-90 transition-transform">cancel</span> Suspender
+          </button>
+          <button
+            onClick={onComplete}
+            className="bg-[#0d141b] dark:bg-slate-700 hover:bg-black dark:hover:bg-slate-600 text-white text-xs font-bold px-8 py-2.5 rounded-xl transition-all active:scale-95 shadow-md"
+          >
+            Concluir
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Inactive / Paused / Queue State
   return (
-    <div className="bg-white dark:bg-slate-900 border-2 border-primary rounded-2xl p-6 shadow-xl relative overflow-hidden">
-      <div className="absolute top-0 right-0 p-1.5">
-        <div className="bg-primary text-white px-3 py-1 rounded-bl-xl text-[9px] font-black uppercase tracking-widest">Ativo Agora</div>
-      </div>
+    <div
+      draggable
+      onDragStart={onDragStart}
+      className="bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing opacity-90 hover:opacity-100"
+    >
       <div className="flex justify-between items-start mb-4">
-        <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-widest ${periodicityColors[task.periodicity]}`}>
-          {task.periodicity}
+        <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-widest opacity-80 ${periodicityColors[task.periodicity]}`}>
+          {periodicityLabels[task.periodicity]}
         </span>
-        <span className="text-[10px] font-bold text-[#4c739a] flex items-center gap-1">
-          <span className="material-symbols-outlined text-xs">schedule</span> Início: {new Date(task.start_date).toLocaleDateString()}
-        </span>
-      </div>
-      <h4 className="text-[#0d141b] dark:text-white font-bold text-lg mb-2">{task.name}</h4>
-      <p className="text-[#4c739a] dark:text-slate-400 text-sm mb-4 leading-relaxed">{task.description}</p>
-
-      <div className="space-y-1.5 mb-6">
-        <div className="flex justify-between text-[10px] font-bold text-primary uppercase">
-          <span>Progresso Execução</span>
-          <span>10%</span>
-        </div>
-        <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full text-center text-[8px]">
-          <div className="bg-primary h-full w-[10%] rounded-full shadow-[0_0_8px_rgba(19,127,236,0.3)]"></div>
-        </div>
+        <span className="text-[10px] font-bold text-[#4c739a] uppercase">Fila de espera</span>
       </div>
 
-      <div className="flex items-center justify-between border-t border-[#e7edf3] dark:border-slate-800 pt-5">
-        <button className="text-[#4c739a] hover:text-red-500 text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 group">
-          <span className="material-symbols-outlined text-lg group-hover:rotate-90 transition-transform">cancel</span> Suspender
-        </button>
-        <button className="bg-[#0d141b] dark:bg-slate-700 hover:bg-black dark:hover:bg-slate-600 text-white text-xs font-bold px-8 py-2.5 rounded-xl transition-all active:scale-95 shadow-md">
-          Concluir
+      <h4 className="text-[#0d141b] dark:text-white font-bold text-lg mb-2 opacity-90">{task.name}</h4>
+      <p className="text-[#4c739a] dark:text-slate-400 text-sm mb-6 line-clamp-2 leading-relaxed">{task.description}</p>
+
+      <div className="flex items-center justify-between border-t border-[#e7edf3] dark:border-slate-800 pt-5 mt-auto">
+        <div className="flex items-center gap-2 text-[12px] font-bold text-[#4c739a] italic">
+          <span className="material-symbols-outlined text-lg">history</span>
+          <span>Aguardando...</span>
+        </div>
+        <button
+          onClick={onStart}
+          className="bg-white border-2 border-primary/20 hover:border-primary text-primary hover:bg-primary/5 text-xs font-bold px-6 py-2 rounded-xl transition-all active:scale-95 shadow-sm"
+        >
+          Iniciar
         </button>
       </div>
     </div>

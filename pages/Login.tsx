@@ -76,15 +76,31 @@ const Login: React.FC = () => {
     return abbr ? `${abbr} ${name}` : name;
   };
 
-  const handleUserClick = (user: User) => {
+  const handleUserClick = async (user: User) => {
     if (user.requires_password || user.password_hash === null) {
       setSelectedUser(user);
       setPassword('');
       setDontUsePassword(false);
     } else {
-      // No password required, save session and go directly to dashboard
-      localStorage.setItem('currentUser', JSON.stringify(user));
-      navigate('/app/dashboard');
+      // No password required
+      try {
+        // Update DB with NEW last_login
+        const newTime = new Date().toISOString();
+        await supabase
+          .from('members')
+          .update({ last_login: newTime })
+          .eq('id', user.id);
+
+        // Save session with OLD last_login (so notifications work for tasks since previous login)
+        // 'user' here comes from state and has the old last_login
+        localStorage.setItem('currentUser', JSON.stringify(user));
+        navigate('/app/dashboard');
+      } catch (error) {
+        console.error("Error updating login:", error);
+        // Navigate anyway to not block user
+        localStorage.setItem('currentUser', JSON.stringify(user));
+        navigate('/app/dashboard');
+      }
     }
   };
 
@@ -92,6 +108,8 @@ const Login: React.FC = () => {
     if (!selectedUser) return;
 
     try {
+      const lastLoginTime = new Date().toISOString();
+
       if (selectedUser.password_hash === null) {
         // First access registration
         if (!dontUsePassword && !password) {
@@ -103,7 +121,8 @@ const Login: React.FC = () => {
           .from('members')
           .update({
             password_hash: dontUsePassword ? 'DISABLED' : password,
-            requires_password: !dontUsePassword
+            requires_password: !dontUsePassword,
+            last_login: lastLoginTime
           })
           .eq('id', selectedUser.id);
 
@@ -113,7 +132,8 @@ const Login: React.FC = () => {
         localStorage.setItem('currentUser', JSON.stringify({
           ...selectedUser,
           requires_password: !dontUsePassword,
-          password_hash: dontUsePassword ? 'DISABLED' : password
+          password_hash: dontUsePassword ? 'DISABLED' : password,
+          last_login: lastLoginTime
         }));
 
         navigate('/app/dashboard');
@@ -121,12 +141,26 @@ const Login: React.FC = () => {
         // Regular login
         if (selectedUser.requires_password) {
           if (password === selectedUser.password_hash) {
+            // Update last_login in DB
+            await supabase
+              .from('members')
+              .update({ last_login: lastLoginTime })
+              .eq('id', selectedUser.id);
+
+            // Save to localStorage with OLD last_login (from selectedUser) for notifications
             localStorage.setItem('currentUser', JSON.stringify(selectedUser));
             navigate('/app/dashboard');
           } else {
             setError('Senha incorreta');
           }
         } else {
+          // Update last_login in DB
+          await supabase
+            .from('members')
+            .update({ last_login: lastLoginTime })
+            .eq('id', selectedUser.id);
+
+          // Save to localStorage with OLD last_login (from selectedUser) for notifications
           localStorage.setItem('currentUser', JSON.stringify(selectedUser));
           navigate('/app/dashboard');
         }

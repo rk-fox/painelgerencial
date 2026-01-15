@@ -1,18 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { supabase } from '../supabase';
 
 const Layout: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [newTasks, setNewTasks] = useState<any[]>([]);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
   useEffect(() => {
     const user = localStorage.getItem('currentUser');
     if (user) {
-      setCurrentUser(JSON.parse(user));
+      const parsedUser = JSON.parse(user);
+      setCurrentUser(parsedUser);
+      checkNotifications(parsedUser);
     }
   }, []);
+
+  const checkNotifications = async (user: any) => {
+    if (!user || !user.last_login) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .gt('created_at', user.last_login)
+        .contains('specialties', [user.specialty]); // Check if user.specialty is in the specialties array
+
+      if (error) throw error;
+      if (data) {
+        setNewTasks(data);
+      }
+    } catch (err: any) {
+      console.error('Error fetching notifications:', err.message);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('currentUser');
@@ -106,10 +130,50 @@ const Layout: React.FC = () => {
           </div>
 
           <div className={`flex items-center ${isSidebarCollapsed ? 'flex-col gap-4' : 'justify-between px-2'}`}>
-            <button className="text-[#4c739a] hover:text-primary transition-all active:scale-95 relative" title="Notificações">
-              <span className="material-symbols-outlined text-[20px]">notifications</span>
-              <span className="absolute top-0 right-0 size-2 bg-red-500 rounded-full border border-white dark:border-slate-900"></span>
-            </button>
+            <div className="relative">
+              <button
+                className="text-[#4c739a] hover:text-primary transition-all active:scale-95 relative"
+                title="Notificações"
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+              >
+                <span className="material-symbols-outlined text-[20px]">notifications</span>
+                {newTasks.length > 0 && (
+                  <span className="absolute top-0 right-0 size-2 bg-red-500 rounded-full border border-white dark:border-slate-900"></span>
+                )}
+              </button>
+
+              {/* Notifications Popup */}
+              {isNotificationsOpen && (
+                <div className="absolute bottom-full left-0 mb-2 w-72 bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                  <div className="p-3 border-b border-[#e7edf3] dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
+                    <h3 className="font-bold text-xs text-[#0d141b] dark:text-white uppercase tracking-wider">Novas Tarefas</h3>
+                    <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">{newTasks.length}</span>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto">
+                    {newTasks.length === 0 ? (
+                      <div className="p-4 text-center text-[#4c739a] text-xs italic">
+                        Nenhuma nova notificação.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-[#e7edf3] dark:divide-slate-800">
+                        {newTasks.map(task => (
+                          <div key={task.id} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer" onClick={() => {
+                            navigate('/app/dashboard');
+                            setIsNotificationsOpen(false);
+                          }}>
+                            <div className="flex items-start gap-2 mb-1">
+                              <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">Nova</span>
+                              <span className="text-[10px] font-bold text-[#4c739a]">{new Date(task.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                            <p className="text-sm font-bold text-[#0d141b] dark:text-white line-clamp-2 leading-tight">{task.name}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             <button className="text-[#4c739a] hover:text-primary transition-all active:scale-95" title="Configurações">
               <span className="material-symbols-outlined text-[20px]">settings</span>
             </button>
