@@ -8,10 +8,37 @@ const Dashboard: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  const [filterSpecialties, setFilterSpecialties] = useState<string[]>([]);
+  const [filterPeriodicities, setFilterPeriodicities] = useState<string[]>([]);
+
+  // Rank definitions for permission logic
+  const rankOrder: Record<string, number> = {
+    'Major': 1, 'MAJ': 1,
+    'Capitão': 2, 'CAP': 2,
+    '1º Tenente': 3, '1TEN': 3,
+    '2º Tenente': 4, '2TEN': 4,
+    'Suboficial': 5, 'SO': 5,
+    // Others are restricted
+  };
+
   useEffect(() => {
     const userJson = localStorage.getItem('currentUser');
     if (userJson) {
-      setCurrentUser(JSON.parse(userJson));
+      const user = JSON.parse(userJson);
+      setCurrentUser(user);
+
+      // Initialize filters based on permissions
+      const userRankValue = rankOrder[user.rank] || 99;
+      if (userRankValue <= 5) {
+        // Officer/SO: Can see all, default to showing both? Or empty implies all?
+        // User request: "podendo marcar 1, o outro ou ambos".
+        // Let's start with NO filters (showing all) or BOTH filters enabled.
+        // Usually showing all is better.
+        setFilterSpecialties(['BCT', 'AIS']);
+      } else {
+        // Restricted: Lock to own specialty
+        setFilterSpecialties([user.specialty]);
+      }
     }
     fetchTasks();
   }, []);
@@ -89,11 +116,11 @@ const Dashboard: React.FC = () => {
     try {
       const { error } = await supabase
         .from('tasks')
-        .update({ status: 'pausada' })
+        .update({ status: 'pendente' })
         .eq('id', taskId);
 
       if (error) throw error;
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'pausada' } : t));
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'pendente' } : t));
     } catch (err: any) {
       console.error('Error suspending task:', err.message);
     }
@@ -107,8 +134,13 @@ const Dashboard: React.FC = () => {
         .eq('id', taskId);
 
       if (error) throw error;
-      // Remove from list or update status (if we kept concluded tasks, we'd update. Here we might want to remove visually or just let the filter handle it on refetch, but updating local state is smoother)
-      setTasks(prev => prev.filter(t => t.id !== taskId));
+      // Update status in local state instead of removing, so it counts towards completed stats immediately
+      setTasks(prev => prev.map(t =>
+        t.id === taskId ? { ...t, status: 'concluida', completed_at: new Date().toISOString() } : t
+      ));
+
+      // Also refetch to ensure server sync and correct timestamps
+      await fetchTasks();
     } catch (err: any) {
       console.error('Error completing task:', err.message);
     }
@@ -141,9 +173,76 @@ const Dashboard: React.FC = () => {
     e.preventDefault();
   };
 
-  const bankTasks = tasks.filter(t => !t.assigned_to && t.status !== 'concluida');
+  // Filter Logic Helpers
+  const isRestrictedUser = () => {
+    if (!currentUser) return true;
+    const rankValue = rankOrder[currentUser.rank] || 99;
+    return rankValue > 5; // > 5 means restricted (Sgts, Civ)
+  };
+
+  const toggleSpecialty = (spec: string) => {
+    if (isRestrictedUser()) return; // Prevent toggle for restricted users
+
+    setFilterSpecialties(prev => {
+      if (prev.includes(spec)) {
+        // If unchecking, ensure at least one remains? Or allow empty?
+        // User flow: "podendo marcar 1, o outro ou ambos".
+        // If both unchecked, show none? Or show all? Usually empty filter means show all, BUT here it's explicit filtering.
+        // Let's allow unchecking.
+        return prev.filter(s => s !== spec);
+      } else {
+        return [...prev, spec];
+      }
+    });
+  };
+
+  const togglePeriodicity = (period: string) => {
+    setFilterPeriodicities(prev => {
+      if (prev.includes(period)) {
+        return prev.filter(p => p !== period);
+      } else {
+        return [...prev, period];
+      }
+    });
+  };
+
+  const clearFilters = () => {
+    setFilterPeriodicities([]); // Clear periodicities
+    // Reset specialties based on rank
+    if (isRestrictedUser()) {
+      setFilterSpecialties([currentUser.specialty]);
+    } else {
+      setFilterSpecialties(['BCT', 'AIS']); // Reset to showing both
+    }
+  };
+
+  const filterTask = (t: any) => {
+    // 1. Filter by Specialty
+    // Task must have at least one specialty that is in the filter list.
+    // If filterSpecialties is empty, should we show none? Or all?
+    // Given the explicit toggles, if BCT is off and AIS is off, likely show nothing or show all.
+    // Let's assume if enabled list has items, match against them.
+    if (filterSpecialties.length > 0) {
+      const hasMatchingSpecialty = t.specialties?.some((s: string) => filterSpecialties.includes(s));
+      if (!hasMatchingSpecialty) return false;
+    } else {
+      // If no specialty selected, maybe show none? Or all?
+      // Since buttons are toggles, unselecting all -> Show nothing usually.
+      // Let's return false if no specialty is selected (user deselected everything).
+      return false;
+    }
+
+    // 2. Filter by Periodicity
+    if (filterPeriodicities.length > 0) {
+      if (!filterPeriodicities.includes(t.periodicity)) return false;
+    }
+
+    return true;
+  };
+
+  const bankTasks = tasks.filter(t => !t.assigned_to && t.status !== 'concluida' && filterTask(t));
   const myTasks = tasks
-    .filter(t => t.assigned_to === currentUser?.id && t.status !== 'concluida')
+    .filter(t => t.assigned_to === currentUser?.id && t.status !== 'concluida' && filterTask(t))
     .sort((a, b) => {
       // Prioritize 'iniciada' tasks
       if (a.status === 'iniciada' && b.status !== 'iniciada') return -1;
@@ -152,26 +251,104 @@ const Dashboard: React.FC = () => {
       return 0;
     });
 
+  const calculateStats = () => {
+    if (!currentUser) return { completed30: 0, completedTrend: 0, expiringCount: 0, pendingCount: 0 };
+
+    const now = new Date();
+
+    // Concluídas últimos 30 dias
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(now.getDate() - 30);
+
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(now.getDate() - 60);
+
+    const completedLast30 = tasks.filter(t =>
+      // Ensure type safety (IDs should be strings, but safeguard)
+      String(t.assigned_to) === String(currentUser.id) &&
+      t.status === 'concluida' &&
+      t.completed_at &&
+      new Date(t.completed_at) >= thirtyDaysAgo
+    ).length;
+
+    const completedPrevious30 = tasks.filter(t =>
+      String(t.assigned_to) === String(currentUser.id) &&
+      t.status === 'concluida' &&
+      t.completed_at &&
+      new Date(t.completed_at) >= sixtyDaysAgo &&
+      new Date(t.completed_at) < thirtyDaysAgo
+    ).length;
+
+    let trend = 0;
+    if (completedPrevious30 > 0) {
+      trend = Math.round(((completedLast30 - completedPrevious30) / completedPrevious30) * 100);
+    } else if (completedLast30 > 0) {
+      trend = 100; // 100% increase if previous was 0
+    }
+
+    // Prazos a expirar (Pontual, até 3 dias) - Only for my tasks
+    const threeDaysFromNow = new Date();
+    threeDaysFromNow.setDate(now.getDate() + 3);
+
+    const expiringCount = tasks.filter(t => {
+      // Logic: assigned to me, not concluded, is pontual, matches date range
+      if (t.assigned_to !== currentUser.id) return false;
+      if (t.periodicity !== 'pontual' || t.status === 'concluida' || !t.end_date) return false;
+
+      const endDate = new Date(t.end_date);
+      // Reset times
+      const todayZero = new Date(now.setHours(0, 0, 0, 0));
+      const endZero = new Date(endDate.setHours(0, 0, 0, 0));
+      const threeDaysZero = new Date(threeDaysFromNow.setHours(0, 0, 0, 0));
+
+      return endZero >= todayZero && endZero <= threeDaysZero;
+    }).length;
+
+    // Tarefas Pendentes Logic:
+    // "Count should happen when task is assigned to someone AND STARTED" -> Meaning it is REMOVED from pending count then.
+    // So Pending = All tasks - Concluded - (Assigned AND Started)
+    // AND we must apply filters (Specialty/Periodicity) so it reflects what is seen on dashboard.
+    const pendingCount = tasks.filter(t => {
+      // Must match filters
+      if (!filterTask(t)) return false;
+
+      // Exclude concluded
+      if (t.status === 'concluida') return false;
+
+      // Exclude if Assigned AND Started
+      if (t.assigned_to && t.status === 'iniciada') return false;
+
+      // Everything else is pending (Unassigned, Assigned+Pending, Assigned+Paused)
+      return true;
+    }).length;
+
+    return { completed30: completedLast30, completedTrend: trend, expiringCount, pendingCount };
+  };
+
+  const stats = calculateStats();
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard
-          title="Concluídas Hoje"
-          value="12"
-          trend="+20%"
-          trendType="positive"
+          title="Concluídas Últ. 30 Dias"
+          value={stats.completed30.toString()}
+          trend={stats.completedTrend > 0 ? `+${stats.completedTrend}%` : `${stats.completedTrend}%`}
+          trendType={stats.completedTrend >= 0 ? 'positive' : 'negative'}
         />
         <StatCard
-          title="Disponibilidade"
-          value="85%"
-          progress={85}
+          title="Prazos a Expirar"
+          value={stats.expiringCount.toString()}
+          badge={stats.expiringCount > 0 ? "Alerta" : ""}
+          badgeType="custom"
+          badgeColor="bg-[#FFF1F2] text-[#F43F5E]"
         />
         <StatCard
           title="Tarefas Pendentes"
-          value={bankTasks.length.toString()}
-          badge={bankTasks.length > 5 ? "Alerta" : ""}
-          badgeType="warning"
+          value={stats.pendingCount.toString()}
+          icon="pending_actions"
+          iconColor="bg-[#FFEDD5] text-[#F97316]"
         />
       </div>
 
@@ -179,18 +356,52 @@ const Dashboard: React.FC = () => {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 p-5 rounded-2xl shadow-sm">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
-            <FilterButton label="BCT" active />
-            <FilterButton label="AIS" />
+            <FilterButton
+              label="BCT"
+              active={filterSpecialties.includes('BCT')}
+              onClick={() => toggleSpecialty('BCT')}
+              disabled={isRestrictedUser() && currentUser?.specialty !== 'BCT'}
+            />
+            <FilterButton
+              label="AIS"
+              active={filterSpecialties.includes('AIS')}
+              onClick={() => toggleSpecialty('AIS')}
+              disabled={isRestrictedUser() && currentUser?.specialty !== 'AIS'}
+            />
           </div>
           <div className="h-6 w-px bg-[#e7edf3] dark:bg-slate-800 hidden md:block"></div>
           <div className="flex flex-wrap items-center gap-2">
-            <FilterButton label="Diária" active />
-            <FilterButton label="Semanal" />
-            <FilterButton label="Mensal" />
-            <FilterButton label="Pontual" />
+            <FilterButton
+              label="Diária"
+              active={filterPeriodicities.includes('diaria')}
+              onClick={() => togglePeriodicity('diaria')}
+            />
+            <FilterButton
+              label="Semanal"
+              active={filterPeriodicities.includes('semanal')}
+              onClick={() => togglePeriodicity('semanal')}
+            />
+            <FilterButton
+              label="Mensal"
+              active={filterPeriodicities.includes('mensal')}
+              onClick={() => togglePeriodicity('mensal')}
+            />
+            <FilterButton
+              label="Temporada"
+              active={filterPeriodicities.includes('temporada')}
+              onClick={() => togglePeriodicity('temporada')}
+            />
+            <FilterButton
+              label="Pontual"
+              active={filterPeriodicities.includes('pontual')}
+              onClick={() => togglePeriodicity('pontual')}
+            />
           </div>
         </div>
-        <button className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/20 hover:brightness-110 active:scale-95 transition-all">
+        <button
+          onClick={clearFilters}
+          className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/20 hover:brightness-110 active:scale-95 transition-all"
+        >
           Todas <span className="material-symbols-outlined text-lg">close</span>
         </button>
       </div>
@@ -224,7 +435,7 @@ const Dashboard: React.FC = () => {
               />
             ))}
             {bankTasks.length === 0 && !loading && (
-              <div className="text-center py-10 opacity-50 italic text-sm">Nenhuma tarefa disponível no banco.</div>
+              <div className="text-center py-10 opacity-50 italic text-sm">Nenhuma tarefa corresponde aos filtros.</div>
             )}
             {loading && (
               <div className="text-center py-10 animate-pulse text-sm">Carregando tarefas...</div>
@@ -274,7 +485,7 @@ const Dashboard: React.FC = () => {
   );
 };
 
-const StatCard = ({ title, value, trend, trendType, progress, badge, badgeType }: any) => (
+const StatCard = ({ title, value, trend, trendType, progress, badge, badgeType, badgeColor, icon, iconColor }: any) => (
   <div className="flex flex-col gap-2 rounded-2xl p-6 bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 shadow-sm transition-transform hover:-translate-y-1">
     <p className="text-[#4c739a] dark:text-slate-400 text-xs font-bold uppercase tracking-widest">{title}</p>
     <div className="flex items-end justify-between">
@@ -290,16 +501,33 @@ const StatCard = ({ title, value, trend, trendType, progress, badge, badgeType }
         </div>
       )}
       {badge && (
-        <p className={`text-sm font-bold flex items-center gap-1 px-2 py-1 rounded-lg ${badgeType === 'warning' ? 'text-orange-500 bg-orange-100 dark:bg-orange-900/30' : ''}`}>
+        <p className={`text-sm font-bold flex items-center gap-1 px-2 py-1 rounded-lg ${badgeColor ? badgeColor :
+          badgeType === 'warning' ? 'text-orange-500 bg-orange-100 dark:bg-orange-900/30' : ''
+          }`}>
           <span className="material-symbols-outlined text-sm">warning</span> {badge}
         </p>
+      )}
+      {icon && (
+        <div className={`p-2 rounded-lg ${iconColor ? iconColor : 'bg-slate-100 dark:bg-slate-800 text-[#4c739a]'}`}>
+          <span className="material-symbols-outlined">{icon}</span>
+        </div>
       )}
     </div>
   </div>
 );
 
-const FilterButton = ({ label, active }: { label: string, active?: boolean }) => (
-  <button className={`px-5 py-2 rounded-full border text-xs font-bold transition-all active:scale-95 ${active ? 'border-primary bg-primary/10 text-primary hover:bg-primary/20' : 'border-[#e7edf3] dark:border-slate-700 bg-transparent text-[#4c739a] dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+const FilterButton = ({ label, active, onClick, disabled }: { label: string, active?: boolean, onClick?: () => void, disabled?: boolean }) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className={`px-5 py-2 rounded-full border text-xs font-bold transition-all active:scale-95 
+      ${disabled
+        ? 'opacity-50 cursor-not-allowed border-[#e7edf3] bg-slate-100 text-[#94a3b8]'
+        : active
+          ? 'border-primary bg-primary/10 text-primary hover:bg-primary/20'
+          : 'border-[#e7edf3] dark:border-slate-700 bg-transparent text-[#4c739a] dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+      }`}
+  >
     {label}
   </button>
 );
