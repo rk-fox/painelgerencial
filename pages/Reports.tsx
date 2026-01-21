@@ -1,114 +1,253 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../supabase';
+
+interface CategoryRanking {
+    category: string;
+    total: number;
+}
+
+interface StatusCounts {
+    pendente: number;
+    iniciada: number;
+    concluida: number;
+}
 
 const Reports: React.FC = () => {
-  return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <ReportCard 
-          icon="assignment" color="blue" 
-          title="Total de Tarefas" value="1.284" 
-          badge="+12%" badgeColor="emerald"
-        />
-        <ReportCard 
-          icon="calendar_today" color="indigo" 
-          title="Média de Tarefas/Dia" value="42,5" 
-          badge="Média Móvel" badgeColor="slate"
-        />
-        <ReportCard 
-          icon="task_alt" color="emerald" 
-          title="Taxa de Conclusão" value="92%" 
-          badge="META 90%" badgeColor="emerald"
-          progress={92}
-        />
-        <ReportCard 
-          icon="pending_actions" color="rose" 
-          title="Tarefas Pendentes" value="56" 
-          badge="-4%" badgeColor="rose"
-        />
-      </div>
+    const [categoryRankings, setCategoryRankings] = useState<CategoryRanking[]>([]);
+    const [statusCounts, setStatusCounts] = useState<StatusCounts>({ pendente: 0, iniciada: 0, concluida: 0 });
+    const [loading, setLoading] = useState(true);
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <ReportCard 
-            icon="explore" color="amber" 
-            title="Missões Únicas" value="10" 
-            badge="+2" badgeColor="emerald"
-        />
-        <ReportCard 
-            icon="date_range" color="sky" 
-            title="Total de Dias em Missão" value="55 dias" 
-            badge="Consolidado" badgeColor="slate"
-        />
-        <ReportCard 
-            icon="payments" color="violet" 
-            title="Total de Diárias Realizadas" value="180 diárias" 
-            badge="Acumulado" badgeColor="emerald"
-        />
-        <ReportCard 
-            icon="timer" color="slate" 
-            title="Carga Horária em Viagem" value="242h" 
-            badge="Em trânsito" badgeColor="slate"
-        />
-      </div>
+    useEffect(() => {
+        fetchReportData();
+    }, []);
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Task Completion Chart Mock */}
-        <div className="lg:col-span-8 bg-white dark:bg-slate-900 p-6 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm">
-            <div className="flex items-center justify-between mb-8">
-                <div>
-                    <h4 className="text-base font-bold text-slate-800 dark:text-white">Tarefas Concluídas por Membro</h4>
-                    <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Acumulado do Mês Corrente</p>
-                </div>
-                <select className="bg-slate-50 dark:bg-slate-800 border-none rounded-lg text-[10px] font-bold px-3 py-1 text-slate-500 focus:ring-1 focus:ring-primary">
-                    <option>Últimos 30 dias</option>
-                    <option>Último trimestre</option>
-                </select>
+    const fetchReportData = async () => {
+        try {
+            // Fetch status counts
+            const { data: tasks, error: tasksError } = await supabase
+                .from('tasks')
+                .select('status, quantidade, category');
+
+            if (tasksError) throw tasksError;
+
+            // Calculate status counts
+            const counts: StatusCounts = { pendente: 0, iniciada: 0, concluida: 0 };
+            const categoryMap = new Map<string, number>();
+
+            tasks?.forEach(task => {
+                const qty = task.quantidade || 1;
+
+                // Status counts
+                if (task.status === 'pendente') counts.pendente += qty;
+                else if (task.status === 'iniciada') counts.iniciada += qty;
+                else if (task.status === 'concluida') counts.concluida += qty;
+
+                // Category ranking (only completed tasks)
+                if (task.status === 'concluida' && task.category) {
+                    const current = categoryMap.get(task.category) || 0;
+                    categoryMap.set(task.category, current + qty);
+                }
+            });
+
+            setStatusCounts(counts);
+
+            // Convert map to sorted array
+            const rankings = Array.from(categoryMap.entries())
+                .map(([category, total]) => ({ category, total }))
+                .sort((a, b) => b.total - a.total);
+
+            setCategoryRankings(rankings);
+        } catch (err) {
+            console.error('Error fetching report data:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Calculate efficiency
+    const totalTasks = statusCounts.pendente + statusCounts.iniciada + statusCounts.concluida;
+    const efficiency = totalTasks > 0 ? Math.round((statusCounts.concluida / totalTasks) * 100) : 0;
+
+    // Calculate percentages for donut chart
+    const pendingPercent = totalTasks > 0 ? (statusCounts.pendente / totalTasks) * 100 : 0;
+    const inProgressPercent = totalTasks > 0 ? (statusCounts.iniciada / totalTasks) * 100 : 0;
+    const completedPercent = totalTasks > 0 ? (statusCounts.concluida / totalTasks) * 100 : 0;
+
+    // Max for bar chart scaling
+    const maxCategoryTotal = categoryRankings.length > 0 ? categoryRankings[0].total : 1;
+
+    return (
+        <div className="space-y-6 animate-in fade-in duration-500">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <ReportCard
+                    icon="assignment" color="blue"
+                    title="Total de Tarefas" value={totalTasks.toString()}
+                    badge="Atual" badgeColor="slate"
+                />
+                <ReportCard
+                    icon="calendar_today" color="indigo"
+                    title="Média de Tarefas/Dia" value="42,5"
+                    badge="Média Móvel" badgeColor="slate"
+                />
+                <ReportCard
+                    icon="task_alt" color="emerald"
+                    title="Taxa de Conclusão" value={`${efficiency}%`}
+                    badge="META 90%" badgeColor="emerald"
+                    progress={efficiency}
+                />
+                <ReportCard
+                    icon="pending_actions" color="rose"
+                    title="Tarefas Pendentes" value={statusCounts.pendente.toString()}
+                    badge="Atual" badgeColor="rose"
+                />
             </div>
-            <div className="space-y-6">
-                <BarChartItem label="Silva, Sgt" value="84 tarefas (Max)" percent={100} />
-                <BarChartItem label="Santos, Sgt" value="62 tarefas" percent={74} />
-                <BarChartItem label="Oliveira, Sgt" value="55 tarefas" percent={65} />
-                <BarChartItem label="Melo, Sgt" value="93 tarefas" percent={100} color="bg-primary" />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <ReportCard
+                    icon="explore" color="amber"
+                    title="Missões Únicas" value="10"
+                    badge="+2" badgeColor="emerald"
+                />
+                <ReportCard
+                    icon="date_range" color="sky"
+                    title="Total de Dias em Missão" value="55 dias"
+                    badge="Consolidado" badgeColor="slate"
+                />
+                <ReportCard
+                    icon="payments" color="violet"
+                    title="Total de Diárias Realizadas" value="180 diárias"
+                    badge="Acumulado" badgeColor="emerald"
+                />
+                <ReportCard
+                    icon="timer" color="slate"
+                    title="Carga Horária em Viagem" value="242h"
+                    badge="Em trânsito" badgeColor="slate"
+                />
+            </div>
+
+            {/* Ranking de Atividades and Conclusão de Tarefas */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Ranking de Atividades (Categories) */}
+                <div className="lg:col-span-8 bg-white dark:bg-slate-900 p-6 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm">
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <h4 className="text-base font-bold text-slate-800 dark:text-white">Ranking de Atividades</h4>
+                            <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Categorias por Quantidade Concluída</p>
+                        </div>
+                    </div>
+                    <div className="space-y-6">
+                        {loading ? (
+                            <div className="text-center text-slate-400 py-8">Carregando...</div>
+                        ) : categoryRankings.length > 0 ? (
+                            categoryRankings.map((cat, index) => (
+                                <BarChartItem
+                                    key={cat.category}
+                                    label={cat.category}
+                                    value={`${cat.total} tarefa${cat.total > 1 ? 's' : ''}${index === 0 ? ' (Max)' : ''}`}
+                                    percent={Math.round((cat.total / maxCategoryTotal) * 100)}
+                                    color={index === 0 ? 'bg-emerald-500' : 'bg-primary'}
+                                />
+                            ))
+                        ) : (
+                            <div className="text-center text-slate-400 py-8 italic">Nenhuma tarefa concluída com categoria definida.</div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Conclusão de Tarefas */}
+                <div className="lg:col-span-4 bg-white dark:bg-slate-900 p-6 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm">
+                    <div className="mb-8">
+                        <h4 className="text-base font-bold text-slate-800 dark:text-white">Conclusão de Tarefas</h4>
+                        <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Status das Atividades</p>
+                    </div>
+                    <div className="flex flex-col items-center">
+                        <div className="relative w-40 h-40 xl:w-48 xl:h-48">
+                            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                                {/* Background circle */}
+                                <circle className="text-slate-100 dark:text-slate-800" cx="18" cy="18" fill="transparent" r="16" stroke="currentColor" strokeWidth="3"></circle>
+                                {/* Completed (Green) */}
+                                <circle
+                                    cx="18" cy="18" fill="transparent" r="16"
+                                    stroke="#10b981"
+                                    strokeDasharray={`${completedPercent}, 100`}
+                                    strokeDashoffset="0"
+                                    strokeLinecap="round"
+                                    strokeWidth="3.5"
+                                ></circle>
+                                {/* In Progress (Blue) */}
+                                <circle
+                                    cx="18" cy="18" fill="transparent" r="16"
+                                    stroke="#3b82f6"
+                                    strokeDasharray={`${inProgressPercent}, 100`}
+                                    strokeDashoffset={`${-completedPercent}`}
+                                    strokeLinecap="round"
+                                    strokeWidth="3.5"
+                                ></circle>
+                                {/* Pending (Gray) */}
+                                <circle
+                                    cx="18" cy="18" fill="transparent" r="16"
+                                    stroke="#9ca3af"
+                                    strokeDasharray={`${pendingPercent}, 100`}
+                                    strokeDashoffset={`${-(completedPercent + inProgressPercent)}`}
+                                    strokeLinecap="round"
+                                    strokeWidth="3.5"
+                                ></circle>
+                            </svg>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                <span className="text-3xl xl:text-4xl font-black text-slate-800 dark:text-white">{efficiency}%</span>
+                                <span className="text-[9px] font-extrabold text-slate-400 uppercase">Eficiência</span>
+                            </div>
+                        </div>
+                        <div className="mt-8 w-full space-y-3">
+                            <div className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-3 h-3 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20"></div>
+                                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Concluídas</span>
+                                </div>
+                                <span className="text-[11px] font-extrabold text-slate-800 dark:text-white">{statusCounts.concluida}</span>
+                            </div>
+                            <div className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-3 h-3 rounded-full bg-blue-500 ring-4 ring-blue-500/20"></div>
+                                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Em Andamento</span>
+                                </div>
+                                <span className="text-[11px] font-extrabold text-slate-800 dark:text-white">{statusCounts.iniciada}</span>
+                            </div>
+                            <div className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-3 h-3 rounded-full bg-gray-400 ring-4 ring-gray-400/20"></div>
+                                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Pendentes</span>
+                                </div>
+                                <span className="text-[11px] font-extrabold text-slate-800 dark:text-white">{statusCounts.pendente}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Tarefas Concluídas por Membro (Full Width Bottom) */}
+            <div className="grid grid-cols-1 gap-6">
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm">
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <h4 className="text-base font-bold text-slate-800 dark:text-white">Tarefas Concluídas por Membro</h4>
+                            <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Acumulado do Mês Corrente</p>
+                        </div>
+                        <select className="bg-slate-50 dark:bg-slate-800 border-none rounded-lg text-[10px] font-bold px-3 py-1 text-slate-500 focus:ring-1 focus:ring-primary">
+                            <option>Últimos 30 dias</option>
+                            <option>Último trimestre</option>
+                        </select>
+                    </div>
+                    <div className="space-y-6">
+                        <BarChartItem label="Silva, Sgt" value="84 tarefas (Max)" percent={100} />
+                        <BarChartItem label="Santos, Sgt" value="62 tarefas" percent={74} />
+                        <BarChartItem label="Oliveira, Sgt" value="55 tarefas" percent={65} />
+                        <BarChartItem label="Melo, Sgt" value="93 tarefas" percent={100} color="bg-primary" />
+                    </div>
+                </div>
             </div>
         </div>
-
-        {/* Efficiency Circle Chart Mock */}
-        <div className="lg:col-span-4 bg-white dark:bg-slate-900 p-6 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm">
-            <div className="mb-8">
-                <h4 className="text-base font-bold text-slate-800 dark:text-white">Ocupação da Seção</h4>
-                <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Tempo em Atividade vs Ociosidade</p>
-            </div>
-            <div className="flex flex-col items-center">
-                <div className="relative w-40 h-40 xl:w-48 xl:h-48">
-                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                        <circle className="text-slate-100 dark:text-slate-800" cx="18" cy="18" fill="transparent" r="16" stroke="currentColor" strokeWidth="3"></circle>
-                        <circle cx="18" cy="18" fill="transparent" r="16" stroke="#137fec" strokeDasharray="85, 100" strokeLinecap="round" strokeWidth="3.5"></circle>
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-3xl xl:text-4xl font-black text-slate-800 dark:text-white">85%</span>
-                        <span className="text-[9px] font-extrabold text-slate-400 uppercase">Eficiência</span>
-                    </div>
-                </div>
-                <div className="mt-8 w-full space-y-3">
-                    <div className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                        <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-primary ring-4 ring-primary/20"></div>
-                            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Tempo Ativo</span>
-                        </div>
-                        <span className="text-[11px] font-extrabold text-slate-800 dark:text-white">1.054h</span>
-                    </div>
-                    <div className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                        <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-slate-200 dark:bg-slate-700"></div>
-                            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Ociosidade</span>
-                        </div>
-                        <span className="text-[11px] font-extrabold text-slate-800 dark:text-white">186h</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 const ReportCard = ({ icon, color, title, value, badge, badgeColor, progress }: any) => {
@@ -122,7 +261,7 @@ const ReportCard = ({ icon, color, title, value, badge, badgeColor, progress }: 
         violet: 'bg-violet-50 dark:bg-violet-900/20 text-violet-500',
         slate: 'bg-slate-50 dark:bg-slate-800 text-slate-500',
     };
-    
+
     return (
         <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm">
             <div className="flex justify-between items-start mb-4">
@@ -134,12 +273,12 @@ const ReportCard = ({ icon, color, title, value, badge, badgeColor, progress }: 
                 </span>
             </div>
             <p className="text-xs font-semibold text-[#4c739a] dark:text-slate-400">{title}</p>
-            {progress ? (
+            {progress !== undefined ? (
                 <div className="flex items-center gap-3 mt-1">
-                     <h3 className="text-xl font-extrabold text-[#0d141b] dark:text-white">{value}</h3>
-                     <div className="flex-1 bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    <h3 className="text-xl font-extrabold text-[#0d141b] dark:text-white">{value}</h3>
+                    <div className="flex-1 bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
                         <div className="bg-emerald-500 h-full" style={{ width: `${progress}%` }}></div>
-                     </div>
+                    </div>
                 </div>
             ) : (
                 <h3 className="text-xl font-extrabold mt-1 text-[#0d141b] dark:text-white">{value}</h3>

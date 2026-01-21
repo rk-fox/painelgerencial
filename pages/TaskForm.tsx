@@ -4,7 +4,15 @@ import { supabase } from '../supabase';
 
 interface Member {
     id: string;
+    avatar: string;
     name: string;
+    abrev: string;
+    war_name: string;
+}
+
+interface Category {
+    id: string;
+    nome_cat: string;
 }
 
 interface Task {
@@ -19,6 +27,8 @@ interface Task {
     status: string;
     recurrence_active: boolean;
     created_at: string;
+    quantidade?: number;
+    category?: string;
 }
 
 const TaskForm: React.FC = () => {
@@ -38,10 +48,16 @@ const TaskForm: React.FC = () => {
     const [filterSpecialties, setFilterSpecialties] = useState<string[]>([]);
     const [filterPeriodicities, setFilterPeriodicities] = useState<string[]>([]);
 
+    // Category State
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
+    const [newCategoryName, setNewCategoryName] = useState('');
+
     // Form State
     const [editingTask, setEditingTask] = useState<Partial<Task> | null>(null);
     const [formData, setFormData] = useState({
         name: '',
+        category: '',
         specialties: [] as string[],
         description: '',
         periodicity: 'diaria',
@@ -51,13 +67,19 @@ const TaskForm: React.FC = () => {
     });
 
     // Rank Definitions
+    // Rank Definitions
     const rankOrder: Record<string, number> = {
-        'Major': 1, 'MAJ': 1,
-        'Capitão': 2, 'CAP': 2,
-        '1º Tenente': 3, '1TEN': 3,
-        '2º Tenente': 4, '2TEN': 4,
-        'Suboficial': 5, 'SO': 5,
-        // Others are restricted (Sgt, Cabo, Civil etc > 5)
+        // Officers - Value < 4
+        'MAJ': 1, 'MAJ.': 1, 'Maj': 1, 'Maj.': 1,
+        'CAP': 2, 'CAP.': 2, 'Cap': 2, 'Cap.': 2,
+        'TEN': 3, 'TEN.': 3, 'Ten': 3, 'Ten.': 3,
+        '1TEN': 3, '1TEN.': 3, '1º Ten': 3,
+        '2TEN': 3, '2TEN.': 3, '2º Ten': 3,
+        'ASP': 3, 'ASP.': 3, 'Asp': 3,
+        // Suboficial and Enlisted - Value >= 4
+        'SO': 4, 'SO.': 4, 'S.O': 4,
+        '1S': 5, '2S': 5, '3S': 5, 'SGT': 5,
+        'CB': 6, 'SD': 7
     };
 
     useEffect(() => {
@@ -66,19 +88,35 @@ const TaskForm: React.FC = () => {
             setCurrentUser(JSON.parse(userJson));
         }
         fetchMembers();
+        fetchMembers();
         fetchTasks();
+        fetchCategories();
     }, []);
 
     const fetchMembers = async () => {
         try {
             const { data, error } = await supabase
                 .from('members')
-                .select('id, name')
+                //.select('id, name, rank, war_name')
+                .select('id, name, avatar, abrev, war_name')
                 .order('name');
             if (error) throw error;
             setMembers(data || []);
         } catch (err) {
             console.error('Error fetching members:', err);
+        }
+    };
+
+    const fetchCategories = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('task_cat')
+                .select('*')
+                .order('nome_cat');
+            if (error) throw error;
+            setCategories(data || []);
+        } catch (err) {
+            console.error('Error fetching categories:', err);
         }
     };
 
@@ -115,6 +153,7 @@ const TaskForm: React.FC = () => {
         setEditingTask(null);
         setFormData({
             name: '',
+            category: '',
             specialties: [],
             description: '',
             periodicity: 'diaria',
@@ -130,6 +169,7 @@ const TaskForm: React.FC = () => {
         setEditingTask(task);
         setFormData({
             name: task.name,
+            category: task.category || '',
             specialties: task.specialties || [],
             description: task.description || '',
             periodicity: task.periodicity,
@@ -147,6 +187,7 @@ const TaskForm: React.FC = () => {
         setEditingTask(null);
         setFormData({
             name: `${task.name} (Cópia)`,
+            category: task.category || '',
             specialties: task.specialties || [],
             description: task.description || '',
             periodicity: task.periodicity,
@@ -156,6 +197,32 @@ const TaskForm: React.FC = () => {
         });
         setView('form');
         setError(null);
+    };
+
+    const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setFormData(prev => ({ ...prev, category: e.target.value }));
+    };
+
+    const handleSaveNewCategory = async () => {
+        if (!newCategoryName.trim()) return;
+
+        try {
+            const { data, error } = await supabase
+                .from('task_cat')
+                .insert([{ nome_cat: newCategoryName }])
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            // Add to list and select it
+            setCategories(prev => [...prev, data].sort((a, b) => a.nome_cat.localeCompare(b.nome_cat)));
+            setFormData(prev => ({ ...prev, category: newCategoryName })); // Or data.nome_cat
+            setShowNewCategoryModal(false);
+            setNewCategoryName('');
+        } catch (err: any) {
+            alert('Erro ao criar categoria: ' + err.message);
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -175,6 +242,7 @@ const TaskForm: React.FC = () => {
         try {
             const payload = {
                 name: formData.name,
+                category: formData.category,
                 description: formData.description,
                 specialties: formData.specialties,
                 periodicity: formData.periodicity,
@@ -211,14 +279,22 @@ const TaskForm: React.FC = () => {
         }
     };
 
+    // Modal States
+    const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+
     // LIST ACTIONS
-    const handleDelete = async (taskId: string) => {
-        if (!window.confirm('Tem certeza que deseja apagar esta tarefa?')) return;
+    const handleDelete = (task: Task) => {
+        setTaskToDelete(task);
+    };
+
+    const confirmDelete = async () => {
+        if (!taskToDelete) return;
 
         try {
-            const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+            const { error } = await supabase.from('tasks').delete().eq('id', taskToDelete.id);
             if (error) throw error;
-            setTasks(prev => prev.filter(t => t.id !== taskId));
+            setTasks(prev => prev.filter(t => t.id !== taskToDelete.id));
+            setTaskToDelete(null);
         } catch (err: any) {
             alert('Erro ao apagar: ' + err.message);
         }
@@ -243,8 +319,8 @@ const TaskForm: React.FC = () => {
     // HELPERS
     const canDelete = () => {
         if (!currentUser) return false;
-        const rankValue = rankOrder[currentUser.rank] || 99;
-        return rankValue <= 5; // Major(1) to SO(5)
+        const rankValue = rankOrder[currentUser.abrev] || 99;
+        return rankValue <= 3; // Major(1) to SO(5)
     };
 
     const getMemberName = (id: string | null) => {
@@ -283,6 +359,34 @@ const TaskForm: React.FC = () => {
         }
     };
 
+    const getTaskHighlight = (task: Task) => {
+        if (task.status === 'concluida' || !task.end_date) return '';
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Parse YYYY-MM-DD strictly to local midnight
+        const [y, m, d] = task.end_date.split('-').map(Number);
+        const endDate = new Date(y, m - 1, d);
+
+        // Difference in days
+        const diffTime = endDate.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); // Use ceil to be safe, though setHours makes it exact usually
+
+        if (diffDays < 0) {
+            // Overdue (< 0)
+            return 'bg-red-50 text-red-600 px-2 py-0.5 rounded';
+        } else if (diffDays <= 1) {
+            // Due Today (0) or Tomorrow (1) - "Intersection 0-1"
+            return 'bg-amber-300 text-amber-800 px-2 py-0.5 rounded';
+        } else if (diffDays <= 3) {
+            // Upcoming (2, 3) - "Yellow 1-3" (excluding 1 as it falls in bucket above)
+            return 'bg-amber-100 text-amber-600 px-2 py-0.5 rounded';
+        }
+
+        return '';
+    };
+
     // FILTERING
     const filteredTasks = tasks.filter(task => {
         const matchesSearch = task.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -318,7 +422,7 @@ const TaskForm: React.FC = () => {
                     <form className="flex flex-col" onSubmit={handleSubmit}>
                         <div className="p-6 border-b border-[#e7edf3] dark:border-slate-800">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="flex flex-col gap-2 col-span-2 md:col-span-1">
+                                <div className="flex flex-col gap-2 col-span-2">
                                     <label className="text-[#0d141b] dark:text-white text-sm font-semibold">Nome da Tarefa</label>
                                     <input
                                         name="name"
@@ -329,6 +433,32 @@ const TaskForm: React.FC = () => {
                                         type="text"
                                         required
                                     />
+                                </div>
+                                <div className="flex flex-col gap-2 col-span-2 md:col-span-1">
+                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">Categoria</label>
+                                    <div className="flex gap-2">
+                                        <select
+                                            name="category"
+                                            value={formData.category}
+                                            onChange={handleCategoryChange}
+                                            className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
+                                        >
+                                            <option value="">Selecione uma categoria...</option>
+                                            {categories.map(cat => (
+                                                <option key={cat.id} value={cat.nome_cat}>
+                                                    {cat.nome_cat}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowNewCategoryModal(true)}
+                                            className="h-[46px] w-[50px] flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[#4c739a] border border-[#cfdbe7] dark:border-slate-700 transition-colors"
+                                            title="Nova Categoria"
+                                        >
+                                            <span className="material-symbols-outlined text-[24px]">add</span>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="flex flex-col gap-2 col-span-2 md:col-span-1">
                                     <label className="text-[#0d141b] dark:text-white text-sm font-semibold">Especialidade Requerida</label>
@@ -457,6 +587,48 @@ const TaskForm: React.FC = () => {
                         </div>
                     </form>
                 </div>
+                {/* New Category Modal (Form View) */}
+                {showNewCategoryModal && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-[#e7edf3] dark:border-slate-800 w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+                            <div className="p-4 flex flex-col gap-3">
+                                <h3 className="text-sm font-bold text-[#0d141b] dark:text-white uppercase tracking-wider">Nova Categoria</h3>
+                                <div className="flex gap-2">
+                                    <input
+                                        autoFocus
+                                        value={newCategoryName}
+                                        onChange={(e) => setNewCategoryName(e.target.value)}
+                                        className="flex-1 rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-[#f8fafc] dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-2"
+                                        placeholder="Nome da categoria..."
+                                        type="text"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') handleSaveNewCategory();
+                                            if (e.key === 'Escape') setShowNewCategoryModal(false);
+                                        }}
+                                    />
+                                    <button
+                                        onClick={handleSaveNewCategory}
+                                        disabled={!newCategoryName.trim()}
+                                        className="p-2 rounded-lg bg-green-500 hover:bg-green-600 text-white shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Confirmar"
+                                    >
+                                        <span className="material-symbols-outlined text-[20px]">check</span>
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setShowNewCategoryModal(false);
+                                            setNewCategoryName('');
+                                        }}
+                                        className="p-2 rounded-lg bg-red-500 hover:bg-red-600 text-white shadow-md transition-all active:scale-95"
+                                        title="Cancelar"
+                                    >
+                                        <span className="material-symbols-outlined text-[20px]">close</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }
@@ -464,6 +636,75 @@ const TaskForm: React.FC = () => {
     // LIST VIEW
     return (
         <div className="max-w-6xl mx-auto flex flex-col gap-8 animate-in fade-in duration-500">
+
+            {/* Personnel Control Section */}
+            <div className="flex flex-col gap-4">
+                <h1 className="text-[#0d141b] dark:text-white text-3xl font-extrabold leading-tight tracking-tight">Controle do Efetivo</h1>
+                <p className="text-[#4c739a] dark:text-slate-400 text-base font-normal">Tarefas atribuídas ao efetivo nesse momento.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {members
+                        .filter(m => {
+                            const val = rankOrder[m.abrev] || 99;
+                            return val >= 4; // Suboficial (4) and below (>=4)
+                        })
+                        .map(member => {
+                            // Get member tasks
+                            const memberTasks = tasks.filter(t => t.assigned_to === member.id && t.status !== 'concluida');
+                            // Sort: In Progress first
+                            memberTasks.sort((a, b) => {
+                                if (a.status === 'iniciada' && b.status !== 'iniciada') return -1;
+                                if (a.status !== 'iniciada' && b.status === 'iniciada') return 1;
+                                return 0;
+                            });
+
+                            return (
+                                <div key={member.id} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm flex flex-col gap-3">
+                                    <div className="flex flex-col items-center gap-2 mb-1">
+                                        <div className="w-16 h-16 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[#4c739a] font-bold text-sm uppercase overflow-hidden shadow-sm">
+                                            {/* Avatar or Initials */}
+                                            {member.avatar ? (
+                                                <img
+                                                    src={member.avatar}
+                                                    alt={member.name}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            ) : (
+                                                member.name.substring(0, 2)
+                                            )}
+                                        </div>
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-lg font-bold text-[#0d141b] dark:text-white leading-tight">
+                                                {member.abrev} {member.war_name}
+                                            </span>
+                                            <span className="text-[10px] text-[#4c739a] font-medium uppercase mt-0.5">
+                                                {memberTasks.length} Atividades
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="h-px bg-[#e7edf3] dark:bg-slate-800 w-full"></div>
+
+                                    <div className="flex flex-col gap-1.5 min-h-[60px]">
+                                        {memberTasks.length > 0 ? (
+                                            memberTasks.slice(0, 3).map(task => ( // Show top 3? User didn't specify limit but 4 cols might get tall. Let's show all or scroll? List of tasks... "a lista de tarefas". Let's show all but careful with height.
+                                                <div key={task.id} className={`text-xs truncate py-0.5 ${task.status === 'iniciada' ? 'font-bold text-primary' : 'text-[#4c739a]'}`}>
+                                                    {task.status === 'iniciada' && '▶ '}
+                                                    {task.name}
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <span className="text-[10px] text-slate-400 italic">Sem tarefas atribuídas</span>
+                                        )}
+                                        {memberTasks.length > 3 && (
+                                            <span className="text-[10px] text-slate-400 font-medium">+ {memberTasks.length - 3} outras...</span>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                </div>
+            </div>
+
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex flex-col gap-2">
                     <h1 className="text-[#0d141b] dark:text-white text-3xl font-extrabold leading-tight tracking-tight">Gerenciamento de Tarefas</h1>
@@ -611,7 +852,7 @@ const TaskForm: React.FC = () => {
                                 filteredTasks.map(task => (
                                     <tr key={task.id} className="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                                         <td className="p-4">
-                                            <p className="text-sm font-bold text-[#0d141b] dark:text-white">{task.name}</p>
+                                            <p className={`text-sm font-bold text-[#0d141b] dark:text-white inline-block ${getTaskHighlight(task)}`}>{task.name}</p>
                                             <div className="flex gap-1 mt-1">
                                                 {task.specialties?.map(s => (
                                                     <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[#4c739a] font-bold">{s}</span>
@@ -674,13 +915,11 @@ const TaskForm: React.FC = () => {
                                                 )}
                                                 {canDelete() && (
                                                     <button
-                                                        onClick={() => handleDelete(task.id)}
-                                                        className="p-2 text-[#4c739a] hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 rounded-lg transition-colors border border-transparent hover:border-red-100"
-                                                        title="Excluir"
+                                                        onClick={() => handleDelete(task)}
+                                                        className="p-2 text-[#4c739a] hover:bg-red-100 hover:text-red-600 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
                                                     >
-                                                        <span className="material-symbols-outlined text-[18px]">delete</span>
-                                                    </button>
-                                                )}
+                                                        <span className="material-symbols-outlined text-[16px]">delete</span>
+                                                    </button>)}
                                             </div>
                                         </td>
                                     </tr>
@@ -696,6 +935,43 @@ const TaskForm: React.FC = () => {
                     </table>
                 </div>
             </div>
+            {/* Delete Confirmation Modal */}
+            {taskToDelete && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-[#e7edf3] dark:border-slate-800 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="p-6 text-center">
+                            <div className="size-16 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mx-auto mb-4">
+                                <span className="material-symbols-outlined text-red-500 text-[32px]">delete_forever</span>
+                            </div>
+                            <h3 className="text-xl font-bold text-[#0d141b] dark:text-white mb-2">Confirmar Exclusão</h3>
+                            <p className="text-[#4c739a] dark:text-slate-400">
+                                Tem certeza que deseja deletar a tarefa <span className="font-bold text-[#0d141b] dark:text-white">"{taskToDelete.name}"</span>?
+                                <br />Esta ação não pode ser desfeita.
+                            </p>
+                        </div>
+                        <div className="flex p-4 gap-3 bg-[#f8fafc] dark:bg-slate-800/50">
+                            <button
+                                onClick={() => setTaskToDelete(null)}
+                                className="flex-1 px-4 py-3 rounded-xl border border-[#cfdbe7] dark:border-slate-700 text-sm font-bold text-[#4c739a] hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-95"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={confirmDelete}
+                                className="flex-1 px-4 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold shadow-lg shadow-red-500/20 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                                disabled={loading}
+                            >
+                                {loading ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white"></div>
+                                ) : (
+                                    'Excluir Registro'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 };

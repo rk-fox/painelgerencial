@@ -251,6 +251,15 @@ const Dashboard: React.FC = () => {
       return 0;
     });
 
+  // Modal State
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [taskToComplete, setTaskToComplete] = useState<any>(null);
+  const [completionQuantity, setCompletionQuantity] = useState<number>(1);
+
+  const handleCreateNew = () => {
+    // Navigate to task form if needed, but mainly this is Dashboard logic
+  };
+
   const calculateStats = () => {
     if (!currentUser) return { completed30: 0, completedTrend: 0, expiringCount: 0, pendingCount: 0 };
 
@@ -292,7 +301,7 @@ const Dashboard: React.FC = () => {
 
     const expiringCount = tasks.filter(t => {
       // Logic: assigned to me, not concluded, is pontual, matches date range
-      if (t.assigned_to !== currentUser.id) return false;
+      //if (t.assigned_to !== currentUser.id) return false;
       if (t.periodicity !== 'pontual' || t.status === 'concluida' || !t.end_date) return false;
 
       const endDate = new Date(t.end_date);
@@ -327,8 +336,59 @@ const Dashboard: React.FC = () => {
 
   const stats = calculateStats();
 
+  const handleRequestCompletion = (task: any) => {
+    setTaskToComplete(task);
+    setCompletionQuantity(task.quantidade || 1);
+    setShowCompletionModal(true);
+  };
+
+  const confirmCompletion = async () => {
+    if (!taskToComplete) return;
+    await executeCompletion(taskToComplete.id, completionQuantity);
+    setShowCompletionModal(false);
+    setTaskToComplete(null);
+  };
+
+  const cancelCompletion = async () => {
+    if (!taskToComplete) return;
+    // "Caso cancele, deve manter a conclusão da tarefa com a quantidade inalterada."
+    // So we complete with ORIGINAL quantity.
+    await executeCompletion(taskToComplete.id, taskToComplete.quantidade || 1);
+    setShowCompletionModal(false);
+    setTaskToComplete(null);
+  };
+
+  const executeCompletion = async (taskId: string, qty: number) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({
+          status: 'concluida',
+          completed_at: new Date().toISOString(),
+          quantidade: qty
+        })
+        .eq('id', taskId);
+
+      if (error) throw error;
+      // Update status in local state
+      setTasks(prev => prev.map(t =>
+        t.id === taskId ? {
+          ...t,
+          status: 'concluida',
+          completed_at: new Date().toISOString(),
+          quantidade: qty
+        } : t
+      ));
+
+      // Also refetch
+      await fetchTasks();
+    } catch (err: any) {
+      console.error('Error completing task:', err.message);
+    }
+  };
+
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500 relative">
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard
@@ -467,7 +527,7 @@ const Dashboard: React.FC = () => {
                 onDragStart={(e: React.DragEvent) => handleDragStart(e, task.id)}
                 onStart={() => handleStartTask(task.id)}
                 onSuspend={() => handleSuspendTask(task.id)}
-                onComplete={() => handleCompleteTask(task.id)}
+                onComplete={() => handleRequestCompletion(task)}
               />
             ))}
             {myTasks.length === 0 && (
@@ -481,6 +541,51 @@ const Dashboard: React.FC = () => {
           </div>
         </section>
       </div>
+
+      {/* Completion Modal */}
+      {showCompletionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl p-6 w-full max-w-sm border border-[#e7edf3] dark:border-slate-800 flex flex-col gap-4 animate-in zoom-in-95 duration-300">
+            <div className="flex flex-col items-center gap-2 text-center">
+              <div className="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center mb-2">
+                <span className="material-symbols-outlined text-2xl">check_circle</span>
+              </div>
+              <h3 className="text-lg font-bold text-[#0d141b] dark:text-white">Conclusão de Tarefa</h3>
+              <p className="text-[#4c739a] dark:text-slate-400 text-sm">
+                Quantas tarefas iguais foram realizadas neste momento?
+              </p>
+            </div>
+
+            <div className="flex justify-center py-2">
+              <input
+                type="number"
+                min="1"
+                value={completionQuantity}
+                onChange={(e) => setCompletionQuantity(parseInt(e.target.value) || 1)}
+                className="w-24 text-center text-2xl font-bold p-2 border-b-2 border-primary bg-transparent focus:outline-none"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={cancelCompletion}
+                className="flex-1 flex items-center justify-center gap-2 bg-red-50 text-red-600 hover:bg-red-100 py-3 rounded-xl font-bold transition-all active:scale-95"
+              >
+                <span className="material-symbols-outlined">close</span>
+                Manter ({taskToComplete?.quantidade || 1})
+              </button>
+              <button
+                onClick={confirmCompletion}
+                className="flex-1 flex items-center justify-center gap-2 bg-green-500 text-white hover:bg-green-600 py-3 rounded-xl font-bold transition-all active:scale-95 shadow-lg shadow-green-500/20"
+              >
+                <span className="material-symbols-outlined">check</span>
+                Salvar ({completionQuantity})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
