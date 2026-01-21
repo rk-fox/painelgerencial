@@ -134,6 +134,11 @@ const Reports: React.FC = () => {
                             <h4 className="text-base font-bold text-slate-800 dark:text-white">Ranking de Atividades</h4>
                             <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Categorias por Quantidade Concluída</p>
                         </div>
+                        <select className="bg-slate-50 dark:bg-slate-800 border-none rounded-lg text-[10px] font-bold px-3 py-1 text-slate-500 focus:ring-1 focus:ring-primary">
+                            <option>Últimos 30 dias</option>
+                            <option>Último trimestre</option>
+                            <option>Esse ano</option>
+                        </select>
                     </div>
                     <div className="space-y-6">
                         {loading ? (
@@ -225,24 +230,20 @@ const Reports: React.FC = () => {
                 </div>
             </div>
 
-            {/* Tarefas Concluídas por Membro (Full Width Bottom) */}
+            {/* Diárias Realizadas pelo Efetivo (Full Width Bottom) */}
             <div className="grid grid-cols-1 gap-6">
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm">
                     <div className="flex items-center justify-between mb-8">
                         <div>
-                            <h4 className="text-base font-bold text-slate-800 dark:text-white">Tarefas Concluídas por Membro</h4>
-                            <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Acumulado do Mês Corrente</p>
+                            <h4 className="text-base font-bold text-slate-800 dark:text-white">Diárias Realizadas pelo Efetivo</h4>
+                            <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Acumulado do Ano Corrente</p>
                         </div>
-                        <select className="bg-slate-50 dark:bg-slate-800 border-none rounded-lg text-[10px] font-bold px-3 py-1 text-slate-500 focus:ring-1 focus:ring-primary">
-                            <option>Últimos 30 dias</option>
-                            <option>Último trimestre</option>
-                        </select>
                     </div>
                     <div className="space-y-6">
-                        <BarChartItem label="Silva, Sgt" value="84 tarefas (Max)" percent={100} />
-                        <BarChartItem label="Santos, Sgt" value="62 tarefas" percent={74} />
-                        <BarChartItem label="Oliveira, Sgt" value="55 tarefas" percent={65} />
-                        <BarChartItem label="Melo, Sgt" value="93 tarefas" percent={100} color="bg-primary" />
+                        <BarChartItem label="SO. Ferraz" value="100 diárias (Max)" percent={100} color="bg-primary" />
+                        <BarChartItem label="Sgt. Robson" value="90 diárias" percent={90} />
+                        <BarChartItem label="Sgt. Railbolt" value="74 diárias" percent={74} />
+                        <BarChartItem label="SO. Celso" value="65 diárias" percent={65} />
                     </div>
                 </div>
             </div>
