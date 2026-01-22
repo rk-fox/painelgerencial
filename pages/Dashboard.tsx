@@ -693,7 +693,7 @@ const TaskCard = ({ task, onPull, onDragStart }: any) => {
       <div className="flex items-center justify-between border-t border-[#e7edf3] dark:border-slate-800 pt-5 mt-auto">
         <div className="flex items-center gap-2 text-[10px] font-bold text-[#4c739a]">
           <span className="material-symbols-outlined text-lg">calendar_today</span>
-          <span>Início: {task.start_date ? new Date(task.start_date).toLocaleDateString() : 'N/A'}</span>
+          <span>Início: {task.start_date ? task.start_date.split('T')[0].split('-').reverse().join('/') : 'N/A'}</span>
         </div>
         <button
           onClick={onPull}

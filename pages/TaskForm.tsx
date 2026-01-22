@@ -869,7 +869,7 @@ const TaskForm: React.FC = () => {
                                             )}
                                         </td>
                                         <td className="p-4 text-sm text-[#4c739a] dark:text-slate-300">
-                                            {task.start_date ? new Date(task.start_date).toLocaleDateString() : '-'}
+                                            {task.start_date ? task.start_date.split('T')[0].split('-').reverse().join('/') : '-'}
                                         </td>
                                         <td className="p-4 text-sm text-[#4c739a] dark:text-slate-300">
                                             {getMemberName(task.assigned_to)}
