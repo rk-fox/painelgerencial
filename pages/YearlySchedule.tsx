@@ -304,7 +304,7 @@ const YearlySchedule: React.FC = () => {
                                             >
                                                 {day}
                                                 {dayMissions.length > 0 && (
-                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
+                                                    <div className="absolute top-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
                                                         <div className="bg-slate-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap shadow-xl">
                                                             {dayMissions.map(m => (
                                                                 <div key={m.id} className="flex items-center gap-2">
@@ -369,7 +369,7 @@ const YearlySchedule: React.FC = () => {
                                                             <span className="font-bold text-slate-800 dark:text-white cursor-help">{mission.qtd_equipe}</span>
                                                             <span className="text-slate-500 text-xs ml-1">pessoas</span>
                                                             {mission.equipe && mission.equipe.length > 0 && (
-                                                                <div className="absolute bottom-full left-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
+                                                                <div className="absolute top-full left-0 mb-2 opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
                                                                     <div className="bg-slate-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap shadow-xl">
                                                                         {getMemberNames(mission.equipe).map((name, idx) => (
                                                                             <div key={idx}>{name}</div>
