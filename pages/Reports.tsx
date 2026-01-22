@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
+import { Member } from '../types';
+
+interface MemberRanking {
+    id: string;
+    name: string;
+    war_name?: string;
+    abrev?: string;
+    avatar?: string;
+    totalDiarias: number;
+}
 
 interface CategoryRanking {
     category: string;
@@ -21,6 +31,7 @@ interface MissionStats {
 }
 
 const Reports: React.FC = () => {
+    const [memberRankings, setMemberRankings] = useState<MemberRanking[]>([]);
     const [categoryRankings, setCategoryRankings] = useState<CategoryRanking[]>([]);
     const [statusCounts, setStatusCounts] = useState<StatusCounts>({ pendente: 0, iniciada: 0, concluida: 0 });
     const [missionStats, setMissionStats] = useState<MissionStats>({
@@ -35,6 +46,7 @@ const Reports: React.FC = () => {
     useEffect(() => {
         fetchReportData();
         fetchMissionStats();
+        fetchMemberRanking();
     }, []);
 
     // Calculate weekdays between two dates (excluding weekends)
@@ -104,6 +116,58 @@ const Reports: React.FC = () => {
             totalDiarias: Math.round(totalDiarias * 10) / 10,
             workHours
         });
+    };
+
+    const fetchMemberRanking = async () => {
+        try {
+            const currentYear = new Date().getFullYear();
+
+            // Fetch members
+            const { data: membersData } = await supabase
+                .from('members')
+                .select('*');
+
+            // Filter for SO. and Sgt.
+            const eligibleMembers = membersData?.filter(m => 
+                ['SO.', 'Sgt.'].includes(m.abrev || '')
+            ) || [];
+
+            // Fetch missions for current year
+            const { data: missionsData } = await supabase
+                .from('missions')
+                .select('id, data_inicio, data_fim, equipe')
+                .gte('data_inicio', `${currentYear}-01-01`)
+                .lte('data_inicio', `${currentYear}-12-31`);
+
+            // Calculate totals
+            const memberMap = new Map<string, number>();
+            
+            // Initialize with 0 for all eligible members
+            eligibleMembers.forEach(m => memberMap.set(m.id, 0));
+
+            missionsData?.forEach(mission => {
+                const duration = calculateDuration(mission.data_inicio, mission.data_fim);
+                mission.equipe?.forEach((memberId: string) => {
+                    if (memberMap.has(memberId)) {
+                        memberMap.set(memberId, Number((memberMap.get(memberId)! + duration).toFixed(1)));
+                    }
+                });
+            });
+
+            // Create ranking array
+            const rankings = eligibleMembers.map(m => ({
+                id: m.id,
+                name: m.name,
+                war_name: m.war_name,
+                abrev: m.abrev,
+                avatar: m.avatar,
+                totalDiarias: memberMap.get(m.id) || 0
+            })).sort((a, b) => b.totalDiarias - a.totalDiarias);
+
+            setMemberRankings(rankings);
+        } catch (error) {
+            console.error('Error fetching member ranking:', error);
+        }
     };
 
     const fetchReportData = async () => {
@@ -330,12 +394,52 @@ const Reports: React.FC = () => {
                             <h4 className="text-base font-bold text-slate-800 dark:text-white">Diárias Realizadas pelo Efetivo</h4>
                             <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Acumulado do Ano Corrente</p>
                         </div>
+                        {memberRankings.length > 0 && (
+                            <div className="text-right">
+                                <span className="text-xs font-bold text-primary">{memberRankings[0].totalDiarias} diárias (Max)</span>
+                            </div>
+                        )}
                     </div>
                     <div className="space-y-6">
-                        <BarChartItem label="SO. Ferraz" value="100 diárias (Max)" percent={100} color="bg-primary" />
-                        <BarChartItem label="Sgt. Robson" value="90 diárias" percent={90} />
-                        <BarChartItem label="Sgt. Railbolt" value="74 diárias" percent={74} />
-                        <BarChartItem label="SO. Celso" value="65 diárias" percent={65} />
+                        {memberRankings.map((member) => (
+                            <div key={member.id} className="relative">
+                                <div className="flex items-center gap-4 mb-2">
+                                    {/* Avatar */}
+                                    <div className="flex-shrink-0">
+                                        {member.avatar ? (
+                                            <img src={member.avatar} alt={member.war_name || member.name} className="w-10 h-10 rounded-full object-cover border-2 border-white dark:border-slate-800 shadow-sm" />
+                                        ) : (
+                                            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center border-2 border-white dark:border-slate-800 shadow-sm">
+                                                <span className="text-xs font-bold text-slate-500">
+                                                    {(member.war_name || member.name || '').charAt(0)}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {/* Name and Bar */}
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                                                {member.abrev} {member.war_name}
+                                            </span>
+                                            <span className="text-xs font-bold text-slate-500">
+                                                {member.totalDiarias} diárias
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                                            <div 
+                                                className="bg-primary h-full rounded-full transition-all duration-500" 
+                                                style={{ width: `${(member.totalDiarias / (memberRankings[0]?.totalDiarias || 1)) * 100}%` }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        {memberRankings.length === 0 && (
+                            <div className="text-center text-slate-400 py-8">Nenhum membro encontrado.</div>
+                        )}
                     </div>
                 </div>
             </div>
