@@ -190,23 +190,20 @@ const YearlySchedule: React.FC = () => {
                     <select
                         value={selectedYear}
                         onChange={(e) => setSelectedYear(Number(e.target.value))}
-                        className="px-4 py-3 w-[100px] rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold focus:ring-2 focus:ring-primary"
-                    >
+                        className="px-4 py-3 w-[100px] rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold focus:ring-2 focus:ring-primary">
                         {availableYears.map(year => (
                             <option key={year} value={year}>{year}</option>
                         ))}
                     </select>
                     <button
                         onClick={() => setIsReviewPopupOpen(true)}
-                        className="px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95 flex items-center gap-2"
-                    >
+                        className="px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95 flex items-center gap-2">
                         <span className="material-symbols-outlined text-sm">visibility</span>
                         Rever Planejamento
                     </button>
                     <button 
                         onClick={() => navigate('/app/schedule/adjustment')}
-                        className="px-6 py-3 rounded-xl bg-primary text-white font-bold shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all active:scale-95 flex items-center justify-center gap-2"
-                    >
+                        className="px-6 py-3 rounded-xl bg-primary text-white font-bold shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all active:scale-95 flex items-center justify-center gap-2">
                         <span className="material-symbols-outlined">add</span>
                         <span>Cadastrar Nova Viagem</span>
                     </button>
@@ -261,10 +258,7 @@ const YearlySchedule: React.FC = () => {
             <div className="mb-6">
                 <div className="grid grid-cols-7 gap-3 mb-3">
                     {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d, i) => (
-                        <div
-                            key={i}
-                            className="text-center text-xs font-bold text-slate-400 uppercase"
-                        >
+                        <div key={i} className="text-center text-xs font-bold text-slate-400 uppercase">
                     {d}
                 </div>
                 ))}
@@ -295,12 +289,7 @@ const YearlySchedule: React.FC = () => {
                     }
 
                     return (
-                        <div
-                            key={day}
-                            className={`aspect-square flex items-center justify-center text-base font-bold rounded-xl 
-                                ${bgClass} ${textClass} relative cursor-pointer 
-                                hover:ring-2 hover:ring-primary transition-all group`}
-                        >
+                        <div key={day} className={`aspect-square flex items-center justify-center text-base font-bold rounded-xl ${bgClass} ${textClass} relative cursor-pointer hover:ring-2 hover:ring-primary transition-all group`}>
                         {day}
 
                         {dayMissions.length > 0 && (
