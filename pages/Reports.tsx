@@ -349,7 +349,7 @@ const Reports: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <ReportCard
                     icon="explore" color="amber"
-                    title="Missões Únicas" 
+                    title="Missões Únicas Previstas" 
                     value={missionStats.totalMissions.toString()}
                     badge={missionStats.totalMissions - missionStats.previousYearMissions >= 0 
                         ? `+${missionStats.totalMissions - missionStats.previousYearMissions}` 
@@ -358,19 +358,19 @@ const Reports: React.FC = () => {
                 />
                 <ReportCard
                     icon="date_range" color="sky"
-                    title="Total de Dias em Missão" 
+                    title="Total de Dias Previstos em Missão" 
                     value={`${missionStats.totalDays} dias`}
                     badge="Consolidado" badgeColor="sky"
                 />
                 <ReportCard
                     icon="payments" color="violet"
-                    title="Total de Diárias Realizadas" 
+                    title="Total de Diárias Realizadas/Previstas" 
                     value={`${missionStats.totalDiarias} diárias`}
                     badge="Acumulado" badgeColor="violet"
                 />
                 <ReportCard
                     icon="timer" color="sky"
-                    title="Carga Horária em Viagem" 
+                    title="Carga Horária Esperada em Viagem" 
                     value={`${missionStats.workHours}h`}
                     badge="Consolidado" badgeColor="sky"
                 />
@@ -389,24 +389,7 @@ const Reports: React.FC = () => {
                             value={rankingTimeRange}
                             onChange={(e) => setRankingTimeRange(e.target.value)}
                             //className="bg-slate-50 w-[100px] dark:bg-slate-800 border-none rounded-lg text-[10px] font-bold px-3 py-1 text-slate-500 focus:ring-1 focus:ring-primary cursor-pointer"
-                            className="
-    block
-    appearance-none
-    w-[120px]
-    box-border
-    flex-none
-    bg-slate-50
-    dark:bg-slate-800
-    rounded-lg
-    text-[10px]
-    font-bold
-    px-3
-    py-1
-    text-slate-500
-    focus:ring-1
-    focus:ring-primary
-    cursor-pointer
-  "
+                            className="block appearance-none w-[120px] box-border flex-none bg-slate-50 dark:bg-slate-800 rounded-lg text-[10px] font-bold px-3 py-1 text-slate-500 focus:ring-1 focus:ring-primary cursor-pointer"
                         >
                             <option value="30d">Últimos 30 dias</option>
                             <option value="trimestre">Último trimestre</option>

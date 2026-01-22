@@ -8,6 +8,7 @@ interface Member {
     name: string;
     abrev: string;
     war_name: string;
+    status: string;
 }
 
 interface Category {
@@ -99,7 +100,7 @@ const TaskForm: React.FC = () => {
             const { data, error } = await supabase
                 .from('members')
                 //.select('id, name, rank, war_name')
-                .select('id, name, avatar, abrev, war_name')
+                .select('id, name, avatar, abrev, war_name, status')
                 .order('name');
             if (error) throw error;
             setMembers(data || []);
@@ -674,6 +675,7 @@ const TaskForm: React.FC = () => {
                         })
                         .map(member => {
                             const currentMission = getMemberMission(member.id);
+                            const isUnavailable = member.status === 'Indisponível';
                             
                             // Get member tasks
                             const memberTasks = tasks.filter(t => t.assigned_to === member.id && t.status !== 'concluida');
@@ -691,6 +693,8 @@ const TaskForm: React.FC = () => {
                                         p-4 rounded-xl border shadow-sm flex flex-col gap-3 transition-all duration-300
                                         ${currentMission 
                                             ? 'bg-amber-50/50 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800' 
+                                            : isUnavailable
+                                            ? 'bg-red-50/50 border-red-200 dark:bg-red-900/10 dark:border-red-800'
                                             : 'bg-white border-[#e7edf3] dark:bg-slate-900 dark:border-slate-800'
                                         }
                                     `}
@@ -698,7 +702,7 @@ const TaskForm: React.FC = () => {
                                     <div className="flex flex-col items-center gap-2 mb-1">
                                         <div className={`
                                             w-16 h-16 rounded-full flex items-center justify-center font-bold text-sm uppercase overflow-hidden shadow-sm border-2
-                                            ${currentMission ? 'border-amber-400' : 'border-white dark:border-slate-800 bg-slate-200 dark:bg-slate-700 text-[#4c739a]'}
+                                            ${currentMission ? 'border-amber-400' : isUnavailable ? 'border-red-400' : 'border-white dark:border-slate-800 bg-slate-200 dark:bg-slate-700 text-[#4c739a]'}
                                         `}>
                                             {/* Avatar or Initials */}
                                             {member.avatar ? (
@@ -722,6 +726,13 @@ const TaskForm: React.FC = () => {
                                                         Em Viagem
                                                     </span>
                                                 </div>
+                                            ) : isUnavailable ? (
+                                                <div className="flex items-center gap-1.5 mt-0.5">
+                                                    <span className="material-symbols-outlined text-[14px] text-red-600 dark:text-red-500">block</span>
+                                                    <span className="text-[10px] text-red-600 dark:text-red-500 font-bold uppercase tracking-wider">
+                                                        Indisponível
+                                                    </span>
+                                                </div>
                                             ) : (
                                                 <span className="text-[10px] text-[#4c739a] font-medium uppercase mt-0.5">
                                                     {memberTasks.length} Atividades
@@ -730,7 +741,7 @@ const TaskForm: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    <div className={`h-px w-full ${currentMission ? 'bg-amber-200 dark:bg-amber-800/50' : 'bg-[#e7edf3] dark:bg-slate-800'}`}></div>
+                                    <div className={`h-px w-full ${currentMission ? 'bg-amber-200 dark:bg-amber-800/50' : isUnavailable ? 'bg-red-200 dark:bg-red-800/50' : 'bg-[#e7edf3] dark:bg-slate-800'}`}></div>
 
                                     <div className="flex flex-col gap-1.5 min-h-[60px]">
                                         {currentMission ? (
