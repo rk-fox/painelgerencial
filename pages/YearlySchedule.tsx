@@ -390,7 +390,7 @@ const YearlySchedule: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                </div>
+                
             )}
 
             {/* Review Popup Modal */}
