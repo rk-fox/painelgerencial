@@ -91,27 +91,42 @@ const YearlySchedule: React.FC = () => {
         });
     };
 
-    // CORREÇÃO: Normalização para garantir comparação segura de mês/ano
+    // --- FUNÇÕES DE DATA CORRIGIDAS (AJUSTE DE FUSO HORÁRIO) ---
+
+    // Função auxiliar para formatar a data visualmente (O "Terceiro Ajuste")
+    // Transforma '2024-01-20' em '20/01/2024' manualmente
+    const formatDateString = (dateString: string): string => {
+        if (!dateString) return '';
+        const parts = dateString.split('T')[0].split('-'); // ['2024', '01', '20']
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    };
+
     const getMissionsForMonth = (month: number): Mission[] => {
         return missions.filter(m => {
-            const missionDate = new Date(m.data_inicio);
-            // Verifica mês e ano para evitar bugs se houver dados de anos misturados no estado
+            // Pega apenas a parte da data YYYY-MM-DD
+            const datePart = m.data_inicio.split('T')[0];
+            const [y, mStr, d] = datePart.split('-').map(Number);
+            
+            // Cria data local: Ano, Mês (0-indexado), Dia
+            const missionDate = new Date(y, mStr - 1, d);
+            
             return missionDate.getMonth() === month && missionDate.getFullYear() === selectedYear;
         });
     };
 
-    // CORREÇÃO PRINCIPAL: Normalização de horário para incluir corretamente o último dia
     const getMissionsForDay = (month: number, day: number): Mission[] => {
         return missions.filter(m => {
-            // Cria objetos Date baseados nas strings
-            const s = new Date(m.data_inicio);
-            const e = new Date(m.data_fim);
-            
-            // Reconstrói as datas garantindo horas zeradas (00:00:00) para comparação puramente de calendário
-            // Isso resolve o problema do fuso horário ou horários quebrados ignorando o último dia
-            const startDate = new Date(s.getFullYear(), s.getMonth(), s.getDate()).getTime();
-            const endDate = new Date(e.getFullYear(), e.getMonth(), e.getDate()).getTime();
+            // Data do calendário que estamos verificando (Meia-noite Local)
             const checkDate = new Date(selectedYear, month, day).getTime();
+
+            // Pega as datas de inicio e fim quebradas em partes (Ano, Mês, Dia)
+            const sParts = m.data_inicio.split('T')[0].split('-').map(Number);
+            const eParts = m.data_fim.split('T')[0].split('-').map(Number);
+
+            // Recria as datas localmente para evitar conversão UTC -> Local (-3h)
+            // Lembre-se: no JS, mês começa em 0, por isso subtraímos 1
+            const startDate = new Date(sParts[0], sParts[1] - 1, sParts[2]).getTime();
+            const endDate = new Date(eParts[0], eParts[1] - 1, eParts[2]).getTime();
 
             return checkDate >= startDate && checkDate <= endDate;
         });
@@ -270,10 +285,6 @@ const YearlySchedule: React.FC = () => {
                                     {Array.from({ length: getDaysInMonth(selectedMonth) }).map((_, i) => {
                                         const day = i + 1;
                                         const dayMissions = getMissionsForDay(selectedMonth, day);
-                                        
-                                        // MELHORIA DE PERFORMANCE: 
-                                        // Usamos o dayMissions já calculado para somar a equipe, 
-                                        // em vez de chamar getTeamSizeForDay (que filtraria tudo de novo)
                                         const teamSize = dayMissions.reduce((sum, m) => sum + (m.qtd_equipe || 0), 0);
                                         
                                         let bgClass = "bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-white";
@@ -341,7 +352,8 @@ const YearlySchedule: React.FC = () => {
                                                         </td>
                                                         <td className="py-3 px-2 text-slate-600 dark:text-slate-400">{mission.local}</td>
                                                         <td className="py-3 px-2 text-slate-600 dark:text-slate-400">
-                                                            {new Date(mission.data_inicio).toLocaleDateString('pt-BR')} - {new Date(mission.data_fim).toLocaleDateString('pt-BR')}
+                                                            {/* AQUI ESTAVA O PROBLEMA DE DATA VISUAL. CORRIGIDO COM formatDateString */}
+                                                            {formatDateString(mission.data_inicio)} - {formatDateString(mission.data_fim)}
                                                         </td>
                                                         <td className="py-3 px-2">
                                                             <span className="bg-primary/10 text-primary px-2 py-1 rounded-lg font-bold text-xs">
@@ -446,7 +458,8 @@ const YearlySchedule: React.FC = () => {
                                                             </td>
                                                             <td className="py-3 px-2 text-slate-600 dark:text-slate-400">{mission.local}</td>
                                                             <td className="py-3 px-2 text-slate-600 dark:text-slate-400">
-                                                                {new Date(mission.data_inicio).toLocaleDateString('pt-BR')} - {new Date(mission.data_fim).toLocaleDateString('pt-BR')}
+                                                                {/* CORREÇÃO APLICADA AQUI TAMBÉM */}
+                                                                {formatDateString(mission.data_inicio)} - {formatDateString(mission.data_fim)}
                                                             </td>
                                                             <td className="py-3 px-2">
                                                                 <span className="bg-primary/10 text-primary px-2 py-1 rounded-lg font-bold text-xs">
