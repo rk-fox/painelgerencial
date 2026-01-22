@@ -33,7 +33,6 @@ const YearlySchedule: React.FC = () => {
     const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
     const [isMonthPopupOpen, setIsMonthPopupOpen] = useState(false);
     const [isReviewPopupOpen, setIsReviewPopupOpen] = useState(false);
-
     const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
     useEffect(() => {
@@ -51,7 +50,6 @@ const YearlySchedule: React.FC = () => {
         const { data, error } = await supabase
             .from('missions')
             .select('data_inicio');
-        
         if (!error && data) {
             const years = [...new Set(data.map(m => new Date(m.data_inicio).getFullYear()))].sort((a, b) => b - a);
             setAvailableYears(years.length > 0 ? years : [new Date().getFullYear()]);
@@ -71,7 +69,6 @@ const YearlySchedule: React.FC = () => {
             .gte('data_inicio', startDate)
             .lte('data_inicio', endDate)
             .order('data_inicio');
-        
         if (!error && data) {
             setMissions(data);
         }
@@ -81,7 +78,6 @@ const YearlySchedule: React.FC = () => {
         const { data, error } = await supabase
             .from('members')
             .select('id, name, war_name, rank, abrev');
-        
         if (!error && data) {
             setMembers(data);
         }
@@ -95,19 +91,29 @@ const YearlySchedule: React.FC = () => {
         });
     };
 
+    // CORREÇÃO: Normalização para garantir comparação segura de mês/ano
     const getMissionsForMonth = (month: number): Mission[] => {
         return missions.filter(m => {
             const missionDate = new Date(m.data_inicio);
-            return missionDate.getMonth() === month;
+            // Verifica mês e ano para evitar bugs se houver dados de anos misturados no estado
+            return missionDate.getMonth() === month && missionDate.getFullYear() === selectedYear;
         });
     };
 
+    // CORREÇÃO PRINCIPAL: Normalização de horário para incluir corretamente o último dia
     const getMissionsForDay = (month: number, day: number): Mission[] => {
         return missions.filter(m => {
-            const start = new Date(m.data_inicio);
-            const end = new Date(m.data_fim);
-            const checkDate = new Date(selectedYear, month, day);
-            return checkDate >= start && checkDate <= end;
+            // Cria objetos Date baseados nas strings
+            const s = new Date(m.data_inicio);
+            const e = new Date(m.data_fim);
+            
+            // Reconstrói as datas garantindo horas zeradas (00:00:00) para comparação puramente de calendário
+            // Isso resolve o problema do fuso horário ou horários quebrados ignorando o último dia
+            const startDate = new Date(s.getFullYear(), s.getMonth(), s.getDate()).getTime();
+            const endDate = new Date(e.getFullYear(), e.getMonth(), e.getDate()).getTime();
+            const checkDate = new Date(selectedYear, month, day).getTime();
+
+            return checkDate >= startDate && checkDate <= endDate;
         });
     };
 
@@ -162,12 +168,10 @@ const YearlySchedule: React.FC = () => {
 
     const confirmDelete = async () => {
         if (!missionToDelete) return;
-
         const { error } = await supabase
             .from('missions')
             .delete()
             .eq('id', missionToDelete.id);
-        
         if (!error) {
             fetchMissions(selectedYear);
             setMissionToDelete(null);
@@ -176,8 +180,6 @@ const YearlySchedule: React.FC = () => {
 
     return (
         <div className="animate-in fade-in duration-500">
-            {/* ... (existing header and content) ... */}
-
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div>
                     <h1 className="text-[#0d141b] dark:text-white text-3xl font-black tracking-tight">Cronograma Anual de Missões</h1>
@@ -268,7 +270,12 @@ const YearlySchedule: React.FC = () => {
                                     {Array.from({ length: getDaysInMonth(selectedMonth) }).map((_, i) => {
                                         const day = i + 1;
                                         const dayMissions = getMissionsForDay(selectedMonth, day);
-                                        const teamSize = getTeamSizeForDay(selectedMonth, day);
+                                        
+                                        // MELHORIA DE PERFORMANCE: 
+                                        // Usamos o dayMissions já calculado para somar a equipe, 
+                                        // em vez de chamar getTeamSizeForDay (que filtraria tudo de novo)
+                                        const teamSize = dayMissions.reduce((sum, m) => sum + (m.qtd_equipe || 0), 0);
+                                        
                                         let bgClass = "bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-white";
                                         let textClass = "";
 
@@ -495,7 +502,7 @@ const YearlySchedule: React.FC = () => {
                 </div>
             )}
 
-            {/* Delete Confirmation Modal (Z-Index 60 to appear above date popups) */}
+            {/* Delete Confirmation Modal */}
             {missionToDelete && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden scale-100 animate-in zoom-in-95 duration-200">
@@ -546,7 +553,6 @@ interface MonthCardProps {
 
 const MonthCard: React.FC<MonthCardProps> = ({ month, year, days, startDay, heatmapData, missionsCount, onMonthClick, monthIndex, getTeamSizeForDay }) => {
     const cells = [];
-    
     for (let i = 0; i < startDay; i++) {
         cells.push(<div key={`empty-${i}`} className="aspect-square"></div>);
     }
@@ -555,7 +561,6 @@ const MonthCard: React.FC<MonthCardProps> = ({ month, year, days, startDay, heat
         const teamSize = getTeamSizeForDay(monthIndex, i);
         let bgClass = "bg-slate-50 dark:bg-slate-800 text-[#0d141b] dark:text-white";
         let textClass = "";
-
         if (heatmapData.includes(i)) {
             textClass = "text-white";
             if (teamSize >= 7) bgClass = "bg-red-500";
