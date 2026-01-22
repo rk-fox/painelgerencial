@@ -186,7 +186,7 @@ const TaskForm: React.FC = () => {
         // We set editingTask to null so it inserts as new
         setEditingTask(null);
         setFormData({
-            name: `${task.name} (Cópia)`,
+            name: `${task.name}`,
             category: task.category || '',
             specialties: task.specialties || [],
             description: task.description || '',
