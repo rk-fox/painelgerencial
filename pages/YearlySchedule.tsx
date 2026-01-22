@@ -187,23 +187,16 @@ const YearlySchedule: React.FC = () => {
                     <p className="text-[#4c739a] dark:text-slate-400">Visão consolidada da efetividade externa da equipe.</p>
                 </div>
                 <div className="flex gap-3 items-center">
-                    <select
-                        value={selectedYear}
-                        onChange={(e) => setSelectedYear(Number(e.target.value))}
-                        className="px-4 py-3 w-[100px] rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold focus:ring-2 focus:ring-primary">
+                    <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className="px-4 py-3 w-[100px] rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold focus:ring-2 focus:ring-primary">
                         {availableYears.map(year => (
                             <option key={year} value={year}>{year}</option>
                         ))}
                     </select>
-                    <button
-                        onClick={() => setIsReviewPopupOpen(true)}
-                        className="px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95 flex items-center gap-2">
+                    <button onClick={() => setIsReviewPopupOpen(true)} className="px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95 flex items-center gap-2">
                         <span className="material-symbols-outlined text-sm">visibility</span>
                         Rever Planejamento
                     </button>
-                    <button 
-                        onClick={() => navigate('/app/schedule/adjustment')}
-                        className="px-6 py-3 rounded-xl bg-primary text-white font-bold shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all active:scale-95 flex items-center justify-center gap-2">
+                    <button onClick={() => navigate('/app/schedule/adjustment')} className="px-6 py-3 rounded-xl bg-primary text-white font-bold shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all active:scale-95 flex items-center justify-center gap-2">
                         <span className="material-symbols-outlined">add</span>
                         <span>Cadastrar Nova Viagem</span>
                     </button>
