@@ -126,7 +126,9 @@ const YearlySchedule: React.FC = () => {
 
     const getTeamSizeForDay = (month: number, day: number): number => {
         const dayMissions = getMissionsForDay(month, day);
-        return dayMissions.reduce((sum, m) => sum + (m.qtd_equipe || 0), 0);
+            return dayMissions.reduce(
+                (sum, m) => sum + (m.qtd_equipe || 0),0
+        );
     };
 
     const calculateDuration = (startDate: string, endDate: string): number => {
@@ -136,6 +138,7 @@ const YearlySchedule: React.FC = () => {
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         return diffDays + 0.5;
     };
+
 
     const getStartDayOfMonth = (month: number): number => {
         return new Date(selectedYear, month, 1).getDay();
@@ -254,55 +257,73 @@ const YearlySchedule: React.FC = () => {
                             </button>
                         </div>
                         <div className="p-6">
-                            {/* Larger Calendar */}
-                            <div className="mb-6">
-                                <div className="grid grid-cols-7 gap-3 mb-3">
-                                    {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d, i) => (
-                                        <div key={i} className="text-center text-xs font-bold text-slate-400 uppercase">{d}</div>
-                                    ))}
-                                </div>
-                                <div className="grid grid-cols-7 gap-3">
-                                    {Array.from({ length: getStartDayOfMonth(selectedMonth) }).map((_, i) => (
-                                        <div key={`empty-${i}`} className="aspect-square"></div>
-                                    ))}
-                                    {Array.from({ length: getDaysInMonth(selectedMonth) }).map((_, i) => {
-                                        const day = i + 1;
-                                        const dayMissions = getMissionsForDay(selectedMonth, day);
-                                        const teamSize = getTeamSizeForDay(selectedMonth, day);
-                                        let bgClass = "bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-white";
-                                        let textClass = "";
+            {/* Larger Calendar */}
+            <div className="mb-6">
+                <div className="grid grid-cols-7 gap-3 mb-3">
+                    {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d, i) => (
+                        <div
+                            key={i}
+                            className="text-center text-xs font-bold text-slate-400 uppercase"
+                        >
+                    {d}
+                </div>
+                ))}
+            </div>
 
-                                        if (dayMissions.length > 0) {
-                                            textClass = "text-white";
-                                            if (teamSize >= 7) bgClass = "bg-red-500";
-                                            else if (teamSize >= 4) bgClass = "bg-yellow-500";
-                                            else bgClass = "bg-green-500";
-                                        }
+            <div className="grid grid-cols-7 gap-3">
+                {Array.from({ length: getStartDayOfMonth(selectedMonth) }).map((_, i) => (
+                    <div key={`empty-${i}`} className="aspect-square"></div>
+                ))}
 
-                                        return (
-                                            <div
-                                                key={day}
-                                                className={`aspect-square flex items-center justify-center text-base font-bold rounded-xl ${bgClass} ${textClass} relative cursor-pointer hover:ring-2 hover:ring-primary transition-all group`}
-                                            >
-                                                {day}
-                                                {dayMissions.length > 0 && (
-                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
-                                                        <div className="bg-slate-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap shadow-xl">
-                                                            {dayMissions.map(m => (
-                                                                <div key={m.id} className="flex items-center gap-2">
-                                                                    <span className="font-semibold">{m.nome}</span>
-                                                                    <span className="text-slate-400">({m.qtd_equipe} pessoas)</span>
-                                                                </div>
-                                                            ))}
-                                                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900"></div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
+                {Array.from({ length: getDaysInMonth(selectedMonth) }).map((_, i) => {
+                    const day = i + 1;
+                    const dayMissions = getMissionsForDay(selectedMonth, day);
+                    const teamSize = getTeamSizeForDay(selectedMonth, day);
+
+                    // 🔑 Apenas para visual
+                    const visualTeamSize = Math.ceil(teamSize);
+    
+                    let bgClass = "bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-white";
+                    let textClass = "";
+    
+                    if (dayMissions.length > 0) {
+                        textClass = "text-white";
+
+                        if (visualTeamSize >= 7) bgClass = "bg-red-500";
+                        else if (visualTeamSize >= 4) bgClass = "bg-yellow-500";
+                        else bgClass = "bg-green-500";
+                    }
+
+                    return (
+                        <div
+                            key={day}
+                            className={`aspect-square flex items-center justify-center text-base font-bold rounded-xl 
+                                ${bgClass} ${textClass} relative cursor-pointer 
+                                hover:ring-2 hover:ring-primary transition-all group`}
+                        >
+                        {day}
+
+                        {dayMissions.length > 0 && (
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
+                                <div className="bg-slate-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap shadow-xl">
+                                    {dayMissions.map(m => (
+                                        <div key={m.id} className="flex items-center gap-2">
+                                            <span className="font-semibold">{m.nome}</span>
+                                            <span className="text-slate-400">
+                                                ({m.qtd_equipe} pessoas)
+                                            </span>
+                                        </div>
+                                    ))}
+                                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900"></div>
                                 </div>
                             </div>
+                            )}
+                            </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
 
                             {/* Missions Table */}
                             <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
