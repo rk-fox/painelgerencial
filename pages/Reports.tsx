@@ -49,10 +49,16 @@ const Reports: React.FC = () => {
         fetchMemberRanking();
     }, []);
 
+    // Parse date string to Date object
+    const parseLocalDate = (dateStr: string): Date => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+};
+
     // Calculate weekdays between two dates (excluding weekends)
     const countWeekdays = (startDate: string, endDate: string): number => {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
+        const start = parseLocalDate(startDate);
+        const end = parseLocalDate(endDate);
         let count = 0;
         const current = new Date(start);
         
@@ -66,13 +72,30 @@ const Reports: React.FC = () => {
         return count;
     };
 
+    // Calculate weekdays between two dates (excluding weekends)
+    const countWeekendays = (startDate: string, endDate: string): number => {
+        const start = parseLocalDate(startDate);
+        const end = parseLocalDate(endDate);
+        let count = 0;
+        const current = new Date(start);
+        
+        while (current <= end) {
+            const dayOfWeek = current.getDay();
+            if (dayOfWeek === 0 || dayOfWeek === 6) { // Sunday (0) or Saturday (6)
+                count++;
+            }
+            current.setDate(current.getDate() + 1);
+        }
+        return count;
+    };
+
     // Calculate duration (last day = 0.5)
     const calculateDuration = (startDate: string, endDate: string): number => {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
+        const start = parseLocalDate(startDate);
+        const end = parseLocalDate(endDate);
         const diffTime = Math.abs(end.getTime() - start.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        return diffDays + 0.5;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)+1);
+        return diffDays - 0.5;
     };
 
     const fetchMissionStats = async () => {
@@ -102,10 +125,11 @@ const Reports: React.FC = () => {
                 const duration = calculateDuration(mission.data_inicio, mission.data_fim);
                 const teamSize = mission.qtd_equipe || 1;
                 const weekdays = countWeekdays(mission.data_inicio, mission.data_fim);
+                const weekends = countWeekendays(mission.data_inicio, mission.data_fim);
 
                 totalDays += duration;
                 totalDiarias += duration * teamSize;
-                workHours += weekdays * 8; // Each weekday = 8h of work
+                workHours += (duration - weekends) * teamSize * 8; // Each weekday = 8h of work
             });
         }
 
