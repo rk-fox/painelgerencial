@@ -46,13 +46,29 @@ const Dashboard: React.FC = () => {
   const fetchTasks = async () => {
     try {
       setLoading(true);
+      const today = new Date();
+      today.setHours(23, 59, 59, 999); // Include tasks starting today (comparing with task start_date which is usually just a date string YYYY-MM-DD or ISODate)
+
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setTasks(data || []);
+
+      // Filter tasks that strictly haven't started yet
+      const activeTasks = (data || []).filter((task: any) => {
+          if (!task.start_date) return true; // Show if no start date
+          const startDate = new Date(task.start_date);
+          // Set start date time to 00:00:00 to ensure we include tasks starting today
+          startDate.setHours(0, 0, 0, 0); 
+          const now = new Date();
+          now.setHours(0, 0, 0, 0);
+          
+          return startDate <= now;
+      });
+
+      setTasks(activeTasks);
     } catch (err: any) {
       console.error('Error fetching tasks:', err.message);
     } finally {

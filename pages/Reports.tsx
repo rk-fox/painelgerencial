@@ -12,14 +12,99 @@ interface StatusCounts {
     concluida: number;
 }
 
+interface MissionStats {
+    totalMissions: number;
+    previousYearMissions: number;
+    totalDays: number;
+    totalDiarias: number; // days * team size
+    workHours: number; // weekdays * 8h
+}
+
 const Reports: React.FC = () => {
     const [categoryRankings, setCategoryRankings] = useState<CategoryRanking[]>([]);
     const [statusCounts, setStatusCounts] = useState<StatusCounts>({ pendente: 0, iniciada: 0, concluida: 0 });
+    const [missionStats, setMissionStats] = useState<MissionStats>({
+        totalMissions: 0,
+        previousYearMissions: 0,
+        totalDays: 0,
+        totalDiarias: 0,
+        workHours: 0
+    });
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         fetchReportData();
+        fetchMissionStats();
     }, []);
+
+    // Calculate weekdays between two dates (excluding weekends)
+    const countWeekdays = (startDate: string, endDate: string): number => {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        let count = 0;
+        const current = new Date(start);
+        
+        while (current <= end) {
+            const dayOfWeek = current.getDay();
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Not Sunday (0) or Saturday (6)
+                count++;
+            }
+            current.setDate(current.getDate() + 1);
+        }
+        return count;
+    };
+
+    // Calculate duration (last day = 0.5)
+    const calculateDuration = (startDate: string, endDate: string): number => {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const diffTime = Math.abs(end.getTime() - start.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return diffDays + 0.5;
+    };
+
+    const fetchMissionStats = async () => {
+        const currentYear = new Date().getFullYear();
+        const previousYear = currentYear - 1;
+
+        // Fetch current year missions
+        const { data: currentMissions } = await supabase
+            .from('missions')
+            .select('*')
+            .gte('data_inicio', `${currentYear}-01-01`)
+            .lte('data_inicio', `${currentYear}-12-31`);
+
+        // Fetch previous year missions (count only)
+        const { data: previousMissions } = await supabase
+            .from('missions')
+            .select('id')
+            .gte('data_inicio', `${previousYear}-01-01`)
+            .lte('data_inicio', `${previousYear}-12-31`);
+
+        let totalDays = 0;
+        let totalDiarias = 0;
+        let workHours = 0;
+
+        if (currentMissions) {
+            currentMissions.forEach(mission => {
+                const duration = calculateDuration(mission.data_inicio, mission.data_fim);
+                const teamSize = mission.qtd_equipe || 1;
+                const weekdays = countWeekdays(mission.data_inicio, mission.data_fim);
+
+                totalDays += duration;
+                totalDiarias += duration * teamSize;
+                workHours += weekdays * 8; // Each weekday = 8h of work
+            });
+        }
+
+        setMissionStats({
+            totalMissions: currentMissions?.length || 0,
+            previousYearMissions: previousMissions?.length || 0,
+            totalDays: Math.round(totalDays * 10) / 10, // Round to 1 decimal
+            totalDiarias: Math.round(totalDiarias * 10) / 10,
+            workHours
+        });
+    };
 
     const fetchReportData = async () => {
         try {
@@ -105,22 +190,29 @@ const Reports: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <ReportCard
                     icon="explore" color="amber"
-                    title="Missões Únicas" value="10"
-                    badge="+2" badgeColor="emerald"
+                    title="Missões Únicas" 
+                    value={missionStats.totalMissions.toString()}
+                    badge={missionStats.totalMissions - missionStats.previousYearMissions >= 0 
+                        ? `+${missionStats.totalMissions - missionStats.previousYearMissions}` 
+                        : `${missionStats.totalMissions - missionStats.previousYearMissions}`}
+                    badgeColor={missionStats.totalMissions >= missionStats.previousYearMissions ? "emerald" : "rose"}
                 />
                 <ReportCard
                     icon="date_range" color="sky"
-                    title="Total de Dias em Missão" value="55 dias"
+                    title="Total de Dias em Missão" 
+                    value={`${missionStats.totalDays} dias`}
                     badge="Consolidado" badgeColor="slate"
                 />
                 <ReportCard
                     icon="payments" color="violet"
-                    title="Total de Diárias Realizadas" value="180 diárias"
+                    title="Total de Diárias Realizadas" 
+                    value={`${missionStats.totalDiarias} diárias`}
                     badge="Acumulado" badgeColor="emerald"
                 />
                 <ReportCard
                     icon="timer" color="slate"
-                    title="Carga Horária em Viagem" value="242h"
+                    title="Carga Horária em Viagem" 
+                    value={`${missionStats.workHours}h`}
                     badge="Em trânsito" badgeColor="slate"
                 />
             </div>
