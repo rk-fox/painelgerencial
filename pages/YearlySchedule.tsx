@@ -328,7 +328,7 @@ const YearlySchedule: React.FC = () => {
                                 {getMissionsForMonth(selectedMonth).length === 0 ? (
                                     <p className="text-slate-500 text-center py-8">Nenhuma missão neste mês</p>
                                 ) : (
-                                    <div className="overflow-x-auto overflow-y-visible">
+                                    <div className="overflow-visible">
                                         <table className="w-full text-sm">
                                             <thead>
                                                 <tr className="border-b border-slate-200 dark:border-slate-700">
@@ -434,7 +434,7 @@ const YearlySchedule: React.FC = () => {
                                                 {monthMissions.length} {monthMissions.length === 1 ? 'missão' : 'missões'}
                                             </span>
                                         </div>
-                                        <div className="overflow-x-auto overflow-y-visible">
+                                        <div className="overflow-visible">
                                             <table className="w-full text-sm">
                                                 <thead>
                                                     <tr className="border-b border-slate-200 dark:border-slate-700">
