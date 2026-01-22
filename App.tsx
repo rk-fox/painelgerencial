@@ -8,6 +8,7 @@ import TaskForm from './pages/TaskForm';
 import Reports from './pages/Reports';
 import YearlySchedule from './pages/YearlySchedule';
 import ScheduleAdjustment from './pages/ScheduleAdjustment';
+import MonthlyPlanner from './pages/MonthlyPlanner';
 import Layout from './components/Layout';
 
 const App: React.FC = () => {
@@ -23,6 +24,7 @@ const App: React.FC = () => {
           <Route path="members/new" element={<MemberForm />} />
           <Route path="members/edit/:id" element={<MemberForm />} />
           <Route path="tasks/new" element={<TaskForm />} />
+          <Route path="tasks/planner" element={<MonthlyPlanner />} />
           <Route path="schedule" element={<YearlySchedule />} />
           <Route path="schedule/adjustment" element={<ScheduleAdjustment />} />
           <Route path="reports" element={<Reports />} />

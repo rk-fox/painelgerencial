@@ -101,16 +101,23 @@ const YearlySchedule: React.FC = () => {
         return `${parts[2]}/${parts[1]}/${parts[0]}`;
     };
 
-    const getMissionsForMonth = (month: number): Mission[] => {
+    const getMissionsForMonth = (month: number, onlyStartingInMonth: boolean = false): Mission[] => {
+        const firstDayOfMonth = new Date(selectedYear, month, 1).getTime();
+        const lastDayOfMonth = new Date(selectedYear, month + 1, 0, 23, 59, 59).getTime();
+
         return missions.filter(m => {
-            // Pega apenas a parte da data YYYY-MM-DD
-            const datePart = m.data_inicio.split('T')[0];
-            const [y, mStr, d] = datePart.split('-').map(Number);
-            
-            // Cria data local: Ano, Mês (0-indexado), Dia
-            const missionDate = new Date(y, mStr - 1, d);
-            
-            return missionDate.getMonth() === month && missionDate.getFullYear() === selectedYear;
+            const sParts = m.data_inicio.split('T')[0].split('-').map(Number);
+            const eParts = m.data_fim.split('T')[0].split('-').map(Number);
+            const startDate = new Date(sParts[0], sParts[1] - 1, sParts[2]).getTime();
+            const endDate = new Date(eParts[0], eParts[1] - 1, eParts[2], 23, 59, 59).getTime();
+
+            // For the yearly review list, we only want to show missions that START in that month
+            if (onlyStartingInMonth) {
+                return (startDate >= firstDayOfMonth && startDate <= lastDayOfMonth);
+            }
+
+            // For the monthly popup/cards, we show anything that overlaps
+            return (startDate <= lastDayOfMonth && endDate >= firstDayOfMonth);
         });
     };
 
@@ -204,7 +211,7 @@ const YearlySchedule: React.FC = () => {
                     <select
                         value={selectedYear}
                         onChange={(e) => setSelectedYear(Number(e.target.value))}
-                        className="px-4 py-3 w-[100px] rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold focus:ring-2 focus:ring-primary"
+                        className="px-4 py-3 w-[90px] rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold focus:ring-2 focus:ring-primary"
                     >
                         {availableYears.map(year => (
                             <option key={year} value={year}>{year}</option>
@@ -423,7 +430,7 @@ const YearlySchedule: React.FC = () => {
                         </div>
                         <div className="p-6 space-y-8">
                             {monthNames.map((monthName, monthIndex) => {
-                                const monthMissions = getMissionsForMonth(monthIndex);
+                                const monthMissions = getMissionsForMonth(monthIndex, true);
                                 if (monthMissions.length === 0) return null;
                                 
                                 return (

@@ -40,6 +40,7 @@ const TaskForm: React.FC = () => {
     // Data
     const [tasks, setTasks] = useState<Task[]>([]);
     const [members, setMembers] = useState<Member[]>([]);
+    const [missions, setMissions] = useState<any[]>([]);
     const [currentUser, setCurrentUser] = useState<any>(null);
 
     // Filters
@@ -88,8 +89,8 @@ const TaskForm: React.FC = () => {
             setCurrentUser(JSON.parse(userJson));
         }
         fetchMembers();
-        fetchMembers();
         fetchTasks();
+        fetchMissions();
         fetchCategories();
     }, []);
 
@@ -131,6 +132,30 @@ const TaskForm: React.FC = () => {
         } catch (err: any) {
             console.error('Error fetching tasks:', err.message);
         }
+    };
+
+    const fetchMissions = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('missions')
+                .select('*');
+            if (error) throw error;
+            setMissions(data || []);
+        } catch (err: any) {
+            console.error('Error fetching missions:', err.message);
+        }
+    };
+
+    const getMemberMission = (memberId: string) => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const activeMission = missions.find(miss => {
+            if (!miss.equipe || !miss.equipe.includes(memberId)) return false;
+            const start = new Date(miss.data_inicio.split('T')[0] + 'T00:00:00');
+            const end = new Date(miss.data_fim.split('T')[0] + 'T23:59:59');
+            return today >= start && today <= end;
+        });
+        return activeMission;
     };
 
     // FORM HANDLERS
@@ -648,6 +673,8 @@ const TaskForm: React.FC = () => {
                             return val >= 4; // Suboficial (4) and below (>=4)
                         })
                         .map(member => {
+                            const currentMission = getMemberMission(member.id);
+                            
                             // Get member tasks
                             const memberTasks = tasks.filter(t => t.assigned_to === member.id && t.status !== 'concluida');
                             // Sort: In Progress first
@@ -658,9 +685,21 @@ const TaskForm: React.FC = () => {
                             });
 
                             return (
-                                <div key={member.id} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm flex flex-col gap-3">
+                                <div 
+                                    key={member.id} 
+                                    className={`
+                                        p-4 rounded-xl border shadow-sm flex flex-col gap-3 transition-all duration-300
+                                        ${currentMission 
+                                            ? 'bg-amber-50/50 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800' 
+                                            : 'bg-white border-[#e7edf3] dark:bg-slate-900 dark:border-slate-800'
+                                        }
+                                    `}
+                                >
                                     <div className="flex flex-col items-center gap-2 mb-1">
-                                        <div className="w-16 h-16 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[#4c739a] font-bold text-sm uppercase overflow-hidden shadow-sm">
+                                        <div className={`
+                                            w-16 h-16 rounded-full flex items-center justify-center font-bold text-sm uppercase overflow-hidden shadow-sm border-2
+                                            ${currentMission ? 'border-amber-400' : 'border-white dark:border-slate-800 bg-slate-200 dark:bg-slate-700 text-[#4c739a]'}
+                                        `}>
                                             {/* Avatar or Initials */}
                                             {member.avatar ? (
                                                 <img
@@ -672,31 +711,56 @@ const TaskForm: React.FC = () => {
                                                 member.name.substring(0, 2)
                                             )}
                                         </div>
-                                        <div className="flex flex-col items-center">
+                                        <div className="flex flex-col items-center text-center">
                                             <span className="text-lg font-bold text-[#0d141b] dark:text-white leading-tight">
                                                 {member.abrev} {member.war_name}
                                             </span>
-                                            <span className="text-[10px] text-[#4c739a] font-medium uppercase mt-0.5">
-                                                {memberTasks.length} Atividades
-                                            </span>
+                                            {currentMission ? (
+                                                <div className="flex items-center gap-1.5 mt-0.5">
+                                                    <span className="material-symbols-outlined text-[14px] text-amber-600 dark:text-amber-500">flight_takeoff</span>
+                                                    <span className="text-[10px] text-amber-600 dark:text-amber-500 font-bold uppercase tracking-wider">
+                                                        Em Viagem
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-[10px] text-[#4c739a] font-medium uppercase mt-0.5">
+                                                    {memberTasks.length} Atividades
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
 
-                                    <div className="h-px bg-[#e7edf3] dark:bg-slate-800 w-full"></div>
+                                    <div className={`h-px w-full ${currentMission ? 'bg-amber-200 dark:bg-amber-800/50' : 'bg-[#e7edf3] dark:bg-slate-800'}`}></div>
 
                                     <div className="flex flex-col gap-1.5 min-h-[60px]">
-                                        {memberTasks.length > 0 ? (
-                                            memberTasks.slice(0, 3).map(task => ( // Show top 3? User didn't specify limit but 4 cols might get tall. Let's show all or scroll? List of tasks... "a lista de tarefas". Let's show all but careful with height.
-                                                <div key={task.id} className={`text-xs truncate py-0.5 ${task.status === 'iniciada' ? 'font-bold text-primary' : 'text-[#4c739a]'}`}>
-                                                    {task.status === 'iniciada' && '▶ '}
-                                                    {task.name}
+                                        {currentMission ? (
+                                            <div className="flex items-start gap-2 py-1">
+                                                <div className="mt-0.5 p-1 bg-amber-100 dark:bg-amber-900/30 rounded">
+                                                    <span className="material-symbols-outlined text-[14px] text-amber-600 dark:text-amber-500">stars</span>
                                                 </div>
-                                            ))
+                                                <div className="flex flex-col">
+                                                    <span className="text-[11px] font-black text-amber-700 dark:text-amber-400 uppercase leading-tight line-clamp-2">
+                                                        {currentMission.nome}
+                                                    </span>
+                                                    <span className="text-[9px] font-bold text-amber-600/70 dark:text-amber-500/70 uppercase">Missão Ativa</span>
+                                                </div>
+                                            </div>
                                         ) : (
-                                            <span className="text-[10px] text-slate-400 italic">Sem tarefas atribuídas</span>
-                                        )}
-                                        {memberTasks.length > 3 && (
-                                            <span className="text-[10px] text-slate-400 font-medium">+ {memberTasks.length - 3} outras...</span>
+                                            <>
+                                                {memberTasks.length > 0 ? (
+                                                    memberTasks.slice(0, 3).map(task => (
+                                                        <div key={task.id} className={`text-xs truncate py-0.5 ${task.status === 'iniciada' ? 'font-bold text-primary' : 'text-[#4c739a]'}`}>
+                                                            {task.status === 'iniciada' && '▶ '}
+                                                            {task.name}
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-[10px] text-slate-400 italic">Sem tarefas atribuídas</span>
+                                                )}
+                                                {memberTasks.length > 3 && (
+                                                    <span className="text-[10px] text-slate-400 font-medium">+ {memberTasks.length - 3} outras...</span>
+                                                )}
+                                            </>
                                         )}
                                     </div>
                                 </div>
@@ -707,7 +771,16 @@ const TaskForm: React.FC = () => {
 
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex flex-col gap-2">
-                    <h1 className="text-[#0d141b] dark:text-white text-3xl font-extrabold leading-tight tracking-tight">Gerenciamento de Tarefas</h1>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-[#0d141b] dark:text-white text-3xl font-extrabold leading-tight tracking-tight">Gerenciamento de Tarefas</h1>
+                        <button
+                            onClick={() => navigate('/app/tasks/planner')}
+                            className="p-2 rounded-lg bg-white dark:bg-slate-800 border border-[#e7edf3] dark:border-slate-700 text-[#4c739a] hover:text-primary transition-all active:scale-95 shadow-sm"
+                            title="Cronograma Mensal"
+                        >
+                            <span className="material-symbols-outlined text-[24px]">calendar_month</span>
+                        </button>
+                    </div>
                     <p className="text-[#4c739a] dark:text-slate-400 text-base font-normal">Gerencie todas as atividades, filtre por especialidade e controle recorrências.</p>
                 </div>
                 <button

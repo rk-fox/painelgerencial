@@ -42,12 +42,25 @@ const Reports: React.FC = () => {
         workHours: 0
     });
     const [loading, setLoading] = useState(true);
+    const [avgTasksPerDay, setAvgTasksPerDay] = useState<string>("0");
+    
+    // Filters State
+    const [rankingTimeRange, setRankingTimeRange] = useState<string>('year');
+    const [selectedRankingYear, setSelectedRankingYear] = useState<number>(new Date().getFullYear());
+    const [availableRankingYears, setAvailableRankingYears] = useState<number[]>([]);
+
+    useEffect(() => {
+        fetchAvailableYears();
+    }, []);
 
     useEffect(() => {
         fetchReportData();
         fetchMissionStats();
+    }, [rankingTimeRange]);
+
+    useEffect(() => {
         fetchMemberRanking();
-    }, []);
+    }, [selectedRankingYear]);
 
     // Parse date string to Date object
     const parseLocalDate = (dateStr: string): Date => {
@@ -87,6 +100,23 @@ const Reports: React.FC = () => {
             current.setDate(current.getDate() + 1);
         }
         return count;
+    };
+
+    const fetchAvailableYears = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('missions')
+                .select('data_inicio');
+            if (!error && data) {
+                const years = [...new Set(data.map(m => new Date(m.data_inicio).getFullYear()))].sort((a, b) => b - a);
+                setAvailableRankingYears(years.length > 0 ? years : [new Date().getFullYear()]);
+                if (years.length > 0 && !years.includes(selectedRankingYear)) {
+                    setSelectedRankingYear(years[0]);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching available years:', error);
+        }
     };
 
     // Calculate duration (last day = 0.5)
@@ -156,12 +186,12 @@ const Reports: React.FC = () => {
                 ['SO.', 'Sgt.'].includes(m.abrev || '')
             ) || [];
 
-            // Fetch missions for current year
+            // Fetch missions for selected year
             const { data: missionsData } = await supabase
                 .from('missions')
                 .select('id, data_inicio, data_fim, equipe')
-                .gte('data_inicio', `${currentYear}-01-01`)
-                .lte('data_inicio', `${currentYear}-12-31`);
+                .gte('data_inicio', `${selectedRankingYear}-01-01`)
+                .lte('data_inicio', `${selectedRankingYear}-12-31`);
 
             // Calculate totals
             const memberMap = new Map<string, number>();
@@ -199,7 +229,7 @@ const Reports: React.FC = () => {
             // Fetch status counts
             const { data: tasks, error: tasksError } = await supabase
                 .from('tasks')
-                .select('status, quantidade, category');
+                .select('status, quantidade, category, start_date, end_date');
 
             if (tasksError) throw tasksError;
 
@@ -215,14 +245,55 @@ const Reports: React.FC = () => {
                 else if (task.status === 'iniciada') counts.iniciada += qty;
                 else if (task.status === 'concluida') counts.concluida += qty;
 
-                // Category ranking (only completed tasks)
+                // Category ranking logic
                 if (task.status === 'concluida' && task.category) {
-                    const current = categoryMap.get(task.category) || 0;
-                    categoryMap.set(task.category, current + qty);
+                    const taskDateStr = task.end_date || task.start_date;
+                    if (!taskDateStr) return;
+
+                    const taskDate = new Date(taskDateStr);
+                    const now = new Date();
+                    let isInRange = false;
+
+                    if (rankingTimeRange === '30d') {
+                        const thirtyDaysAgo = new Date();
+                        thirtyDaysAgo.setDate(now.getDate() - 30);
+                        isInRange = taskDate >= thirtyDaysAgo;
+                    } else if (rankingTimeRange === 'trimestre') {
+                        const ninetyDaysAgo = new Date();
+                        ninetyDaysAgo.setDate(now.getDate() - 90);
+                        isInRange = taskDate >= ninetyDaysAgo;
+                    } else { // year
+                        isInRange = taskDate.getFullYear() === now.getFullYear();
+                    }
+
+                    if (isInRange) {
+                        const current = categoryMap.get(task.category) || 0;
+                        categoryMap.set(task.category, current + qty);
+                    }
                 }
             });
 
             setStatusCounts(counts);
+
+            // Calculate Tasks Per Day Average
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+            const startOfYearStr = `${today.getFullYear()}-01-01`;
+            const weekdaysInYearWindow = countWeekdays(startOfYearStr, todayStr);
+            
+            const totalTasksInWindow = tasks?.reduce((acc, task) => {
+                if (!task.start_date) return acc;
+                const taskDate = task.start_date.split('T')[0];
+                if (taskDate <= todayStr) {
+                    return acc + (task.quantidade || 1);
+                }
+                return acc;
+            }, 0) || 0;
+
+            if (weekdaysInYearWindow > 0) {
+                const avg = totalTasksInWindow / weekdaysInYearWindow;
+                setAvgTasksPerDay(avg.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }));
+            }
 
             // Convert map to sorted array
             const rankings = Array.from(categoryMap.entries())
@@ -255,12 +326,12 @@ const Reports: React.FC = () => {
                 <ReportCard
                     icon="assignment" color="blue"
                     title="Total de Tarefas" value={totalTasks.toString()}
-                    badge="Atual" badgeColor="slate"
+                    badge="Atual" badgeColor="blue"
                 />
                 <ReportCard
                     icon="calendar_today" color="indigo"
-                    title="Média de Tarefas/Dia" value="42,5"
-                    badge="Média Móvel" badgeColor="slate"
+                    title="Média de Tarefas/Dia" value={avgTasksPerDay}
+                    badge="Média Móvel" badgeColor="indigo"
                 />
                 <ReportCard
                     icon="task_alt" color="emerald"
@@ -289,19 +360,19 @@ const Reports: React.FC = () => {
                     icon="date_range" color="sky"
                     title="Total de Dias em Missão" 
                     value={`${missionStats.totalDays} dias`}
-                    badge="Consolidado" badgeColor="slate"
+                    badge="Consolidado" badgeColor="sky"
                 />
                 <ReportCard
                     icon="payments" color="violet"
                     title="Total de Diárias Realizadas" 
                     value={`${missionStats.totalDiarias} diárias`}
-                    badge="Acumulado" badgeColor="emerald"
+                    badge="Acumulado" badgeColor="violet"
                 />
                 <ReportCard
-                    icon="timer" color="slate"
+                    icon="timer" color="sky"
                     title="Carga Horária em Viagem" 
                     value={`${missionStats.workHours}h`}
-                    badge="Em trânsito" badgeColor="slate"
+                    badge="Consolidado" badgeColor="sky"
                 />
             </div>
 
@@ -314,10 +385,32 @@ const Reports: React.FC = () => {
                             <h4 className="text-base font-bold text-slate-800 dark:text-white">Ranking de Atividades</h4>
                             <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Categorias por Quantidade Concluída</p>
                         </div>
-                        <select className="bg-slate-50 dark:bg-slate-800 border-none rounded-lg text-[10px] font-bold px-3 py-1 text-slate-500 focus:ring-1 focus:ring-primary">
-                            <option>Últimos 30 dias</option>
-                            <option>Último trimestre</option>
-                            <option>Esse ano</option>
+                        <select 
+                            value={rankingTimeRange}
+                            onChange={(e) => setRankingTimeRange(e.target.value)}
+                            //className="bg-slate-50 w-[100px] dark:bg-slate-800 border-none rounded-lg text-[10px] font-bold px-3 py-1 text-slate-500 focus:ring-1 focus:ring-primary cursor-pointer"
+                            className="
+    block
+    appearance-none
+    w-[120px]
+    box-border
+    flex-none
+    bg-slate-50
+    dark:bg-slate-800
+    rounded-lg
+    text-[10px]
+    font-bold
+    px-3
+    py-1
+    text-slate-500
+    focus:ring-1
+    focus:ring-primary
+    cursor-pointer
+  "
+                        >
+                            <option value="30d">Últimos 30 dias</option>
+                            <option value="trimestre">Último trimestre</option>
+                            <option value="year">Esse ano</option>
                         </select>
                     </div>
                     <div className="space-y-6">
@@ -416,13 +509,24 @@ const Reports: React.FC = () => {
                     <div className="flex items-center justify-between mb-8">
                         <div>
                             <h4 className="text-base font-bold text-slate-800 dark:text-white">Diárias Realizadas pelo Efetivo</h4>
-                            <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Acumulado do Ano Corrente</p>
+                            <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Acumulado - {selectedRankingYear}</p>
                         </div>
-                        {memberRankings.length > 0 && (
-                            <div className="text-right">
-                                <span className="text-xs font-bold text-primary">{memberRankings[0].totalDiarias} diárias (Max)</span>
-                            </div>
-                        )}
+                        <div className="flex items-center gap-4">
+                            <select 
+                                value={selectedRankingYear}
+                                onChange={(e) => setSelectedRankingYear(Number(e.target.value))}
+                                className="block appearance-none w-[60px] box-border flex-none bg-slate-50 dark:bg-slate-800 rounded-lg text-[10px] font-bold px-3 py-1 text-slate-500 focus:ring-1 focus:ring-primary cursor-pointer"
+                            >
+                                {availableRankingYears.map(year => (
+                                    <option key={year} value={year}>{year}</option>
+                                ))}
+                            </select>
+                            {memberRankings.length > 0 && (
+                                <div className="text-right">
+                                    <span className="text-xs font-bold text-primary">{memberRankings[0].totalDiarias} diárias (Max)</span>
+                                </div>
+                            )}
+                        </div>
                     </div>
                     <div className="space-y-6">
                         {memberRankings.map((member) => (

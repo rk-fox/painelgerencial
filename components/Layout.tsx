@@ -198,14 +198,6 @@ const Layout: React.FC = () => {
         <header className="h-16 bg-white dark:bg-slate-900 border-b border-[#e7edf3] dark:border-slate-800 flex items-center justify-between px-6 sticky top-0 z-40 shrink-0">
           <div className="flex items-center gap-8 flex-1">
             <h1 className="text-[#0d141b] dark:text-white font-bold text-lg whitespace-nowrap hidden md:block">Painel Gerencial</h1>
-            <div className="max-w-md w-full relative">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#4c739a] text-xl">search</span>
-              <input
-                className="w-full pl-10 pr-4 py-2 bg-[#f8fafc] dark:bg-slate-800 border-none rounded-lg text-sm focus:ring-2 focus:ring-primary/20 placeholder:text-[#4c739a]"
-                placeholder="Buscar membros, especialidades, tarefas..."
-                type="text"
-              />
-            </div>
           </div>
           <div className="flex items-center gap-4 ml-4">
             <div className="text-right hidden sm:block">
