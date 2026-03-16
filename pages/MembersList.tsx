@@ -176,7 +176,7 @@ const MembersList: React.FC = () => {
 
                                     {/* Groups */}
                                     {[
-                                        { label: 'Especialidade', options: ['BCT', 'AIS'] },
+                                        { label: 'Especialidade', options: ['BCT', 'AIS', 'CTA'] },
                                         { label: 'Status', options: ['Ativo', 'Em Viagem', 'Indisponível'] },
                                         { label: 'Graduação', options: [...new Set(members.map(m => m.rank))].sort() }
                                     ].map(group => (
@@ -252,7 +252,7 @@ const MembersList: React.FC = () => {
                                         if (selectedFilters.length === 0) return true;
                                         
                                         // Specialty Match
-                                        const hasSpecialtyFilter = selectedFilters.some(f => ['BCT', 'AIS'].includes(f));
+                                        const hasSpecialtyFilter = selectedFilters.some(f => ['BCT', 'AIS', 'CTA'].includes(f));
                                         const matchesSpecialty = !hasSpecialtyFilter || selectedFilters.includes(member.specialty);
                                         
                                         // Status Match
@@ -262,7 +262,7 @@ const MembersList: React.FC = () => {
                                         const matchesStatus = !hasStatusFilter || selectedFilters.includes(effectiveStatus);
 
                                         // Rank Match
-                                        const otherFilters = selectedFilters.filter(f => !['BCT', 'AIS', 'Ativo', 'Em Viagem', 'Indisponível'].includes(f));
+                                        const otherFilters = selectedFilters.filter(f => !['BCT', 'AIS', 'CTA', 'Ativo', 'Em Viagem', 'Indisponível'].includes(f));
                                         const matchesRank = otherFilters.length === 0 || otherFilters.includes(member.rank);
 
                                         return matchesSpecialty && matchesStatus && matchesRank;
@@ -293,7 +293,7 @@ const MembersList: React.FC = () => {
                                                             email={member.email}
                                                             rank={member.rank}
                                                             specialty={member.specialty}
-                                                            specialtyColor={member.specialty === 'BCT' ? 'blue' : 'amber'}
+                                                            specialtyColor={member.specialty === 'BCT' ? 'blue' : member.specialty === 'CTA' ? 'slate' : 'amber'}
                                                             entry={new Date(member.entry_date).toLocaleDateString('pt-BR')}
                                                             status={displayedStatus}
                                                             statusColor={displayedStatusColor}
@@ -321,13 +321,13 @@ const MembersList: React.FC = () => {
                                             member.specialty.toLowerCase().includes(searchTerm.toLowerCase());
                                         if (!matchesSearch) return false;
                                         if (selectedFilters.length === 0) return true;
-                                        const hasSpecialtyFilter = selectedFilters.some(f => ['BCT', 'AIS'].includes(f));
+                                        const hasSpecialtyFilter = selectedFilters.some(f => ['BCT', 'AIS', 'CTA'].includes(f));
                                         const matchesSpecialty = !hasSpecialtyFilter || selectedFilters.includes(member.specialty);
                                         const hasStatusFilter = selectedFilters.some(f => ['Ativo', 'Em Viagem', 'Indisponível'].includes(f));
                                         const isOnMission = isMemberOnMission(member.id);
                                         const effectiveStatus = isOnMission ? 'Em Viagem' : member.status;
                                         const matchesStatus = !hasStatusFilter || selectedFilters.includes(effectiveStatus);
-                                        const otherFilters = selectedFilters.filter(f => !['BCT', 'AIS', 'Ativo', 'Em Viagem', 'Indisponível'].includes(f));
+                                        const otherFilters = selectedFilters.filter(f => !['BCT', 'AIS', 'CTA', 'Ativo', 'Em Viagem', 'Indisponível'].includes(f));
                                         const matchesRank = otherFilters.length === 0 || otherFilters.includes(member.rank);
                                         return matchesSpecialty && matchesStatus && matchesRank;
                                     }).length}</span> de <span className="font-bold text-[#0d141b] dark:text-white">{members.length}</span> membros</p>
@@ -415,6 +415,7 @@ const MemberRow = ({ initials, initialsColor, avatar, name, email, rank, special
         amber: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
         green: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
         indigo: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
+        slate: 'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400',
         red: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
     };
 
@@ -437,7 +438,7 @@ const MemberRow = ({ initials, initialsColor, avatar, name, email, rank, special
             <td className="px-6 py-4">
                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${badges[specialtyColor]}`}>
                     <img
-                        src={specialty === 'BCT' ? 'https://raw.githubusercontent.com/rk-fox/painelgerencial/refs/heads/main/bct-icon-transp.png' : 'https://raw.githubusercontent.com/rk-fox/painelgerencial/refs/heads/main/ais-icon-transp.png'}
+                        src={(specialty === 'BCT' || specialty === 'CTA') ? 'https://raw.githubusercontent.com/rk-fox/painelgerencial/refs/heads/main/bct-icon-transp.png' : 'https://raw.githubusercontent.com/rk-fox/painelgerencial/refs/heads/main/ais-icon-transp.png'}
                         alt={specialty}
                         className="size-4 object-contain"
                     />

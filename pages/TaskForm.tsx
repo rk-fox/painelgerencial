@@ -263,7 +263,7 @@ const TaskForm: React.FC = () => {
             return;
         }
 
-        const recurrenceActive = ['diaria', 'semanal', 'mensal'].includes(formData.periodicity);
+        const recurrenceActive = ['diaria', 'semanal', 'quinzenal', 'mensal'].includes(formData.periodicity);
 
         try {
             const payload = {
@@ -359,6 +359,7 @@ const TaskForm: React.FC = () => {
         const map: any = {
             'diaria': 'Diária',
             'semanal': 'Semanal',
+            'quinzenal': 'Quinzenal',
             'mensal': 'Mensal',
             'temporada': 'Temporada',
             'pontual': 'Pontual'
@@ -539,6 +540,7 @@ const TaskForm: React.FC = () => {
                                     >
                                         <option value="diaria">Diária</option>
                                         <option value="semanal">Semanal</option>
+                                        <option value="quinzenal">Quinzenal</option>
                                         <option value="mensal">Mensal</option>
                                         <option value="temporada">Temporada</option>
                                         <option value="pontual">Pontual</option>
@@ -848,8 +850,9 @@ const TaskForm: React.FC = () => {
                         {[
                             { id: 'diaria', label: 'Diária' },
                             { id: 'semanal', label: 'Semanal' },
+                            { id: 'quinzenal', label: 'Quinzenal' },
                             { id: 'mensal', label: 'Mensal' },
-                            { id: 'temporada', label: 'Temporada' },
+                            //{ id: 'temporada', label: 'Temporada' },
                             { id: 'pontual', label: 'Pontual' }
                         ].map(period => (
                             <button

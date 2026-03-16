@@ -74,6 +74,12 @@ const MonthlyPlanner: React.FC = () => {
             if (task.recurrence_active) {
                 if (task.periodicity.toLowerCase() === 'diaria') return isBusinessDay(date);
                 if (task.periodicity.toLowerCase() === 'semanal') return dayOfWeek === 1;
+                if (task.periodicity.toLowerCase() === 'quinzenal') {
+                    const startDate = new Date(task.start_date.split('T')[0]);
+                    const diffTime = date.getTime() - startDate.getTime();
+                    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                    return diffDays >= 0 && diffDays % 14 === 0;
+                }
                 if (task.periodicity.toLowerCase() === 'mensal') return day === getFirstBusinessDayOfMonth(currentYear, currentMonth);
             }
             return false;
@@ -182,6 +188,9 @@ const MonthlyPlanner: React.FC = () => {
                                             } else if (periodicity === 'semanal') {
                                                 colors = "bg-[#f5f1ff] border-[#e8deff] text-[#7c4dff] dark:bg-purple-900/20 dark:border-purple-800 dark:text-purple-400";
                                                 barColor = "bg-[#7c4dff]";
+                                            } else if (periodicity === 'quinzenal') {
+                                                colors = "bg-[#e6fffa] border-[#b2f5ea] text-[#0d9488] dark:bg-teal-900/20 dark:border-teal-800 dark:text-teal-400";
+                                                barColor = "bg-[#0d9488]";
                                             } else if (periodicity === 'mensal') {
                                                 colors = "bg-[#fff9eb] border-[#ffedc2] text-[#c67c00] dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400";
                                                 barColor = "bg-[#c67c00]";
@@ -235,6 +244,10 @@ const MonthlyPlanner: React.FC = () => {
                 <div className="flex items-center gap-2">
                     <div className="size-3 rounded-full bg-purple-600 shadow-sm shadow-purple-200" />
                     <span>Semanal</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="size-3 rounded-full bg-teal-600 shadow-sm shadow-teal-200" />
+                    <span>Quinzenal</span>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="size-3 rounded-full bg-amber-600 shadow-sm shadow-amber-200" />

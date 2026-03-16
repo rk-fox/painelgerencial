@@ -458,6 +458,11 @@ const Dashboard: React.FC = () => {
               onClick={() => togglePeriodicity('semanal')}
             />
             <FilterButton
+              label="Quinzenal"
+              active={filterPeriodicities.includes('quinzenal')}
+              onClick={() => togglePeriodicity('quinzenal')}
+            />
+            <FilterButton
               label="Mensal"
               active={filterPeriodicities.includes('mensal')}
               onClick={() => togglePeriodicity('mensal')}
@@ -657,6 +662,7 @@ const TaskCard = ({ task, onPull, onDragStart }: any) => {
   const periodicityColors: any = {
     diaria: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
     semanal: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    quinzenal: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
     mensal: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
     temporada: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
     pontual: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
@@ -665,6 +671,7 @@ const TaskCard = ({ task, onPull, onDragStart }: any) => {
   const periodicityLabels: any = {
     diaria: 'Diária',
     semanal: 'Semanal',
+    quinzenal: 'Quinzenal',
     mensal: 'Mensal',
     temporada: 'Temporada',
     pontual: 'Pontual',
@@ -676,8 +683,9 @@ const TaskCard = ({ task, onPull, onDragStart }: any) => {
       onDragStart={onDragStart}
       className={`bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group border-l-4 cursor-grab active:cursor-grabbing ${task.periodicity === 'diaria' ? 'border-l-green-500' :
         task.periodicity === 'semanal' ? 'border-l-blue-500' :
-          task.periodicity === 'mensal' ? 'border-l-purple-500' :
-            'border-l-amber-500'
+          task.periodicity === 'quinzenal' ? 'border-l-teal-500' :
+            task.periodicity === 'mensal' ? 'border-l-purple-500' :
+              'border-l-amber-500'
         }`}
     >
       <div className="flex justify-between items-start mb-4">
@@ -712,6 +720,7 @@ const MyTaskCard = ({ task, onDragStart, onStart, onSuspend, onComplete }: any) 
   const periodicityColors: any = {
     diaria: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
     semanal: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    quinzenal: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
     mensal: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
     temporada: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
     pontual: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
@@ -720,6 +729,7 @@ const MyTaskCard = ({ task, onDragStart, onStart, onSuspend, onComplete }: any) 
   const periodicityLabels: any = {
     diaria: 'Diária',
     semanal: 'Semanal',
+    quinzenal: 'Quinzenal',
     mensal: 'Mensal',
     temporada: 'Temporada',
     pontual: 'Pontual',

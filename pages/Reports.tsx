@@ -364,7 +364,7 @@ const Reports: React.FC = () => {
                 />
                 <ReportCard
                     icon="payments" color="violet"
-                    title="Total de Diárias Realizadas/Previstas" 
+                    title="Total de Diárias Previstas no Ano"
                     value={`${missionStats.totalDiarias} diárias`}
                     badge="Acumulado" badgeColor="violet"
                 />
