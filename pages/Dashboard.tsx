@@ -323,6 +323,8 @@ const Dashboard: React.FC = () => {
       const endDate = new Date(t.end_date);
       // Reset times
       const todayZero = new Date(now.setHours(0, 0, 0, 0));
+      // Subtrai 1 dia do "hoje" para compensar o atraso do fuso horário/UTC
+      todayZero.setDate(todayZero.getDate() - 1);
       const endZero = new Date(endDate.setHours(0, 0, 0, 0));
       const threeDaysZero = new Date(threeDaysFromNow.setHours(0, 0, 0, 0));
 
