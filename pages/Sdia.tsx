@@ -269,7 +269,7 @@ const SdiaPage: React.FC = () => {
                                 <h3 className="font-bold text-slate-800 dark:text-white">{month}</h3>
                                 {getSdiasForMonth(index).length > 0 && (
                                     <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">
-                                        {getSdiasForMonth(index).length} SDIAs
+                                        {getSdiasForMonth(index).length} {getSdiasForMonth(index).length === 1 ? 'SDIA' : 'SDIAs'}
                                     </span>
                                 )}
                             </div>
