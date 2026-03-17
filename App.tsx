@@ -9,6 +9,7 @@ import Reports from './pages/Reports';
 import YearlySchedule from './pages/YearlySchedule';
 import ScheduleAdjustment from './pages/ScheduleAdjustment';
 import MonthlyPlanner from './pages/MonthlyPlanner';
+import SdiaPage from './pages/Sdia';
 import Layout from './components/Layout';
 
 const App: React.FC = () => {
@@ -27,6 +28,7 @@ const App: React.FC = () => {
           <Route path="tasks/planner" element={<MonthlyPlanner />} />
           <Route path="schedule" element={<YearlySchedule />} />
           <Route path="schedule/adjustment" element={<ScheduleAdjustment />} />
+          <Route path="sdia" element={<SdiaPage />} />
           <Route path="reports" element={<Reports />} />
 
           {/* Default redirect to dashboard */}

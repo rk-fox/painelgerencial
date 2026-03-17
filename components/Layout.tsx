@@ -105,6 +105,12 @@ const Layout: React.FC = () => {
             label="Relatórios"
             collapsed={isSidebarCollapsed}
           />
+          <SidebarItem
+            to="/app/sdia"
+            icon="report"
+            label="SDIA"
+            collapsed={isSidebarCollapsed}
+          />
         </nav>
 
         <div className="p-4 border-t border-[#e7edf3] dark:border-slate-800 space-y-4">

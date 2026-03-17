@@ -365,7 +365,7 @@ const TaskForm: React.FC = () => {
     const canDelete = () => {
         if (!currentUser) return false;
         const rankValue = rankOrder[currentUser.abrev] || 99;
-        return rankValue <= 5; // Major(1) to SO(5)
+        return rankValue <= 5; // Major(1) to SGT(5) AQUI É O FILTRO DE QUEM PODE DELETAR
     };
 
     const getMemberName = (id: string | null) => {
