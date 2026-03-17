@@ -583,6 +583,11 @@ const Dashboard: React.FC = () => {
                 min="1"
                 value={completionQuantity}
                 onChange={(e) => setCompletionQuantity(parseInt(e.target.value) || 1)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    confirmCompletion();
+                  }
+                }}
                 className="w-24 text-center text-2xl font-bold p-2 border-b-2 border-primary bg-transparent focus:outline-none"
                 autoFocus
               />

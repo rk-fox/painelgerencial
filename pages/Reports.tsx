@@ -11,6 +11,24 @@ interface MemberRanking {
     totalDiarias: number;
 }
 
+interface SectionTimeEntry {
+    id: string;
+    name: string;
+    war_name?: string;
+    abrev?: string;
+    avatar?: string;
+    years: number;
+}
+
+interface UnavailabilityRanking {
+    id: string;
+    name: string;
+    war_name?: string;
+    abrev?: string;
+    avatar?: string;
+    totalDays: number;
+}
+
 interface CategoryRanking {
     category: string;
     total: number;
@@ -43,6 +61,10 @@ const Reports: React.FC = () => {
     });
     const [loading, setLoading] = useState(true);
     const [avgTasksPerDay, setAvgTasksPerDay] = useState<string>("0");
+    const [sectionTimeRanking, setSectionTimeRanking] = useState<SectionTimeEntry[]>([]);
+    const [unavailRankings, setUnavailRankings] = useState<UnavailabilityRanking[]>([]);
+    const [availableUnavailTypes, setAvailableUnavailTypes] = useState<string[]>([]);
+    const [selectedUnavailType, setSelectedUnavailType] = useState<string>('Dispensa');
     
     // Filters State
     const [rankingTimeRange, setRankingTimeRange] = useState<string>('year');
@@ -56,11 +78,13 @@ const Reports: React.FC = () => {
     useEffect(() => {
         fetchReportData();
         fetchMissionStats();
+        fetchSectionTimeRanking();
     }, [rankingTimeRange]);
 
     useEffect(() => {
         fetchMemberRanking();
-    }, [selectedRankingYear]);
+        fetchUnavailRanking();
+    }, [selectedRankingYear, selectedUnavailType]);
 
     // Parse date string to Date object
     const parseLocalDate = (dateStr: string): Date => {
@@ -221,6 +245,100 @@ const Reports: React.FC = () => {
             setMemberRankings(rankings);
         } catch (error) {
             console.error('Error fetching member ranking:', error);
+        }
+    };
+
+    const fetchUnavailRanking = async () => {
+        try {
+            // Fetch all records from unavailability for selected year
+            const { data: unavailData } = await supabase
+                .from('unavailability')
+                .select('*')
+                .gte('start_date', `${selectedRankingYear}-01-01`)
+                .lte('start_date', `${selectedRankingYear}-12-31`);
+
+            if (!unavailData) return;
+
+            // Extract unique types for filter
+            const types = [...new Set(unavailData.map(u => u.type))].sort();
+            setAvailableUnavailTypes(types);
+            
+            // If current selected type is not in the new types list and list isn't empty, pick first one
+            // unless it's the initial default 'Dispensa' which we keep if possible
+            if (types.length > 0 && !types.includes(selectedUnavailType)) {
+                if (types.includes('Dispensa')) setSelectedUnavailType('Dispensa');
+                else setSelectedUnavailType(types[0]);
+            }
+
+            // Fetch members
+            const { data: membersData } = await supabase
+                .from('members')
+                .select('*');
+
+            const eligibleMembers = membersData?.filter(m => 
+                ['SO.', 'Sgt.', 'Cv.'].includes(m.abrev || '')
+            ) || [];
+
+            const memberMap = new Map<string, number>();
+            eligibleMembers.forEach(m => memberMap.set(m.id, 0));
+
+            unavailData.forEach(u => {
+                if (u.type === selectedUnavailType && memberMap.has(u.member)) {
+                    const start = parseLocalDate(u.start_date);
+                    const end = parseLocalDate(u.end_date);
+                    const diffTime = Math.abs(end.getTime() - start.getTime());
+                    const duration = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                    memberMap.set(u.member, (memberMap.get(u.member) || 0) + duration);
+                }
+            });
+
+            const rankings = eligibleMembers
+                .map(m => ({
+                    id: m.id,
+                    name: m.name,
+                    war_name: m.war_name,
+                    abrev: m.abrev,
+                    avatar: m.avatar,
+                    totalDays: memberMap.get(m.id) || 0
+                }))
+                .filter(r => r.totalDays > 0)
+                .sort((a, b) => b.totalDays - a.totalDays);
+
+            setUnavailRankings(rankings);
+        } catch (error) {
+            console.error('Error fetching unavailability ranking:', error);
+        }
+    };
+
+    const fetchSectionTimeRanking = async () => {
+        try {
+            const { data: membersData } = await supabase
+                .from('members')
+                .select('id, name, war_name, abrev, avatar, entry_date, status');
+
+            if (!membersData) return;
+
+            const today = new Date();
+            const ranking: SectionTimeEntry[] = membersData
+                .filter(m => m.entry_date && ['SO.', 'Sgt.', 'Cv.'].includes(m.abrev || ''))
+                .map(m => {
+                    const entryDate = parseLocalDate(m.entry_date);
+                    const diffMs = today.getTime() - entryDate.getTime();
+                    const years = Math.round((diffMs / (1000 * 60 * 60 * 24 * 365.25)) * 10) / 10;
+                    return {
+                        id: m.id,
+                        name: m.name,
+                        war_name: m.war_name,
+                        abrev: m.abrev,
+                        avatar: m.avatar,
+                        years: Math.max(years, 0),
+                    };
+                })
+                .sort((a, b) => b.years - a.years);
+
+            setSectionTimeRanking(ranking);
+        } catch (error) {
+            console.error('Error fetching section time ranking:', error);
         }
     };
 
@@ -549,6 +667,125 @@ const Reports: React.FC = () => {
                             </div>
                         ))}
                         {memberRankings.length === 0 && (
+                            <div className="text-center text-slate-400 py-8">Nenhum membro encontrado.</div>
+                        )}
+                    </div>
+                </div>
+            </div>
+            {/* Afastamentos (Unavailability) Ranking */}
+            <div className="grid grid-cols-1 gap-6">
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm">
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <h4 className="text-base font-bold text-slate-800 dark:text-white">Relatórios de Afastamentos</h4>
+                            <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Acumulado - {selectedRankingYear}</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <select 
+                                value={selectedUnavailType}
+                                onChange={(e) => setSelectedUnavailType(e.target.value)}
+                                className="block appearance-none min-w-[120px] box-border flex-none bg-slate-50 dark:bg-slate-800 rounded-lg text-[10px] font-bold px-3 py-1 text-slate-500 focus:ring-1 focus:ring-primary cursor-pointer"
+                            >
+                                {availableUnavailTypes.length > 0 ? (
+                                    availableUnavailTypes.map(type => (
+                                        <option key={type} value={type}>{type}</option>
+                                    ))
+                                ) : (
+                                    <option value="">Nenhum registro</option>
+                                )}
+                            </select>
+                            {unavailRankings.length > 0 && (
+                                <div className="text-right">
+                                    <span className="text-xs font-bold text-primary">{unavailRankings[0].totalDays} dias (Max)</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <div className="space-y-6">
+                        {unavailRankings.map((member) => (
+                            <div key={member.id} className="relative">
+                                <div className="flex items-center gap-4 mb-2">
+                                    <div className="flex-shrink-0">
+                                        {member.avatar ? (
+                                            <img src={member.avatar} alt={member.war_name || member.name} className="w-10 h-10 rounded-full object-cover border-2 border-white dark:border-slate-800 shadow-sm" />
+                                        ) : (
+                                            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center border-2 border-white dark:border-slate-800 shadow-sm">
+                                                <span className="text-xs font-bold text-slate-500">
+                                                    {(member.war_name || member.name || '').charAt(0)}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                                                {member.abrev} {member.war_name}
+                                            </span>
+                                            <span className="text-xs font-bold text-slate-500">
+                                                {member.totalDays} dias
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                                            <div 
+                                                className="bg-primary h-full rounded-full transition-all duration-500" 
+                                                style={{ width: `${(member.totalDays / (unavailRankings[0]?.totalDays || 1)) * 100}%` }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        {unavailRankings.length === 0 && (
+                            <div className="text-center text-slate-400 py-8 italic">Nenhum afastamento do tipo "{selectedUnavailType}" registrado para {selectedRankingYear}.</div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Tempo de Seção */}
+            <div className="grid grid-cols-1 gap-6">
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm">
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <h4 className="text-base font-bold text-slate-800 dark:text-white">Tempo de Seção</h4>
+                            <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Calculado a partir da data de entrada</p>
+                        </div>
+                    </div>
+                    <div className="space-y-6">
+                        {sectionTimeRanking.map((member) => (
+                            <div key={member.id} className="relative">
+                                <div className="flex items-center gap-4 mb-2">
+                                    <div className="flex-shrink-0">
+                                        {member.avatar ? (
+                                            <img src={member.avatar} alt={member.war_name || member.name} className="w-10 h-10 rounded-full object-cover border-2 border-white dark:border-slate-800 shadow-sm" />
+                                        ) : (
+                                            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center border-2 border-white dark:border-slate-800 shadow-sm">
+                                                <span className="text-xs font-bold text-slate-500">
+                                                    {(member.war_name || member.name || '').charAt(0)}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                                                {member.abrev} {member.war_name}
+                                            </span>
+                                            <span className="text-xs font-bold text-slate-500">
+                                                {member.years.toFixed(1)} anos
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                                            <div 
+                                                className="bg-primary h-full rounded-full transition-all duration-500" 
+                                                style={{ width: `${(member.years / (sectionTimeRanking[0]?.years || 1)) * 100}%` }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        {sectionTimeRanking.length === 0 && (
                             <div className="text-center text-slate-400 py-8">Nenhum membro encontrado.</div>
                         )}
                     </div>

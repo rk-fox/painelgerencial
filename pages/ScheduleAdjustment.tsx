@@ -260,11 +260,12 @@ const ScheduleAdjustment: React.FC = () => {
                     const missionStartCopy1 = new Date(missionStart);
                     const missionStartCopy2 = new Date(missionStart);
 
-                    // Start Date: 50 days before
+                    // Start Date: 50 days before (adjusted to previous Friday if weekend)
                     missionStartCopy1.setDate(missionStartCopy1.getDate() - 50);
+                    const startDateAdjusted = adjustIfWeekend(missionStartCopy1);
+
                     // End Date: 45 days before
                     missionStartCopy2.setDate(missionStartCopy2.getDate() - 45);
-                    const endDateAdjusted = adjustIfWeekend(missionStartCopy2);
 
                     const newTask = {
                         name: 'Confecção de FAV',
@@ -273,8 +274,8 @@ const ScheduleAdjustment: React.FC = () => {
                         periodicity: 'pontual',
                         specialties: ['BCT', 'AIS'], // BCT and AIS
                         recurrence_active: false,
-                        start_date: missionStartCopy1.toISOString(),
-                        end_date: endDateAdjusted.toISOString(),
+                        start_date: startDateAdjusted.toISOString(),
+                        end_date: missionStartCopy2.toISOString(),
                         status: 'pendente',
                         quantidade: 1, // User said 1 or team size, deciding on 1 for document task
                         created_at: new Date().toISOString()

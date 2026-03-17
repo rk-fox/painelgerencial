@@ -42,6 +42,7 @@ const TaskForm: React.FC = () => {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [members, setMembers] = useState<Member[]>([]);
     const [missions, setMissions] = useState<any[]>([]);
+    const [unavailabilities, setUnavailabilities] = useState<any[]>([]);
     const [currentUser, setCurrentUser] = useState<any>(null);
 
     // Filters
@@ -69,7 +70,6 @@ const TaskForm: React.FC = () => {
     });
 
     // Rank Definitions
-    // Rank Definitions
     const rankOrder: Record<string, number> = {
         // Officers - Value < 4
         'MAJ': 1, 'MAJ.': 1, 'Maj': 1, 'Maj.': 1,
@@ -79,9 +79,8 @@ const TaskForm: React.FC = () => {
         '2TEN': 3, '2TEN.': 3, '2º Ten': 3,
         'ASP': 3, 'ASP.': 3, 'Asp': 3,
         // Suboficial and Enlisted - Value >= 4
-        'SO': 4, 'SO.': 4, 'S.O': 4,
-        '1S': 5, '2S': 5, '3S': 5, 'SGT': 5,
-        'CB': 6, 'SD': 7
+        'SO': 4, 'SO.': 4,
+        '1S': 5, '2S': 5, '3S': 5, 'SGT': 5, 'Sgt.': 5
     };
 
     useEffect(() => {
@@ -92,6 +91,7 @@ const TaskForm: React.FC = () => {
         fetchMembers();
         fetchTasks();
         fetchMissions();
+        fetchUnavailabilities();
         fetchCategories();
     }, []);
 
@@ -147,6 +147,21 @@ const TaskForm: React.FC = () => {
         }
     };
 
+    const fetchUnavailabilities = async () => {
+        try {
+            const today = new Date().toISOString().split('T')[0];
+            const { data, error } = await supabase
+                .from('unavailability')
+                .select('*')
+                .lte('start_date', today)
+                .gte('end_date', today);
+            if (error) throw error;
+            setUnavailabilities(data || []);
+        } catch (err: any) {
+            console.error('Error fetching unavailabilities:', err.message);
+        }
+    };
+
     const getMemberMission = (memberId: string) => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -157,6 +172,10 @@ const TaskForm: React.FC = () => {
             return today >= start && today <= end;
         });
         return activeMission;
+    };
+
+    const getMemberUnavailToday = (memberId: string) => {
+        return unavailabilities.find(u => u.member === memberId);
     };
 
     // FORM HANDLERS
@@ -346,7 +365,7 @@ const TaskForm: React.FC = () => {
     const canDelete = () => {
         if (!currentUser) return false;
         const rankValue = rankOrder[currentUser.abrev] || 99;
-        return rankValue <= 3; // Major(1) to SO(5)
+        return rankValue <= 5; // Major(1) to SO(5)
     };
 
     const getMemberName = (id: string | null) => {
@@ -677,7 +696,8 @@ const TaskForm: React.FC = () => {
                         })
                         .map(member => {
                             const currentMission = getMemberMission(member.id);
-                            const isUnavailable = member.status === 'Indisponível';
+                            const currentUnavail = getMemberUnavailToday(member.id);
+                            const isUnavailable = member.status === 'Indisponível' || !!currentUnavail;
                             
                             // Get member tasks
                             const memberTasks = tasks.filter(t => t.assigned_to === member.id && t.status !== 'concluida');
@@ -732,7 +752,7 @@ const TaskForm: React.FC = () => {
                                                 <div className="flex items-center gap-1.5 mt-0.5">
                                                     <span className="material-symbols-outlined text-[14px] text-red-600 dark:text-red-500">block</span>
                                                     <span className="text-[10px] text-red-600 dark:text-red-500 font-bold uppercase tracking-wider">
-                                                        Indisponível
+                                                        {currentUnavail ? currentUnavail.type : 'Indisponível'}
                                                     </span>
                                                 </div>
                                             ) : (

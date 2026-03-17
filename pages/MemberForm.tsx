@@ -33,6 +33,7 @@ const MemberForm: React.FC = () => {
     specialty: '',
     email: '',
     phone: '',
+    courses: [] as string[],
   });
 
   useEffect(() => {
@@ -62,6 +63,7 @@ const MemberForm: React.FC = () => {
           specialty: data.specialty || '',
           email: data.email || '',
           phone: data.phone || '',
+          courses: Array.isArray(data.courses) ? data.courses : [],
         });
         if (data.avatar) {
           setAvatarPreview(data.avatar);
@@ -76,9 +78,28 @@ const MemberForm: React.FC = () => {
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { id, value, name } = e.target;
+    const { id, value, name, type } = e.target;
     const field = id || name;
-    setFormData(prev => ({ ...prev, [field]: value }));
+
+    if (type === 'checkbox' && field === 'courses') {
+      const checkbox = e.target as HTMLInputElement;
+      setFormData(prev => {
+        const currentCourses = [...(prev.courses || [])];
+        if (checkbox.checked) {
+          if (!currentCourses.includes(value)) {
+            currentCourses.push(value);
+          }
+        } else {
+          const index = currentCourses.indexOf(value);
+          if (index > -1) {
+            currentCourses.splice(index, 1);
+          }
+        }
+        return { ...prev, courses: currentCourses };
+      });
+    } else {
+      setFormData(prev => ({ ...prev, [field]: value }));
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -124,6 +145,7 @@ const MemberForm: React.FC = () => {
         entry_date: formData.entry_date,
         last_promotion_date: formData.last_promotion_date,
         specialty: formData.specialty,
+        courses: formData.courses,
         email: formData.email,
         phone: formData.phone,
         avatar: avatarUrl || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y',
@@ -354,6 +376,104 @@ const MemberForm: React.FC = () => {
                   onChange={handleInputChange}
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Courses Row */}
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-bold text-[#0d141b] dark:text-white">Cursos ATM</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <label className="cursor-pointer group">
+                <input
+                  className="hidden peer"
+                  name="courses"
+                  type="checkbox"
+                  value="ATM043"
+                  checked={formData.courses.includes('ATM043')}
+                  onChange={handleInputChange}
+                />
+                <div className="flex items-center justify-center h-12 border-2 border-[#d1d5db] dark:border-slate-700 rounded-lg peer-checked:border-primary peer-checked:bg-primary/5 text-[#4c739a] peer-checked:text-primary font-bold transition-all bg-white dark:bg-slate-800 text-xs text-center px-2">
+                  ATM043 - Planejador de EA
+                </div>
+              </label>
+              <label className="cursor-pointer group">
+                <input
+                  className="hidden peer"
+                  name="courses"
+                  type="checkbox"
+                  value="ATM044"
+                  checked={formData.courses.includes('ATM044')}
+                  onChange={handleInputChange}
+                />
+                <div className="flex items-center justify-center h-12 border-2 border-[#d1d5db] dark:border-slate-700 rounded-lg peer-checked:border-primary peer-checked:bg-primary/5 text-[#4c739a] peer-checked:text-primary font-bold transition-all bg-white dark:bg-slate-800 text-xs text-center px-2">
+                  ATM044 - Capacidade de Setor
+                </div>
+              </label>
+              <label className="cursor-pointer group">
+                <input
+                  className="hidden peer"
+                  name="courses"
+                  type="checkbox"
+                  value="ATM045"
+                  checked={formData.courses.includes('ATM045')}
+                  onChange={handleInputChange}
+                />
+                <div className="flex items-center justify-center h-12 border-2 border-[#d1d5db] dark:border-slate-700 rounded-lg peer-checked:border-primary peer-checked:bg-primary/5 text-[#4c739a] peer-checked:text-primary font-bold transition-all bg-white dark:bg-slate-800 text-xs text-center px-2">
+                  ATM045 - Capacidade de Pista
+                </div>
+              </label>
+              <label className="cursor-pointer group">
+                <input
+                  className="hidden peer"
+                  name="courses"
+                  type="checkbox"
+                  value="ATM047"
+                  checked={formData.courses.includes('ATM047')}
+                  onChange={handleInputChange}
+                />
+                <div className="flex items-center justify-center h-12 border-2 border-[#d1d5db] dark:border-slate-700 rounded-lg peer-checked:border-primary peer-checked:bg-primary/5 text-[#4c739a] peer-checked:text-primary font-bold transition-all bg-white dark:bg-slate-800 text-xs text-center px-2">
+                  ATM047 - Indicadores
+                </div>
+              </label>
+              <label className="cursor-pointer group">
+                <input
+                  className="hidden peer"
+                  name="courses"
+                  type="checkbox"
+                  value="ATM049"
+                  checked={formData.courses.includes('ATM049')}
+                  onChange={handleInputChange}
+                />
+                <div className="flex items-center justify-center h-12 border-2 border-[#d1d5db] dark:border-slate-700 rounded-lg peer-checked:border-primary peer-checked:bg-primary/5 text-[#4c739a] peer-checked:text-primary font-bold transition-all bg-white dark:bg-slate-800 text-xs text-center px-2">
+                  ATM049 - Análise Técnica de EA
+                </div>
+              </label>
+              <label className="cursor-pointer group">
+                <input
+                  className="hidden peer"
+                  name="courses"
+                  type="checkbox"
+                  value="AGA001"
+                  checked={formData.courses.includes('AGA001')}
+                  onChange={handleInputChange}
+                />
+                <div className="flex items-center justify-center h-12 border-2 border-[#d1d5db] dark:border-slate-700 rounded-lg peer-checked:border-primary peer-checked:bg-primary/5 text-[#4c739a] peer-checked:text-primary font-bold transition-all bg-white dark:bg-slate-800 text-xs text-center px-2">
+                  AGA001 -  Introdução à Atividade AGA
+                </div>
+              </label>
+              <label className="cursor-pointer group">
+                <input
+                  className="hidden peer"
+                  name="courses"
+                  type="checkbox"
+                  value="AGA004"
+                  checked={formData.courses.includes('AGA004')}
+                  onChange={handleInputChange}
+                />
+                <div className="flex items-center justify-center h-12 border-2 border-[#d1d5db] dark:border-slate-700 rounded-lg peer-checked:border-primary peer-checked:bg-primary/5 text-[#4c739a] peer-checked:text-primary font-bold transition-all bg-white dark:bg-slate-800 text-xs text-center px-2">
+                  AGA004 - Análise Técnica de Processos da Área AGA
+                </div>
+              </label>
             </div>
           </div>
 
