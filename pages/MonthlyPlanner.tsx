@@ -144,67 +144,103 @@ const MonthlyPlanner: React.FC = () => {
     const nextWeekRange = getNextWeekRange();
 
     // Returns tasks for a given day with a flag indicating if each is projected
-    const getTasksForDay = (day: number, month?: number, year?: number): { task: Task; isProjected: boolean }[] => {
-        const targetMonth = month !== undefined ? month : currentMonth;
-        const targetYear = year !== undefined ? year : currentYear;
-        const date = new Date(targetYear, targetMonth, day);
-        const dayOfWeek = date.getDay();
-        const dateString = date.toISOString().split('T')[0];
+    const getTasksForDay = (
+    day: number,
+    month?: number,
+    year?: number
+): { task: Task; isProjected: boolean }[] => {
 
-        const periodicityOrder: Record<string, number> = {
-            'pontual': 1, 'temporada': 2, 'mensal': 3,
-            'quinzenal': 4, 'semanal': 5, 'diaria': 6
-        };
+    const targetMonth = month !== undefined ? month : currentMonth;
+    const targetYear = year !== undefined ? year : currentYear;
 
-        const results: { task: Task; isProjected: boolean }[] = [];
+    // 🔒 Data LOCAL (sem UTC)
+    const date = new Date(targetYear, targetMonth, day);
+    const dayOfWeek = date.getDay();
 
-        tasks.forEach(task => {
-            const taskStartStr = task.start_date.split('T')[0];
-            const taskStart = new Date(taskStartStr);
-            if (date < taskStart) return;
-
-            // Real task instance for this day
-            if (taskStartStr === dateString) {
-                results.push({ task, isProjected: false });
-                return;
-            }
-
-            // Handle recurring templates
-            if (task.recurrence_active) {
-                let isProjected = false;
-                const p = task.periodicity.toLowerCase();
-
-                if (p === 'diaria') isProjected = isBusinessDay(date);
-                else if (p === 'semanal') isProjected = dayOfWeek === 1;
-                else if (p === 'quinzenal') {
-                    const diffTime = date.getTime() - taskStart.getTime();
-                    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-                    isProjected = diffDays >= 0 && diffDays % 14 === 0;
-                }
-                else if (p === 'mensal') isProjected = day === getFirstBusinessDayOfMonth(targetYear, targetMonth);
-
-                if (isProjected) {
-                    if (date >= nextWeekRange.start && date <= nextWeekRange.end) {
-                        const existsReal = tasks.some(t =>
-                            t.name === task.name &&
-                            t.start_date.split('T')[0] === dateString &&
-                            !t.recurrence_active
-                        );
-                        if (existsReal) return;
-                    }
-                    results.push({ task, isProjected: true });
-                }
-            }
-        });
-
-        results.sort((a, b) => {
-            const orderA = periodicityOrder[a.task.periodicity.toLowerCase()] || 99;
-            const orderB = periodicityOrder[b.task.periodicity.toLowerCase()] || 99;
-            return orderA - orderB;
-        });
-
-        return results;
+    const periodicityOrder: Record<string, number> = {
+        'pontual': 1, 'temporada': 2, 'mensal': 3,
+        'quinzenal': 4, 'semanal': 5, 'diaria': 6
     };
+
+    const results: { task: Task; isProjected: boolean }[] = [];
+
+    // ✅ Extrai data ignorando timezone (CRÍTICO)
+    const toLocalDate = (input: any) => {
+        if (!input) return null;
+
+        const [year, month, day] = input.split('T')[0].split('-').map(Number);
+        return new Date(year, month - 1, day); // sempre LOCAL
+    };
+
+    const toLocalDateString = (input: any) => {
+        if (!input) return '';
+        return input.split('T')[0]; // já correto (YYYY-MM-DD)
+    };
+
+    const dateString = toLocalDateString(
+        `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    );
+
+    tasks.forEach(task => {
+
+        const taskStart = toLocalDate(task.start_date);
+        const taskStartStr = toLocalDateString(task.start_date);
+
+        // 🚫 Não projeta antes da data inicial
+        if (!taskStart || date < taskStart) return;
+
+        // ✅ Tarefa REAL no dia correto
+        if (taskStartStr === dateString) {
+            results.push({ task, isProjected: false });
+            return;
+        }
+
+        // 🔁 Recorrência
+        if (task.recurrence_active) {
+
+            let isProjected = false;
+            const p = task.periodicity.toLowerCase();
+
+            if (p === 'diaria') {
+                isProjected = isBusinessDay(date);
+            }
+            else if (p === 'semanal') {
+                isProjected = dayOfWeek === 1;
+            }
+            else if (p === 'quinzenal') {
+                const diffTime = date.getTime() - taskStart.getTime();
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                isProjected = diffDays >= 0 && diffDays % 14 === 0;
+            }
+            else if (p === 'mensal') {
+                isProjected = day === getFirstBusinessDayOfMonth(targetYear, targetMonth);
+            }
+
+            if (isProjected) {
+
+                // 🔍 Já existe tarefa REAL nesse dia?
+                const existsReal = tasks.some(t =>
+                    t.name === task.name &&
+                    !t.recurrence_active &&
+                    t.start_date &&
+                    toLocalDateString(t.start_date) === dateString
+                );
+
+                if (existsReal) return;
+
+                results.push({ task, isProjected: true });
+            }
+        }
+    });
+
+    results.sort((a, b) => {
+        const orderA = periodicityOrder[a.task.periodicity.toLowerCase()] || 99;
+        const orderB = periodicityOrder[b.task.periodicity.toLowerCase()] || 99;
+        return orderA - orderB;
+    });
+
+    return results;
+};
 
     const getUnavailForDay = (dateStr: string) => {
         return unavailabilities.filter(u => {
