@@ -11,23 +11,86 @@ const Layout: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const user = localStorage.getItem('currentUser');
-    if (user) {
-      const parsedUser = JSON.parse(user);
-      setCurrentUser(parsedUser);
-      checkNotifications(parsedUser);
-    }
-  }, []);
+    const getSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        // Fetch full profile from members using user_id
+        const { data: profile, error } = await supabase
+          .from('members')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .single();
+
+        if (profile) {
+          // Check for active CH delegations
+          let effectiveSector = profile.sector;
+          const today = new Date().toISOString().split('T')[0];
+          
+          const { data: delegation } = await supabase
+            .from('ch_delegations')
+            .select('*')
+            .eq('beneficiary_id', profile.id)
+            .eq('is_active', true)
+            .lte('start_date', today)
+            .or(`end_date.is.null,end_date.gte.${today}`)
+            .maybeSingle();
+
+          if (delegation) {
+            effectiveSector = 'CH';
+          }
+
+          const userWithSession = { 
+            ...profile, 
+            sector: effectiveSector,
+            last_login: session.user.last_sign_in_at 
+          };
+          setCurrentUser(userWithSession);
+          checkNotifications(userWithSession);
+          localStorage.setItem('currentUser', JSON.stringify(userWithSession));
+        }
+      } else {
+        // Fallback to localStorage if no auth session but user was already logged in 
+        // (Wait, if RLS is on, the above will fail without a session anyway)
+        const localUser = localStorage.getItem('currentUser');
+        if (localUser) {
+          const parsedUser = JSON.parse(localUser);
+          if (parsedUser.user_id) {
+             // If we have a user_id but no session, we should probably re-auth or redirect
+             navigate('/');
+          } else {
+             setCurrentUser(parsedUser);
+             checkNotifications(parsedUser);
+          }
+        } else {
+          navigate('/');
+        }
+      }
+    };
+
+    getSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        localStorage.removeItem('currentUser');
+        navigate('/');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
 
   const checkNotifications = async (user: any) => {
-    if (!user || !user.last_login) return;
+    if (!user || (!user.last_login && !user.last_sign_in_at)) return;
+    const lastLogin = user.last_login || user.last_sign_in_at;
 
     try {
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
-        .gt('created_at', user.last_login)
-        .contains('specialties', [user.specialty]); // Check if user.specialty is in the specialties array
+        .gt('created_at', lastLogin)
+        .contains('specialties', [user.specialty]);
 
       if (error) throw error;
       if (data) {
@@ -38,7 +101,8 @@ const Layout: React.FC = () => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     localStorage.removeItem('currentUser');
     navigate('/');
   };
@@ -53,6 +117,16 @@ const Layout: React.FC = () => {
     const month = months[date.getMonth()];
     const year = date.getFullYear();
     return `${dayName}, ${day} de ${month} de ${year}`;
+  };
+
+  const getSectorLabel = () => {
+    if (!currentUser?.sector) return 'Painel Gerencial';
+    switch (currentUser.sector) {
+      case 'CP': return 'Capacidade ATC';
+      case 'EA': return 'Espaço Aéreo';
+      case 'CH': return 'Subdivisão Estratégica';
+      default: return 'Painel Gerencial';
+    }
   };
 
   return (
@@ -207,7 +281,7 @@ const Layout: React.FC = () => {
           </div>
           <div className="flex items-center gap-4 ml-4">
             <div className="text-right hidden sm:block">
-              <p className="text-[11px] font-bold text-[#4c739a] uppercase tracking-wider">CAPACIDADE ATC</p>
+              <p className="text-[11px] font-bold text-[#4c739a] uppercase tracking-wider">{getSectorLabel()}</p>
               <p className="text-[10px] text-[#4c739a] dark:text-slate-500">Rio de Janeiro, Brasil</p>
               <p className="text-[10px] text-[#4c739a] dark:text-slate-500 capitalize">{formatDate()}</p>
             </div>

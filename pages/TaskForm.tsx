@@ -1,14 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { supabase } from '../supabase';
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "../supabase";
+import { parseLocalDate } from "../utils/dateUtils";
 
 interface Member {
     id: string;
     avatar: string;
+    rank: string;
     name: string;
     abrev: string;
     war_name: string;
     status: string;
+    sector?: string;
 }
 
 interface Category {
@@ -28,13 +31,44 @@ interface Task {
     status: string;
     recurrence_active: boolean;
     created_at: string;
+    sector?: string;
     quantidade?: number;
     category?: string;
 }
 
+// Rank Priority Logic
+const getRankPriority = (
+    rankStr: string | null,
+    abrevStr: string | null,
+): number => {
+    const s = (rankStr || abrevStr || "").toUpperCase().trim();
+    if (s.includes("MAJOR") || s.includes("MAJ")) return 0;
+    if (s.includes("CAPIT")) return 1;
+    if (s.includes("1º TEN") || s.includes("1.º TEN") || s.includes("1TEN")) {
+        return 2;
+    }
+    if (
+        s.includes("2º TEN") || s.includes("2.º TEN") || s.includes("2TEN") ||
+        s.includes("ASP")
+    ) return 3;
+    if (s.includes("SUBOF") || s.includes("SO.")) return 4;
+    if (s.includes("1º SAR") || s.includes("1.º SAR") || s.includes("1SGT")) {
+        return 5;
+    }
+    if (s.includes("2º SAR") || s.includes("2.º SAR") || s.includes("2SGT")) {
+        return 6;
+    }
+    if (s.includes("3º SAR") || s.includes("3.º SAR") || s.includes("3SGT")) {
+        return 7;
+    }
+    if (s.includes("SGT")) return 7;
+    if (s.includes("CIV")) return 8;
+    return 99;
+};
+
 const TaskForm: React.FC = () => {
     const navigate = useNavigate();
-    const [view, setView] = useState<'list' | 'form'>('list');
+    const [view, setView] = useState<"list" | "form">("list");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -46,150 +80,216 @@ const TaskForm: React.FC = () => {
     const [currentUser, setCurrentUser] = useState<any>(null);
 
     // Filters
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchTerm, setSearchTerm] = useState("");
     const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
     const [filterSpecialties, setFilterSpecialties] = useState<string[]>([]);
-    const [filterPeriodicities, setFilterPeriodicities] = useState<string[]>([]);
+    const [filterPeriodicities, setFilterPeriodicities] = useState<string[]>(
+        [],
+    );
+    const [sortField, setSortField] = useState<string>("created_at");
+    const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+    const [selectedYear, setSelectedYear] = useState<number>(
+        new Date().getFullYear(),
+    );
+    const [currentPage, setCurrentPage] = useState<number>(1);
+    const [totalTasks, setTotalTasks] = useState<number>(0);
+    const itemsPerPage = 100;
 
     // Category State
     const [categories, setCategories] = useState<Category[]>([]);
     const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
-    const [newCategoryName, setNewCategoryName] = useState('');
+    const [newCategoryName, setNewCategoryName] = useState("");
 
     // Form State
     const [editingTask, setEditingTask] = useState<Partial<Task> | null>(null);
     const [formData, setFormData] = useState({
-        name: '',
-        category: '',
+        name: "",
+        category: "",
         specialties: [] as string[],
-        description: '',
-        periodicity: 'diaria',
-        start_date: '',
-        end_date: '',
-        assigned_to: '',
+        description: "",
+        periodicity: "diaria",
+        start_date: "",
+        end_date: "",
+        assigned_to: "",
+        sector: "",
     });
 
-    // Rank Definitions
-    const rankOrder: Record<string, number> = {
-        // Officers - Value < 4
-        'MAJ': 1, 'MAJ.': 1, 'Maj': 1, 'Maj.': 1,
-        'CAP': 2, 'CAP.': 2, 'Cap': 2, 'Cap.': 2,
-        'TEN': 3, 'TEN.': 3, 'Ten': 3, 'Ten.': 3,
-        '1TEN': 3, '1TEN.': 3, '1º Ten': 3,
-        '2TEN': 3, '2TEN.': 3, '2º Ten': 3,
-        'ASP': 3, 'ASP.': 3, 'Asp': 3,
-        // Suboficial and Enlisted - Value >= 4
-        'SO': 4, 'SO.': 4,
-        '1S': 5, '2S': 5, '3S': 5, 'SGT': 5, 'Sgt.': 5
-    };
-
     useEffect(() => {
-        const userJson = localStorage.getItem('currentUser');
+        const userJson = localStorage.getItem("currentUser");
         if (userJson) {
             setCurrentUser(JSON.parse(userJson));
         }
         fetchMembers();
-        fetchTasks();
         fetchMissions();
         fetchUnavailabilities();
         fetchCategories();
     }, []);
 
+    useEffect(() => {
+        fetchTasks();
+    }, [selectedYear, currentPage]);
+
     const fetchMembers = async () => {
         try {
             const { data, error } = await supabase
-                .from('members')
-                //.select('id, name, rank, war_name')
-                .select('id, name, avatar, abrev, war_name, status')
-                .order('name');
+                .from("members")
+                .select(
+                    "id, name, avatar, abrev, war_name, status, rank, sector",
+                );
             if (error) throw error;
-            setMembers(data || []);
+
+            const userJson = localStorage.getItem("currentUser");
+            let userSector = null;
+            if (userJson) {
+                userSector = JSON.parse(userJson).sector;
+            }
+
+            let filtered = data || [];
+            if (userSector === "CP" || userSector === "EA") {
+                filtered = filtered.filter((m) => m.sector === userSector);
+            } else if (userSector === "CH") {
+                filtered = filtered.filter((m) =>
+                    m.sector === "CP" || m.sector === "EA"
+                );
+            }
+
+            const sorted = filtered.sort((a, b) => {
+                const pA = getRankPriority(a.rank, a.abrev);
+                const pB = getRankPriority(b.rank, b.abrev);
+                if (pA !== pB) return pA - pB;
+                const nameA = a.war_name || a.name || "";
+                const nameB = b.war_name || b.name || "";
+                return nameA.localeCompare(nameB);
+            });
+            setMembers(sorted);
         } catch (err) {
-            console.error('Error fetching members:', err);
+            console.error("Error fetching members:", err);
         }
     };
 
     const fetchCategories = async () => {
         try {
             const { data, error } = await supabase
-                .from('task_cat')
-                .select('*')
-                .order('nome_cat');
+                .from("task_cat")
+                .select("*")
+                .order("nome_cat");
             if (error) throw error;
             setCategories(data || []);
         } catch (err) {
-            console.error('Error fetching categories:', err);
+            console.error("Error fetching categories:", err);
         }
     };
 
     const fetchTasks = async () => {
         try {
-            const { data, error } = await supabase
-                .from('tasks')
-                .select('*')
-                .order('created_at', { ascending: false });
+            setLoading(true);
+            const userJson = localStorage.getItem("currentUser");
+            const sector = userJson ? JSON.parse(userJson).sector : null;
+
+            const startRange = (currentPage - 1) * itemsPerPage;
+            const endRange = currentPage * itemsPerPage - 1;
+
+            let query = supabase
+                .from("tasks")
+                .select("*", { count: "exact" })
+                .gte("start_date", `${selectedYear}-01-01`)
+                .lte("start_date", `${selectedYear}-12-31`)
+                .order("created_at", { ascending: sortDirection === "asc" });
+
+            if (sector && (sector === "CP" || sector === "EA")) {
+                query = query.eq("sector", sector);
+            }
+
+            // Aplicar range para paginação
+            const { data, error, count } = await query.range(
+                startRange,
+                endRange,
+            );
+
             if (error) throw error;
             setTasks(data || []);
+            setTotalTasks(count || 0);
         } catch (err: any) {
-            console.error('Error fetching tasks:', err.message);
+            console.error("Error fetching tasks:", err.message);
+        } finally {
+            setLoading(false);
         }
     };
 
     const fetchMissions = async () => {
         try {
-            const { data, error } = await supabase
-                .from('missions')
-                .select('*');
+            const userJson = localStorage.getItem("currentUser");
+            const sector = userJson ? JSON.parse(userJson).sector : null;
+            let query = supabase.from("missions").select("*");
+            if (sector && (sector === "CP" || sector === "EA")) {
+                query = query.eq("sector", sector);
+            }
+            const { data, error } = await query;
             if (error) throw error;
             setMissions(data || []);
         } catch (err: any) {
-            console.error('Error fetching missions:', err.message);
+            console.error("Error fetching missions:", err.message);
         }
     };
 
     const fetchUnavailabilities = async () => {
         try {
-            const today = new Date().toISOString().split('T')[0];
+            const today = new Date().toLocaleDateString("en-CA");
             const { data, error } = await supabase
-                .from('unavailability')
-                .select('*')
-                .lte('start_date', today)
-                .gte('end_date', today);
+                .from("unavailability")
+                .select("*")
+                .lte("start_date", today)
+                .gte("end_date", today);
             if (error) throw error;
             setUnavailabilities(data || []);
         } catch (err: any) {
-            console.error('Error fetching unavailabilities:', err.message);
+            console.error("Error fetching unavailabilities:", err.message);
         }
     };
 
     const getMemberMission = (memberId: string) => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const activeMission = missions.find(miss => {
+        const activeMission = missions.find((miss) => {
             if (!miss.equipe || !miss.equipe.includes(memberId)) return false;
-            const start = new Date(miss.data_inicio.split('T')[0] + 'T00:00:00');
-            const end = new Date(miss.data_fim.split('T')[0] + 'T23:59:59');
+            const start = parseLocalDate(miss.data_inicio);
+            const endD = parseLocalDate(miss.data_fim);
+            const end = endD
+                ? new Date(
+                    endD.getFullYear(),
+                    endD.getMonth(),
+                    endD.getDate(),
+                    23,
+                    59,
+                    59,
+                )
+                : null;
+            if (!start || !end) return false;
             return today >= start && today <= end;
         });
         return activeMission;
     };
 
     const getMemberUnavailToday = (memberId: string) => {
-        return unavailabilities.find(u => u.member === memberId);
+        return unavailabilities.find((u) => u.member === memberId);
     };
 
     // FORM HANDLERS
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const handleInputChange = (
+        e: React.ChangeEvent<
+            HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+        >,
+    ) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
     const handleSpecialtyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { value, checked } = e.target;
-        setFormData(prev => {
+        setFormData((prev) => {
             const newSpecialties = checked
                 ? [...prev.specialties, value]
-                : prev.specialties.filter(s => s !== value);
+                : prev.specialties.filter((s) => s !== value);
             return { ...prev, specialties: newSpecialties };
         });
     };
@@ -197,16 +297,17 @@ const TaskForm: React.FC = () => {
     const handleCreateNew = () => {
         setEditingTask(null);
         setFormData({
-            name: '',
-            category: '',
+            name: "",
+            category: "",
             specialties: [],
-            description: '',
-            periodicity: 'diaria',
-            start_date: new Date().toISOString().split('T')[0],
-            end_date: '',
-            assigned_to: '',
+            description: "",
+            periodicity: "diaria",
+            start_date: new Date().toLocaleDateString("en-CA"),
+            end_date: "",
+            assigned_to: "",
+            sector: "",
         });
-        setView('form');
+        setView("form");
         setError(null);
     };
 
@@ -214,15 +315,16 @@ const TaskForm: React.FC = () => {
         setEditingTask(task);
         setFormData({
             name: task.name,
-            category: task.category || '',
+            category: task.category || "",
             specialties: task.specialties || [],
-            description: task.description || '',
+            description: task.description || "",
             periodicity: task.periodicity,
-            start_date: task.start_date ? task.start_date.split('T')[0] : '',
-            end_date: task.end_date ? task.end_date.split('T')[0] : '',
-            assigned_to: task.assigned_to || '',
+            start_date: task.start_date ? task.start_date.split("T")[0] : "",
+            end_date: task.end_date ? task.end_date.split("T")[0] : "",
+            assigned_to: task.assigned_to || "",
+            sector: task.sector || "",
         });
-        setView('form');
+        setView("form");
         setError(null);
     };
 
@@ -232,20 +334,21 @@ const TaskForm: React.FC = () => {
         setEditingTask(null);
         setFormData({
             name: `${task.name}`,
-            category: task.category || '',
+            category: task.category || "",
             specialties: task.specialties || [],
-            description: task.description || '',
+            description: task.description || "",
             periodicity: task.periodicity,
-            start_date: new Date().toISOString().split('T')[0], // Reset start date to today
-            end_date: '',
-            assigned_to: '', // Clear assignment for new clone? Usually safer.
+            start_date: new Date().toLocaleDateString("en-CA"), // Reset start date to today
+            end_date: "",
+            assigned_to: "", // Clear assignment for new clone? Usually safer.
+            sector: task.sector || "",
         });
-        setView('form');
+        setView("form");
         setError(null);
     };
 
     const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        setFormData(prev => ({ ...prev, category: e.target.value }));
+        setFormData((prev) => ({ ...prev, category: e.target.value }));
     };
 
     const handleSaveNewCategory = async () => {
@@ -253,7 +356,7 @@ const TaskForm: React.FC = () => {
 
         try {
             const { data, error } = await supabase
-                .from('task_cat')
+                .from("task_cat")
                 .insert([{ nome_cat: newCategoryName }])
                 .select()
                 .single();
@@ -261,12 +364,16 @@ const TaskForm: React.FC = () => {
             if (error) throw error;
 
             // Add to list and select it
-            setCategories(prev => [...prev, data].sort((a, b) => a.nome_cat.localeCompare(b.nome_cat)));
-            setFormData(prev => ({ ...prev, category: newCategoryName })); // Or data.nome_cat
+            setCategories((prev) =>
+                [...prev, data].sort((a, b) =>
+                    a.nome_cat.localeCompare(b.nome_cat)
+                )
+            );
+            setFormData((prev) => ({ ...prev, category: newCategoryName })); // Or data.nome_cat
             setShowNewCategoryModal(false);
-            setNewCategoryName('');
+            setNewCategoryName("");
         } catch (err: any) {
-            alert('Erro ao criar categoria: ' + err.message);
+            alert("Erro ao criar categoria: " + err.message);
         }
     };
 
@@ -276,13 +383,16 @@ const TaskForm: React.FC = () => {
         setError(null);
 
         // Validation for Pontual
-        if (formData.periodicity === 'pontual' && !formData.end_date) {
-            setError('A data de conclusão é obrigatória para tarefas pontuais.');
+        if (formData.periodicity === "pontual" && !formData.end_date) {
+            setError(
+                "A data de conclusão é obrigatória para tarefas pontuais.",
+            );
             setLoading(false);
             return;
         }
 
-        const recurrenceActive = ['diaria', 'semanal', 'quinzenal', 'mensal'].includes(formData.periodicity);
+        const recurrenceActive = ["diaria", "semanal", "quinzenal", "mensal"]
+            .includes(formData.periodicity);
 
         try {
             const payload = {
@@ -292,33 +402,50 @@ const TaskForm: React.FC = () => {
                 specialties: formData.specialties,
                 periodicity: formData.periodicity,
                 start_date: formData.start_date,
-                end_date: formData.periodicity === 'pontual' ? formData.end_date : null,
+                end_date: formData.periodicity === "pontual"
+                    ? formData.end_date
+                    : null,
                 assigned_to: formData.assigned_to || null,
                 recurrence_active: recurrenceActive,
                 // If creating new, default status to 'pendente'. If editing, keep status unless logic dictates otherwise.
-                status: editingTask ? undefined : 'pendente'
+                status: editingTask ? undefined : "pendente",
+                sector: editingTask
+                    ? undefined
+                    : (currentUser?.sector === "CH"
+                        ? formData.sector
+                        : currentUser?.sector),
             };
+
+            if (
+                currentUser?.sector === "CH" && !editingTask && !formData.sector
+            ) {
+                setError(
+                    "Por favor, selecione para qual seção (Capacidade ATC ou Espaço Aéreo) esta tarefa será criada.",
+                );
+                setLoading(false);
+                return;
+            }
 
             if (editingTask && editingTask.id) {
                 // Update
                 const { error: updateError } = await supabase
-                    .from('tasks')
+                    .from("tasks")
                     .update(payload)
-                    .eq('id', editingTask.id);
+                    .eq("id", editingTask.id);
                 if (updateError) throw updateError;
             } else {
                 // Insert
                 const { error: insertError } = await supabase
-                    .from('tasks')
+                    .from("tasks")
                     .insert([payload]);
                 if (insertError) throw insertError;
             }
 
             await fetchTasks();
-            setView('list');
+            setView("list");
         } catch (err: any) {
-            console.error('Error saving task:', err.message);
-            setError('Erro ao salvar tarefa: ' + err.message);
+            console.error("Error saving task:", err.message);
+            setError("Erro ao salvar tarefa: " + err.message);
         } finally {
             setLoading(false);
         }
@@ -332,88 +459,114 @@ const TaskForm: React.FC = () => {
         setTaskToDelete(task);
     };
 
-    const confirmDelete = async () => {
+    const confirmDelete = React.useCallback(async () => {
         if (!taskToDelete) return;
 
         try {
-            const { error } = await supabase.from('tasks').delete().eq('id', taskToDelete.id);
+            const { error } = await supabase.from("tasks").delete().eq(
+                "id",
+                taskToDelete.id,
+            );
             if (error) throw error;
-            setTasks(prev => prev.filter(t => t.id !== taskToDelete.id));
+            setTasks((prev) => prev.filter((t) => t.id !== taskToDelete.id));
             setTaskToDelete(null);
         } catch (err: any) {
-            alert('Erro ao apagar: ' + err.message);
+            alert("Erro ao apagar: " + err.message);
         }
-    };
+    }, [taskToDelete]);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (taskToDelete) {
+                if (e.key === "Enter") {
+                    confirmDelete();
+                } else if (e.key === "Escape") {
+                    setTaskToDelete(null);
+                }
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [taskToDelete, confirmDelete]);
 
     const handleToggleRecurrence = async (task: Task) => {
         try {
             const { error } = await supabase
-                .from('tasks')
+                .from("tasks")
                 .update({ recurrence_active: !task.recurrence_active })
-                .eq('id', task.id);
+                .eq("id", task.id);
             if (error) throw error;
 
-            setTasks(prev => prev.map(t =>
-                t.id === task.id ? { ...t, recurrence_active: !task.recurrence_active } : t
-            ));
+            setTasks((prev) =>
+                prev.map((t) =>
+                    t.id === task.id
+                        ? { ...t, recurrence_active: !task.recurrence_active }
+                        : t
+                )
+            );
         } catch (err: any) {
-            alert('Erro ao alterar recorrência: ' + err.message);
+            alert("Erro ao alterar recorrência: " + err.message);
         }
     };
 
     // HELPERS
     const canDelete = () => {
         if (!currentUser) return false;
-        const rankValue = rankOrder[currentUser.abrev] || 99;
+        const rankValue = getRankPriority(currentUser.rank, currentUser.abrev);
         return rankValue <= 5; // Major(1) to SGT(5) AQUI É O FILTRO DE QUEM PODE DELETAR
     };
 
     const getMemberName = (id: string | null) => {
-        if (!id) return 'Banco de Tarefas';
-        const member = members.find(m => m.id === id);
-        return member ? member.name : 'Desconhecido';
+        if (!id) return "Banco de Tarefas";
+        const member = members.find((m) => m.id === id);
+        return member ? member.name : "Desconhecido";
     };
 
     const formatPeriodicity = (p: string) => {
         const map: any = {
-            'diaria': 'Diária',
-            'semanal': 'Semanal',
-            'quinzenal': 'Quinzenal',
-            'mensal': 'Mensal',
-            'temporada': 'Temporada',
-            'pontual': 'Pontual'
+            "diaria": "Diária",
+            "semanal": "Semanal",
+            "quinzenal": "Quinzenal",
+            "mensal": "Mensal",
+            "temporada": "Temporada",
+            "pontual": "Pontual",
         };
         return map[p] || p;
     };
 
     const getStatusLabel = (s: string) => {
         const map: any = {
-            'pendente': 'Pendente',
-            'iniciada': 'Em Andamento',
+            "pendente": "Pendente",
+            "iniciada": "Andamento",
             //'pausada': 'Pausada',
-            'concluida': 'Concluída'
+            "concluida": "Concluída",
         };
         return map[s] || s;
     };
 
     const getStatusStyle = (s: string) => {
         switch (s) {
-            case 'concluida': return 'bg-green-100 text-green-700';
-            case 'iniciada': return 'bg-blue-100 text-blue-700';
+            case "concluida":
+                return "bg-green-100 text-green-700";
+            case "iniciada":
+                return "bg-blue-100 text-blue-700";
             //case 'pausada': return 'bg-amber-100 text-amber-700';
-            default: return 'bg-slate-100 text-slate-600';
+            default:
+                return "bg-slate-100 text-slate-600";
         }
     };
 
     const getTaskHighlight = (task: Task) => {
-        if (task.status === 'concluida' || !task.end_date) return '';
+        if (task.status === "concluida" || !task.end_date) return "";
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
         // Parse YYYY-MM-DD strictly to local midnight
-        const [y, m, d] = task.end_date.split('-').map(Number);
-        const endDate = new Date(y, m - 1, d);
+        const endDate = parseLocalDate(task.end_date);
+
+        if (!endDate) return "";
 
         // Difference in days
         const diffTime = endDate.getTime() - today.getTime();
@@ -421,40 +574,93 @@ const TaskForm: React.FC = () => {
 
         if (diffDays < 0) {
             // Overdue (< 0)
-            return 'bg-red-50 text-red-600 px-2 py-0.5 rounded';
+            return "bg-red-50 text-red-600 px-2 py-0.5 rounded";
         } else if (diffDays <= 1) {
             // Due Today (0) or Tomorrow (1) - "Intersection 0-1"
-            return 'bg-amber-300 text-amber-800 px-2 py-0.5 rounded';
+            return "bg-amber-300 text-amber-800 px-2 py-0.5 rounded";
         } else if (diffDays <= 3) {
             // Upcoming (2, 3) - "Yellow 1-3" (excluding 1 as it falls in bucket above)
-            return 'bg-amber-100 text-amber-600 px-2 py-0.5 rounded';
+            return "bg-amber-100 text-amber-600 px-2 py-0.5 rounded";
         }
 
-        return '';
+        return "";
+    };
+
+    const handleSort = (field: string) => {
+        if (sortField === field) {
+            setSortDirection((prev) => prev === "asc" ? "desc" : "asc");
+        } else {
+            setSortField(field);
+            setSortDirection("asc");
+        }
     };
 
     // FILTERING
-    const filteredTasks = tasks.filter(task => {
-        const matchesSearch = task.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (task.description || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const filteredTasks = tasks.filter((task) => {
+        const matchesSearch =
+            task.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (task.description || "").toLowerCase().includes(
+                searchTerm.toLowerCase(),
+            );
 
-        const matchesStatus = filterStatuses.length === 0 || filterStatuses.includes(task.status);
-        const matchesSpecialty = filterSpecialties.length === 0 || task.specialties?.some(s => filterSpecialties.includes(s));
-        const matchesPeriodicity = filterPeriodicities.length === 0 || filterPeriodicities.includes(task.periodicity);
+        const matchesStatus = filterStatuses.length === 0 ||
+            filterStatuses.includes(task.status);
+        const matchesSpecialty = filterSpecialties.length === 0 ||
+            task.specialties?.some((s) => filterSpecialties.includes(s));
+        const matchesPeriodicity = filterPeriodicities.length === 0 ||
+            filterPeriodicities.includes(task.periodicity);
 
-        return matchesSearch && matchesStatus && matchesSpecialty && matchesPeriodicity;
+        return matchesSearch && matchesStatus && matchesSpecialty &&
+            matchesPeriodicity;
+    }).sort((a, b) => {
+        let valA: any = "";
+        let valB: any = "";
+
+        switch (sortField) {
+            case "name":
+                valA = (a.name || "").toLowerCase();
+                valB = (b.name || "").toLowerCase();
+                break;
+            case "periodicity":
+                valA = formatPeriodicity(a.periodicity).toLowerCase();
+                valB = formatPeriodicity(b.periodicity).toLowerCase();
+                break;
+            case "start_date":
+                valA = a.start_date || "";
+                valB = b.start_date || "";
+                break;
+            case "assigned_to":
+                valA = getMemberName(a.assigned_to).toLowerCase();
+                valB = getMemberName(b.assigned_to).toLowerCase();
+                break;
+            case "status":
+                valA = getStatusLabel(a.status).toLowerCase();
+                valB = getStatusLabel(b.status).toLowerCase();
+                break;
+            default:
+                valA = a.created_at || "";
+                valB = b.created_at || "";
+        }
+
+        if (valA < valB) return sortDirection === "asc" ? -1 : 1;
+        if (valA > valB) return sortDirection === "asc" ? 1 : -1;
+        return 0;
     });
 
-    if (view === 'form') {
+    if (view === "form") {
         // FORM VIEW
         return (
             <div className="max-w-4xl mx-auto flex flex-col gap-8 animate-in fade-in duration-500">
                 <div className="flex flex-col gap-2">
                     <h1 className="text-[#0d141b] dark:text-white text-3xl font-extrabold leading-tight tracking-tight">
-                        {editingTask ? 'Editar Tarefa' : 'Cadastrar Nova Tarefa'}
+                        {editingTask
+                            ? "Editar Tarefa"
+                            : "Cadastrar Nova Tarefa"}
                     </h1>
                     <p className="text-[#4c739a] dark:text-slate-400 text-base font-normal">
-                        Preencha os dados abaixo para {editingTask ? 'atualizar a' : 'criar uma nova'} atividade técnica.
+                        Preencha os dados abaixo para{" "}
+                        {editingTask ? "atualizar a" : "criar uma nova"}{" "}
+                        atividade técnica.
                     </p>
                 </div>
 
@@ -469,7 +675,9 @@ const TaskForm: React.FC = () => {
                         <div className="p-6 border-b border-[#e7edf3] dark:border-slate-800">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="flex flex-col gap-2 col-span-2">
-                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">Nome da Tarefa</label>
+                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                        Nome da Tarefa
+                                    </label>
                                     <input
                                         name="name"
                                         value={formData.name}
@@ -481,7 +689,9 @@ const TaskForm: React.FC = () => {
                                     />
                                 </div>
                                 <div className="flex flex-col gap-2 col-span-2 md:col-span-1">
-                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">Categoria</label>
+                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                        Categoria
+                                    </label>
                                     <div className="flex gap-2">
                                         <select
                                             name="category"
@@ -489,45 +699,86 @@ const TaskForm: React.FC = () => {
                                             onChange={handleCategoryChange}
                                             className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
                                         >
-                                            <option value="">Selecione uma categoria...</option>
-                                            {categories.map(cat => (
-                                                <option key={cat.id} value={cat.nome_cat}>
+                                            <option value="">
+                                                Selecione uma categoria...
+                                            </option>
+                                            {categories.map((cat) => (
+                                                <option
+                                                    key={cat.id}
+                                                    value={cat.nome_cat}
+                                                >
                                                     {cat.nome_cat}
                                                 </option>
                                             ))}
                                         </select>
                                         <button
                                             type="button"
-                                            onClick={() => setShowNewCategoryModal(true)}
+                                            onClick={() =>
+                                                setShowNewCategoryModal(true)}
                                             className="h-[46px] w-[50px] flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[#4c739a] border border-[#cfdbe7] dark:border-slate-700 transition-colors"
                                             title="Nova Categoria"
                                         >
-                                            <span className="material-symbols-outlined text-[24px]">add</span>
+                                            <span className="material-symbols-outlined text-[24px]">
+                                                add
+                                            </span>
                                         </button>
                                     </div>
                                 </div>
+                                {currentUser?.sector === "CH" && !editingTask &&
+                                    (
+                                        <div className="flex flex-col gap-2 col-span-2">
+                                            <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                                Seção de Destino
+                                            </label>
+                                            <select
+                                                name="sector"
+                                                value={formData.sector}
+                                                onChange={handleInputChange}
+                                                className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
+                                                required
+                                            >
+                                                <option value="">
+                                                    Selecione o Setor...
+                                                </option>
+                                                <option value="CP">
+                                                    Capacidade ATC (CP)
+                                                </option>
+                                                <option value="EA">
+                                                    Espaço Aéreo (EA)
+                                                </option>
+                                            </select>
+                                        </div>
+                                    )}
                                 <div className="flex flex-col gap-2 col-span-2 md:col-span-1">
-                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">Especialidade Requerida</label>
+                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                        Especialidade Requerida
+                                    </label>
                                     <div className="flex gap-2">
                                         <label className="flex-1 cursor-pointer">
                                             <input
                                                 className="hidden peer"
                                                 type="checkbox"
                                                 value="BCT"
-                                                checked={formData.specialties.includes('BCT')}
+                                                checked={formData.specialties
+                                                    .includes("BCT")}
                                                 onChange={handleSpecialtyChange}
                                             />
-                                            <div className="text-center p-3 rounded-lg border border-[#cfdbe7] dark:border-slate-700 peer-checked:bg-primary/10 peer-checked:border-primary peer-checked:text-primary transition-all text-sm font-medium active:scale-95">BCT</div>
+                                            <div className="text-center p-3 rounded-lg border border-[#cfdbe7] dark:border-slate-700 peer-checked:bg-primary/10 peer-checked:border-primary peer-checked:text-primary transition-all text-sm font-medium active:scale-95">
+                                                BCT
+                                            </div>
                                         </label>
                                         <label className="flex-1 cursor-pointer">
                                             <input
                                                 className="hidden peer"
                                                 type="checkbox"
                                                 value="AIS"
-                                                checked={formData.specialties.includes('AIS')}
+                                                checked={formData.specialties
+                                                    .includes("AIS")}
                                                 onChange={handleSpecialtyChange}
                                             />
-                                            <div className="text-center p-3 rounded-lg border border-[#cfdbe7] dark:border-slate-700 peer-checked:bg-primary/10 peer-checked:border-primary peer-checked:text-primary transition-all text-sm font-medium active:scale-95">AIS</div>
+                                            <div className="text-center p-3 rounded-lg border border-[#cfdbe7] dark:border-slate-700 peer-checked:bg-primary/10 peer-checked:border-primary peer-checked:text-primary transition-all text-sm font-medium active:scale-95">
+                                                AIS
+                                            </div>
                                         </label>
                                     </div>
                                 </div>
@@ -536,21 +787,26 @@ const TaskForm: React.FC = () => {
 
                         <div className="p-6 border-b border-[#e7edf3] dark:border-slate-800">
                             <div className="flex flex-col gap-2">
-                                <label className="text-[#0d141b] dark:text-white text-sm font-semibold">Descrição detalhada</label>
+                                <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                    Descrição detalhada
+                                </label>
                                 <textarea
                                     name="description"
                                     value={formData.description}
                                     onChange={handleInputChange}
                                     className="w-full min-h-32 rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3 resize-none"
                                     placeholder="Descreva as etapas, objetivos e requisitos técnicos da tarefa..."
-                                ></textarea>
+                                >
+                                </textarea>
                             </div>
                         </div>
 
                         <div className="p-6 bg-slate-50/50 dark:bg-slate-800/20">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="flex flex-col gap-2">
-                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">Periodicidade</label>
+                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                        Periodicidade
+                                    </label>
                                     <select
                                         name="periodicity"
                                         value={formData.periodicity}
@@ -559,14 +815,20 @@ const TaskForm: React.FC = () => {
                                     >
                                         <option value="diaria">Diária</option>
                                         <option value="semanal">Semanal</option>
-                                        <option value="quinzenal">Quinzenal</option>
+                                        <option value="quinzenal">
+                                            Quinzenal
+                                        </option>
                                         <option value="mensal">Mensal</option>
-                                        <option value="temporada">Temporada</option>
+                                        <option value="temporada">
+                                            Temporada
+                                        </option>
                                         <option value="pontual">Pontual</option>
                                     </select>
                                 </div>
                                 <div className="flex flex-col gap-2">
-                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">Data de Início</label>
+                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                        Data de Início
+                                    </label>
                                     <div className="relative">
                                         <input
                                             name="start_date"
@@ -576,30 +838,41 @@ const TaskForm: React.FC = () => {
                                             type="date"
                                             required
                                         />
-                                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#4c739a] pointer-events-none text-xl">calendar_today</span>
+                                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#4c739a] pointer-events-none text-xl">
+                                            calendar_today
+                                        </span>
                                     </div>
                                 </div>
 
                                 <div className="flex flex-col gap-2">
-                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">Membro Designado (Opcional)</label>
+                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                        Membro Designado (Opcional)
+                                    </label>
                                     <select
                                         name="assigned_to"
                                         value={formData.assigned_to}
                                         onChange={handleInputChange}
                                         className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
                                     >
-                                        <option value="">Em branco (Banco de Tarefas)</option>
-                                        {members.map(member => (
-                                            <option key={member.id} value={member.id}>
+                                        <option value="">
+                                            Em branco (Banco de Tarefas)
+                                        </option>
+                                        {members.map((member) => (
+                                            <option
+                                                key={member.id}
+                                                value={member.id}
+                                            >
                                                 {member.name}
                                             </option>
                                         ))}
                                     </select>
                                 </div>
 
-                                {formData.periodicity === 'pontual' && (
+                                {formData.periodicity === "pontual" && (
                                     <div className="flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                                        <label className="text-[#0d141b] dark:text-white text-sm font-semibold">Prazo de Conclusão</label>
+                                        <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                            Prazo de Conclusão
+                                        </label>
                                         <div className="relative">
                                             <input
                                                 name="end_date"
@@ -608,7 +881,9 @@ const TaskForm: React.FC = () => {
                                                 className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3 pl-10"
                                                 type="date"
                                             />
-                                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#4c739a] pointer-events-none text-xl">event_available</span>
+                                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#4c739a] pointer-events-none text-xl">
+                                                event_available
+                                            </span>
                                         </div>
                                     </div>
                                 )}
@@ -619,7 +894,7 @@ const TaskForm: React.FC = () => {
                             <button
                                 className="px-6 py-2.5 rounded-lg border border-[#cfdbe7] dark:border-slate-700 text-[#0d141b] dark:text-white text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                                 type="button"
-                                onClick={() => setView('list')}
+                                onClick={() => setView("list")}
                             >
                                 Cancelar
                             </button>
@@ -628,8 +903,11 @@ const TaskForm: React.FC = () => {
                                 type="submit"
                                 disabled={loading}
                             >
-                                {loading && <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white"></div>}
-                                {loading ? 'Salvando...' : 'Salvar Tarefa'}
+                                {loading && (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white">
+                                    </div>
+                                )}
+                                {loading ? "Salvando..." : "Salvar Tarefa"}
                             </button>
                         </div>
                     </form>
@@ -639,18 +917,25 @@ const TaskForm: React.FC = () => {
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-[#e7edf3] dark:border-slate-800 w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
                             <div className="p-4 flex flex-col gap-3">
-                                <h3 className="text-sm font-bold text-[#0d141b] dark:text-white uppercase tracking-wider">Nova Categoria</h3>
+                                <h3 className="text-sm font-bold text-[#0d141b] dark:text-white uppercase tracking-wider">
+                                    Nova Categoria
+                                </h3>
                                 <div className="flex gap-2">
                                     <input
                                         autoFocus
                                         value={newCategoryName}
-                                        onChange={(e) => setNewCategoryName(e.target.value)}
+                                        onChange={(e) =>
+                                            setNewCategoryName(e.target.value)}
                                         className="flex-1 rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-[#f8fafc] dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-2"
                                         placeholder="Nome da categoria..."
                                         type="text"
                                         onKeyDown={(e) => {
-                                            if (e.key === 'Enter') handleSaveNewCategory();
-                                            if (e.key === 'Escape') setShowNewCategoryModal(false);
+                                            if (e.key === "Enter") {
+                                                handleSaveNewCategory();
+                                            }
+                                            if (e.key === "Escape") {
+                                                setShowNewCategoryModal(false);
+                                            }
                                         }}
                                     />
                                     <button
@@ -659,17 +944,21 @@ const TaskForm: React.FC = () => {
                                         className="p-2 rounded-lg bg-green-500 hover:bg-green-600 text-white shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                                         title="Confirmar"
                                     >
-                                        <span className="material-symbols-outlined text-[20px]">check</span>
+                                        <span className="material-symbols-outlined text-[20px]">
+                                            check
+                                        </span>
                                     </button>
                                     <button
                                         onClick={() => {
                                             setShowNewCategoryModal(false);
-                                            setNewCategoryName('');
+                                            setNewCategoryName("");
                                         }}
                                         className="p-2 rounded-lg bg-red-500 hover:bg-red-600 text-white shadow-md transition-all active:scale-95"
                                         title="Cancelar"
                                     >
-                                        <span className="material-symbols-outlined text-[20px]">close</span>
+                                        <span className="material-symbols-outlined text-[20px]">
+                                            close
+                                        </span>
                                     </button>
                                 </div>
                             </div>
@@ -683,118 +972,200 @@ const TaskForm: React.FC = () => {
     // LIST VIEW
     return (
         <div className="max-w-6xl mx-auto flex flex-col gap-8 animate-in fade-in duration-500">
-
             {/* Personnel Control Section */}
             <div className="flex flex-col gap-4">
-                <h1 className="text-[#0d141b] dark:text-white text-3xl font-extrabold leading-tight tracking-tight">Controle do Efetivo</h1>
-                <p className="text-[#4c739a] dark:text-slate-400 text-base font-normal">Tarefas atribuídas ao efetivo nesse momento.</p>
+                <h1 className="text-[#0d141b] dark:text-white text-3xl font-extrabold leading-tight tracking-tight">
+                    Controle do Efetivo
+                </h1>
+                <p className="text-[#4c739a] dark:text-slate-400 text-base font-normal">
+                    Tarefas atribuídas ao efetivo nesse momento.
+                </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {members
-                        .filter(m => {
-                            const val = rankOrder[m.abrev] || 99;
+                        .filter((m) => {
+                            if (currentUser?.sector === "CH") return true; // CH sees all ranks of CP and EA
+                            const val = getRankPriority(m.rank, m.abrev);
                             return val >= 4; // Suboficial (4) and below (>=4)
                         })
-                        .map(member => {
+                        .map((member) => {
                             const currentMission = getMemberMission(member.id);
-                            const currentUnavail = getMemberUnavailToday(member.id);
-                            const isUnavailable = member.status === 'Indisponível' || !!currentUnavail;
-                            
+                            const currentUnavail = getMemberUnavailToday(
+                                member.id,
+                            );
+                            const isUnavailable =
+                                member.status === "Indisponível" ||
+                                !!currentUnavail;
+
                             // Get member tasks
-                            const memberTasks = tasks.filter(t => t.assigned_to === member.id && t.status !== 'concluida');
+                            const memberTasks = tasks.filter((t) =>
+                                t.assigned_to === member.id &&
+                                t.status !== "concluida"
+                            );
                             // Sort: In Progress first
                             memberTasks.sort((a, b) => {
-                                if (a.status === 'iniciada' && b.status !== 'iniciada') return -1;
-                                if (a.status !== 'iniciada' && b.status === 'iniciada') return 1;
+                                if (
+                                    a.status === "iniciada" &&
+                                    b.status !== "iniciada"
+                                ) return -1;
+                                if (
+                                    a.status !== "iniciada" &&
+                                    b.status === "iniciada"
+                                ) return 1;
                                 return 0;
                             });
 
                             return (
-                                <div 
-                                    key={member.id} 
+                                <div
+                                    key={member.id}
                                     className={`
                                         p-4 rounded-xl border shadow-sm flex flex-col gap-3 transition-all duration-300
-                                        ${currentMission 
-                                            ? 'bg-amber-50/50 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800' 
+                                        ${
+                                        currentMission
+                                            ? "bg-amber-50/50 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800"
                                             : isUnavailable
-                                            ? 'bg-red-50/50 border-red-200 dark:bg-red-900/10 dark:border-red-800'
-                                            : 'bg-white border-[#e7edf3] dark:bg-slate-900 dark:border-slate-800'
-                                        }
+                                            ? "bg-red-50/50 border-red-200 dark:bg-red-900/10 dark:border-red-800"
+                                            : "bg-white border-[#e7edf3] dark:bg-slate-900 dark:border-slate-800"
+                                    }
                                     `}
                                 >
                                     <div className="flex flex-col items-center gap-2 mb-1">
-                                        <div className={`
+                                        <div
+                                            className={`
                                             w-16 h-16 rounded-full flex items-center justify-center font-bold text-sm uppercase overflow-hidden shadow-sm border-2
-                                            ${currentMission ? 'border-amber-400' : isUnavailable ? 'border-red-400' : 'border-white dark:border-slate-800 bg-slate-200 dark:bg-slate-700 text-[#4c739a]'}
-                                        `}>
+                                            ${
+                                                currentMission
+                                                    ? "border-amber-400"
+                                                    : isUnavailable
+                                                    ? "border-red-400"
+                                                    : "border-white dark:border-slate-800 bg-slate-200 dark:bg-slate-700 text-[#4c739a]"
+                                            }
+                                        `}
+                                        >
                                             {/* Avatar or Initials */}
-                                            {member.avatar ? (
-                                                <img
-                                                    src={member.avatar}
-                                                    alt={member.name}
-                                                    className="w-full h-full object-cover"
-                                                />
-                                            ) : (
-                                                member.name.substring(0, 2)
-                                            )}
+                                            {member.avatar
+                                                ? (
+                                                    <img
+                                                        src={member.avatar}
+                                                        alt={member.name}
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                )
+                                                : (
+                                                    member.name.substring(0, 2)
+                                                )}
                                         </div>
                                         <div className="flex flex-col items-center text-center">
                                             <span className="text-lg font-bold text-[#0d141b] dark:text-white leading-tight">
                                                 {member.abrev} {member.war_name}
                                             </span>
-                                            {currentMission ? (
-                                                <div className="flex items-center gap-1.5 mt-0.5">
-                                                    <span className="material-symbols-outlined text-[14px] text-amber-600 dark:text-amber-500">flight_takeoff</span>
-                                                    <span className="text-[10px] text-amber-600 dark:text-amber-500 font-bold uppercase tracking-wider">
-                                                        Em Viagem
+                                            {currentMission
+                                                ? (
+                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                        <span className="material-symbols-outlined text-[14px] text-amber-600 dark:text-amber-500">
+                                                            flight_takeoff
+                                                        </span>
+                                                        <span className="text-[10px] text-amber-600 dark:text-amber-500 font-bold uppercase tracking-wider">
+                                                            Em Viagem
+                                                        </span>
+                                                    </div>
+                                                )
+                                                : isUnavailable
+                                                ? (
+                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                        <span className="material-symbols-outlined text-[14px] text-red-600 dark:text-red-500">
+                                                            block
+                                                        </span>
+                                                        <span className="text-[10px] text-red-600 dark:text-red-500 font-bold uppercase tracking-wider">
+                                                            {currentUnavail
+                                                                ? currentUnavail
+                                                                    .type
+                                                                : "Indisponível"}
+                                                        </span>
+                                                    </div>
+                                                )
+                                                : (
+                                                    <span className="text-[10px] text-[#4c739a] font-medium uppercase mt-0.5">
+                                                        {memberTasks.length}
+                                                        {" "}
+                                                        Atividades
                                                     </span>
-                                                </div>
-                                            ) : isUnavailable ? (
-                                                <div className="flex items-center gap-1.5 mt-0.5">
-                                                    <span className="material-symbols-outlined text-[14px] text-red-600 dark:text-red-500">block</span>
-                                                    <span className="text-[10px] text-red-600 dark:text-red-500 font-bold uppercase tracking-wider">
-                                                        {currentUnavail ? currentUnavail.type : 'Indisponível'}
-                                                    </span>
-                                                </div>
-                                            ) : (
-                                                <span className="text-[10px] text-[#4c739a] font-medium uppercase mt-0.5">
-                                                    {memberTasks.length} Atividades
-                                                </span>
-                                            )}
+                                                )}
                                         </div>
                                     </div>
 
-                                    <div className={`h-px w-full ${currentMission ? 'bg-amber-200 dark:bg-amber-800/50' : isUnavailable ? 'bg-red-200 dark:bg-red-800/50' : 'bg-[#e7edf3] dark:bg-slate-800'}`}></div>
+                                    <div
+                                        className={`h-px w-full ${
+                                            currentMission
+                                                ? "bg-amber-200 dark:bg-amber-800/50"
+                                                : isUnavailable
+                                                ? "bg-red-200 dark:bg-red-800/50"
+                                                : "bg-[#e7edf3] dark:bg-slate-800"
+                                        }`}
+                                    >
+                                    </div>
 
                                     <div className="flex flex-col gap-1.5 min-h-[60px]">
-                                        {currentMission ? (
-                                            <div className="flex items-start gap-2 py-1">
-                                                <div className="mt-0.5 p-1 bg-amber-100 dark:bg-amber-900/30 rounded">
-                                                    <span className="material-symbols-outlined text-[14px] text-amber-600 dark:text-amber-500">stars</span>
+                                        {currentMission
+                                            ? (
+                                                <div className="flex items-start gap-2 py-1">
+                                                    <div className="mt-0.5 p-1 bg-amber-100 dark:bg-amber-900/30 rounded">
+                                                        <span className="material-symbols-outlined text-[14px] text-amber-600 dark:text-amber-500">
+                                                            stars
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[11px] font-black text-amber-700 dark:text-amber-400 uppercase leading-tight line-clamp-2">
+                                                            {currentMission
+                                                                .nome}
+                                                        </span>
+                                                        <span className="text-[9px] font-bold text-amber-600/70 dark:text-amber-500/70 uppercase">
+                                                            Missão Ativa
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                                <div className="flex flex-col">
-                                                    <span className="text-[11px] font-black text-amber-700 dark:text-amber-400 uppercase leading-tight line-clamp-2">
-                                                        {currentMission.nome}
-                                                    </span>
-                                                    <span className="text-[9px] font-bold text-amber-600/70 dark:text-amber-500/70 uppercase">Missão Ativa</span>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                {memberTasks.length > 0 ? (
-                                                    memberTasks.slice(0, 3).map(task => (
-                                                        <div key={task.id} className={`text-xs truncate py-0.5 ${task.status === 'iniciada' ? 'font-bold text-primary' : 'text-[#4c739a]'}`}>
-                                                            {task.status === 'iniciada' && '▶ '}
-                                                            {task.name}
-                                                        </div>
-                                                    ))
-                                                ) : (
-                                                    <span className="text-[10px] text-slate-400 italic">Sem tarefas atribuídas</span>
-                                                )}
-                                                {memberTasks.length > 3 && (
-                                                    <span className="text-[10px] text-slate-400 font-medium">+ {memberTasks.length - 3} outras...</span>
-                                                )}
-                                            </>
-                                        )}
+                                            )
+                                            : (
+                                                <>
+                                                    {memberTasks.length > 0
+                                                        ? (
+                                                            memberTasks.slice(
+                                                                0,
+                                                                3,
+                                                            ).map((task) => (
+                                                                <div
+                                                                    key={task
+                                                                        .id}
+                                                                    className={`text-xs truncate py-0.5 ${
+                                                                        task.status ===
+                                                                                "iniciada"
+                                                                            ? "font-bold text-primary"
+                                                                            : "text-[#4c739a]"
+                                                                    }`}
+                                                                >
+                                                                    {task
+                                                                                .status ===
+                                                                            "iniciada" &&
+                                                                        "▶ "}
+                                                                    {task.name}
+                                                                </div>
+                                                            ))
+                                                        )
+                                                        : (
+                                                            <span className="text-[10px] text-slate-400 italic">
+                                                                Sem tarefas
+                                                                atribuídas
+                                                            </span>
+                                                        )}
+                                                    {memberTasks.length > 3 && (
+                                                        <span className="text-[10px] text-slate-400 font-medium">
+                                                            + {memberTasks
+                                                                .length - 3}
+                                                            {" "}
+                                                            outras...
+                                                        </span>
+                                                    )}
+                                                </>
+                                            )}
                                     </div>
                                 </div>
                             );
@@ -805,16 +1176,23 @@ const TaskForm: React.FC = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex flex-col gap-2">
                     <div className="flex items-center gap-3">
-                        <h1 className="text-[#0d141b] dark:text-white text-3xl font-extrabold leading-tight tracking-tight">Gerenciamento de Tarefas</h1>
+                        <h1 className="text-[#0d141b] dark:text-white text-3xl font-extrabold leading-tight tracking-tight">
+                            Gerenciamento de Tarefas
+                        </h1>
                         <button
-                            onClick={() => navigate('/app/tasks/planner')}
+                            onClick={() => navigate("/app/tasks/planner")}
                             className="p-2 rounded-lg bg-white dark:bg-slate-800 border border-[#e7edf3] dark:border-slate-700 text-[#4c739a] hover:text-primary transition-all active:scale-95 shadow-sm"
                             title="Cronograma Mensal"
                         >
-                            <span className="material-symbols-outlined text-[24px]">calendar_month</span>
+                            <span className="material-symbols-outlined text-[24px]">
+                                calendar_month
+                            </span>
                         </button>
                     </div>
-                    <p className="text-[#4c739a] dark:text-slate-400 text-base font-normal">Gerencie todas as atividades, filtre por especialidade e controle recorrências.</p>
+                    <p className="text-[#4c739a] dark:text-slate-400 text-base font-normal">
+                        Gerencie todas as atividades, filtre por especialidade e
+                        controle recorrências.
+                    </p>
                 </div>
                 <button
                     onClick={handleCreateNew}
@@ -828,12 +1206,14 @@ const TaskForm: React.FC = () => {
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm p-4 flex flex-col gap-4">
                 {/* Search Bar */}
                 <div className="relative">
-                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]">search</span>
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]">
+                        search
+                    </span>
                     <input
                         type="text"
                         placeholder="Buscar por nome, graduação ou especialidade..."
                         value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
+                        onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm focus:ring-2 focus:ring-primary/20 focus:outline-none transition-all"
                     />
                 </div>
@@ -842,20 +1222,23 @@ const TaskForm: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-3 md:gap-6 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
                     {/* Specialties */}
                     <div className="flex items-center gap-2">
-                        {['BCT', 'AIS'].map(spec => (
+                        {["BCT", "AIS"].map((spec) => (
                             <button
                                 key={spec}
                                 onClick={() => {
-                                    setFilterSpecialties(prev =>
-                                        prev.includes(spec) ? prev.filter(s => s !== spec) : [...prev, spec]
+                                    setFilterSpecialties((prev) =>
+                                        prev.includes(spec)
+                                            ? prev.filter((s) => s !== spec)
+                                            : [...prev, spec]
                                     );
                                 }}
                                 className={`
                                     px-4 py-1.5 rounded-full text-xs font-bold border transition-all whitespace-nowrap
-                                    ${filterSpecialties.includes(spec)
-                                        ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400'
-                                        : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'
-                                    }
+                                    ${
+                                    filterSpecialties.includes(spec)
+                                        ? "bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400"
+                                        : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400"
+                                }
                                 `}
                             >
                                 {spec}
@@ -863,31 +1246,37 @@ const TaskForm: React.FC = () => {
                         ))}
                     </div>
 
-                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden md:block"></div>
+                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden md:block">
+                    </div>
 
                     {/* Periodicities */}
                     <div className="flex items-center gap-2">
                         {[
-                            { id: 'diaria', label: 'Diária' },
-                            { id: 'semanal', label: 'Semanal' },
-                            { id: 'quinzenal', label: 'Quinzenal' },
-                            { id: 'mensal', label: 'Mensal' },
+                            { id: "diaria", label: "Diária" },
+                            { id: "semanal", label: "Semanal" },
+                            { id: "quinzenal", label: "Quinzenal" },
+                            { id: "mensal", label: "Mensal" },
                             //{ id: 'temporada', label: 'Temporada' },
-                            { id: 'pontual', label: 'Pontual' }
-                        ].map(period => (
+                            { id: "pontual", label: "Pontual" },
+                        ].map((period) => (
                             <button
                                 key={period.id}
                                 onClick={() => {
-                                    setFilterPeriodicities(prev =>
-                                        prev.includes(period.id) ? prev.filter(p => p !== period.id) : [...prev, period.id]
+                                    setFilterPeriodicities((prev) =>
+                                        prev.includes(period.id)
+                                            ? prev.filter((p) =>
+                                                p !== period.id
+                                            )
+                                            : [...prev, period.id]
                                     );
                                 }}
                                 className={`
                                     px-4 py-1.5 rounded-full text-xs font-bold border transition-all whitespace-nowrap
-                                    ${filterPeriodicities.includes(period.id)
-                                        ? 'bg-white border-primary text-primary shadow-sm dark:bg-slate-800 dark:border-primary dark:text-primary'
-                                        : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'
-                                    }
+                                    ${
+                                    filterPeriodicities.includes(period.id)
+                                        ? "bg-white border-primary text-primary shadow-sm dark:bg-slate-800 dark:border-primary dark:text-primary"
+                                        : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400"
+                                }
                                 `}
                             >
                                 {period.label}
@@ -895,29 +1284,35 @@ const TaskForm: React.FC = () => {
                         ))}
                     </div>
 
-                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden md:block"></div>
+                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden md:block">
+                    </div>
 
                     {/* Statuses */}
                     <div className="flex items-center gap-2">
                         {[
-                            { id: 'pendente', label: 'Pendente' },
-                            { id: 'iniciada', label: 'Em Andamento' },
-                            { id: 'concluida', label: 'Concluída' },
+                            { id: "pendente", label: "Pendente" },
+                            { id: "iniciada", label: "Em Andamento" },
+                            { id: "concluida", label: "Concluída" },
                             // { id: 'pausada', label: 'Pausada' }
-                        ].map(status => (
+                        ].map((status) => (
                             <button
                                 key={status.id}
                                 onClick={() => {
-                                    setFilterStatuses(prev =>
-                                        prev.includes(status.id) ? prev.filter(s => s !== status.id) : [...prev, status.id]
+                                    setFilterStatuses((prev) =>
+                                        prev.includes(status.id)
+                                            ? prev.filter((s) =>
+                                                s !== status.id
+                                            )
+                                            : [...prev, status.id]
                                     );
                                 }}
                                 className={`
                                     px-4 py-1.5 rounded-full text-xs font-bold border transition-all whitespace-nowrap
-                                    ${filterStatuses.includes(status.id)
-                                        ? 'bg-slate-800 border-slate-800 text-white dark:bg-white dark:border-white dark:text-slate-900'
-                                        : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'
-                                    }
+                                    ${
+                                    filterStatuses.includes(status.id)
+                                        ? "bg-slate-800 border-slate-800 text-white dark:bg-white dark:border-white dark:text-slate-900"
+                                        : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400"
+                                }
                                 `}
                             >
                                 {status.label}
@@ -925,7 +1320,8 @@ const TaskForm: React.FC = () => {
                         ))}
                     </div>
 
-                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden md:block"></div>
+                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden md:block">
+                    </div>
 
                     {/* Reset Button */}
                     <button
@@ -933,114 +1329,409 @@ const TaskForm: React.FC = () => {
                             setFilterSpecialties([]);
                             setFilterPeriodicities([]);
                             setFilterStatuses([]);
-                            setSearchTerm('');
+                            setSelectedYear(new Date().getFullYear());
+                            setCurrentPage(1);
+                            setSearchTerm("");
                         }}
                         className="px-4 py-1.5 rounded-full text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-colors shadow-md shadow-primary/20 flex items-center gap-1 whitespace-nowrap"
                     >
                         Todas
-                        <span className="material-symbols-outlined text-[14px]">close</span>
+                        <span className="material-symbols-outlined text-[14px]">
+                            close
+                        </span>
                     </button>
+
+                    {/* Year Select */}
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black text-[#4c739a] uppercase tracking-wider">
+                            Ano:
+                        </span>
+                        <select
+                            value={selectedYear}
+                            onChange={(e) => {
+                                setSelectedYear(Number(e.target.value));
+                                setCurrentPage(1);
+                            }}
+                            className="bg-white dark:bg-slate-800 border-none rounded-lg px-2 py-1 text-xs font-bold text-[#0d141b] dark:text-white focus:outline-none ring-1 ring-slate-200 dark:ring-slate-700"
+                        >
+                            {[2022, 2023, 2024, 2025, 2026].map((year) => (
+                                <option key={year} value={year}>{year}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
 
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="border-b border-[#e7edf3] dark:border-slate-800 text-[#4c739a] dark:text-slate-400 text-xs uppercase tracking-wider">
-                                <th className="p-4 font-bold">Nome</th>
-                                <th className="p-4 font-bold">Periodicidade</th>
-                                <th className="p-4 font-bold">Início</th>
-                                <th className="p-4 font-bold">Membro</th>
-                                <th className="p-4 font-bold">Status</th>
-                                <th className="p-4 font-bold text-right">Ações</th>
+                                <th
+                                    className="p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th"
+                                    onClick={() => handleSort("name")}
+                                >
+                                    <div className="flex items-center gap-1">
+                                        Nome
+                                        <span
+                                            className={`material-symbols-outlined text-[14px] transition-transform ${
+                                                sortField === "name"
+                                                    ? "text-primary"
+                                                    : "opacity-0 group-hover/th:opacity-50"
+                                            } ${
+                                                sortField === "name" &&
+                                                    sortDirection === "desc"
+                                                    ? "rotate-180"
+                                                    : ""
+                                            }`}
+                                        >
+                                            arrow_upward
+                                        </span>
+                                    </div>
+                                </th>
+                                <th
+                                    className="p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th"
+                                    onClick={() => handleSort("periodicity")}
+                                >
+                                    <div className="flex items-center gap-1">
+                                        Periodicidade
+                                        <span
+                                            className={`material-symbols-outlined text-[14px] transition-transform ${
+                                                sortField === "periodicity"
+                                                    ? "text-primary"
+                                                    : "opacity-0 group-hover/th:opacity-50"
+                                            } ${
+                                                sortField === "periodicity" &&
+                                                    sortDirection === "desc"
+                                                    ? "rotate-180"
+                                                    : ""
+                                            }`}
+                                        >
+                                            arrow_upward
+                                        </span>
+                                    </div>
+                                </th>
+                                <th
+                                    className="p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th"
+                                    onClick={() => handleSort("start_date")}
+                                >
+                                    <div className="flex items-center gap-1">
+                                        Início
+                                        <span
+                                            className={`material-symbols-outlined text-[14px] transition-transform ${
+                                                sortField === "start_date"
+                                                    ? "text-primary"
+                                                    : "opacity-0 group-hover/th:opacity-50"
+                                            } ${
+                                                sortField === "start_date" &&
+                                                    sortDirection === "desc"
+                                                    ? "rotate-180"
+                                                    : ""
+                                            }`}
+                                        >
+                                            arrow_upward
+                                        </span>
+                                    </div>
+                                </th>
+                                <th
+                                    className="p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th"
+                                    onClick={() => handleSort("assigned_to")}
+                                >
+                                    <div className="flex items-center gap-1">
+                                        Membro
+                                        <span
+                                            className={`material-symbols-outlined text-[14px] transition-transform ${
+                                                sortField === "assigned_to"
+                                                    ? "text-primary"
+                                                    : "opacity-0 group-hover/th:opacity-50"
+                                            } ${
+                                                sortField === "assigned_to" &&
+                                                    sortDirection === "desc"
+                                                    ? "rotate-180"
+                                                    : ""
+                                            }`}
+                                        >
+                                            arrow_upward
+                                        </span>
+                                    </div>
+                                </th>
+                                <th
+                                    className="p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th"
+                                    onClick={() => handleSort("status")}
+                                >
+                                    <div className="flex items-center gap-1">
+                                        Status
+                                        <span
+                                            className={`material-symbols-outlined text-[14px] transition-transform ${
+                                                sortField === "status"
+                                                    ? "text-primary"
+                                                    : "opacity-0 group-hover/th:opacity-50"
+                                            } ${
+                                                sortField === "status" &&
+                                                    sortDirection === "desc"
+                                                    ? "rotate-180"
+                                                    : ""
+                                            }`}
+                                        >
+                                            arrow_upward
+                                        </span>
+                                    </div>
+                                </th>
+                                <th className="p-4 font-bold text-right">
+                                    Ações
+                                </th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[#e7edf3] dark:divide-slate-800">
-                            {filteredTasks.length > 0 ? (
-                                filteredTasks.map(task => (
-                                    <tr key={task.id} className="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                                        <td className="p-4">
-                                            <p className={`text-sm font-bold text-[#0d141b] dark:text-white inline-block ${getTaskHighlight(task)}`}>{task.name}</p>
-                                            <div className="flex gap-1 mt-1">
-                                                {task.specialties?.map(s => (
-                                                    <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[#4c739a] font-bold">{s}</span>
-                                                ))}
-                                            </div>
-                                        </td>
-                                        <td className="p-4 text-sm text-[#4c739a] dark:text-slate-300">
-                                            {formatPeriodicity(task.periodicity)}
-                                            {task.recurrence_active && (
-                                                <span className="ml-1 text-[10px] text-green-600 font-bold" title="Recorrência Ativa">↺</span>
-                                            )}
-                                            {!task.recurrence_active && ['diaria', 'semanal', 'mensal'].includes(task.periodicity) && (
-                                                <span className="ml-1 text-[10px] text-red-400 font-bold" title="Recorrência Parada">✕</span>
-                                            )}
-                                        </td>
-                                        <td className="p-4 text-sm text-[#4c739a] dark:text-slate-300">
-                                            {task.start_date ? task.start_date.split('T')[0].split('-').reverse().join('/') : '-'}
-                                        </td>
-                                        <td className="p-4 text-sm text-[#4c739a] dark:text-slate-300">
-                                            {getMemberName(task.assigned_to)}
-                                        </td>
-                                        <td className="p-4">
-                                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${getStatusStyle(task.status)}`}>
-                                                {getStatusLabel(task.status)}
-                                            </span>
-                                        </td>
-                                        <td className="p-4">
-                                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button
-                                                    onClick={() => handleEdit(task)}
-                                                    className="p-2 text-[#4c739a] hover:bg-white hover:text-primary dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
-                                                    title="Editar"
+                            {filteredTasks.length > 0
+                                ? (
+                                    filteredTasks.map((task) => (
+                                        <tr
+                                            key={task.id}
+                                            className="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                                        >
+                                            <td className="p-4">
+                                                <p
+                                                    className={`text-sm font-bold text-[#0d141b] dark:text-white inline-block ${
+                                                        getTaskHighlight(task)
+                                                    }`}
                                                 >
-                                                    <span className="material-symbols-outlined text-[18px]">edit</span>
-                                                </button>
-                                                <button
-                                                    onClick={() => handleClone(task)}
-                                                    className="p-2 text-[#4c739a] hover:bg-white hover:text-blue-600 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
-                                                    title="Clonar"
-                                                >
-                                                    <span className="material-symbols-outlined text-[18px]">content_copy</span>
-                                                </button>
+                                                    {task.name}
+                                                </p>
+                                                <div className="flex gap-1 mt-1">
+                                                    {task.specialties?.map(
+                                                        (s) => (
+                                                            <span
+                                                                key={s}
+                                                                className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[#4c739a] font-bold"
+                                                            >
+                                                                {s}
+                                                            </span>
+                                                        ),
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="p-4 text-sm text-[#4c739a] dark:text-slate-300">
+                                                {formatPeriodicity(
+                                                    task.periodicity,
+                                                )}
                                                 {task.recurrence_active && (
-                                                    <button
-                                                        onClick={() => handleToggleRecurrence(task)}
-                                                        className="p-2 text-[#4c739a] hover:bg-white hover:text-amber-600 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
-                                                        title="Interromper Recorrência"
+                                                    <span
+                                                        className="ml-1 text-[10px] text-green-600 font-bold"
+                                                        title="Recorrência Ativa"
                                                     >
-                                                        <span className="material-symbols-outlined text-[18px]">event_busy</span>
-                                                    </button>
+                                                        ↺
+                                                    </span>
                                                 )}
-                                                {!task.recurrence_active && ['diaria', 'semanal', 'mensal'].includes(task.periodicity) && (
-                                                    <button
-                                                        onClick={() => handleToggleRecurrence(task)}
-                                                        className="p-2 text-[#4c739a] hover:bg-white hover:text-green-600 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
-                                                        title="Ativar Recorrência"
+                                                {!task.recurrence_active &&
+                                                    [
+                                                        "diaria",
+                                                        "semanal",
+                                                        "quinzenal",
+                                                        "mensal",
+                                                    ].includes(
+                                                        task.periodicity,
+                                                    ) && (
+                                                    <span
+                                                        className="ml-1 text-[10px] text-red-400 font-bold"
+                                                        title="Recorrência Parada"
                                                     >
-                                                        <span className="material-symbols-outlined text-[18px]">update</span>
-                                                    </button>
+                                                        ✕
+                                                    </span>
                                                 )}
-                                                {canDelete() && (
+                                            </td>
+                                            <td className="p-4 text-sm text-[#4c739a] dark:text-slate-300">
+                                                {task.start_date
+                                                    ? task.start_date.split(
+                                                        "T",
+                                                    )[0].split("-").reverse()
+                                                        .join("/")
+                                                    : "-"}
+                                            </td>
+                                            <td className="p-4 text-sm text-[#4c739a] dark:text-slate-300">
+                                                {getMemberName(
+                                                    task.assigned_to,
+                                                )}
+                                            </td>
+                                            <td className="p-4">
+                                                <span
+                                                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
+                                                        getStatusStyle(
+                                                            task.status,
+                                                        )
+                                                    }`}
+                                                >
+                                                    {getStatusLabel(
+                                                        task.status,
+                                                    )}
+                                                </span>
+                                            </td>
+                                            <td className="p-4">
+                                                <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <button
-                                                        onClick={() => handleDelete(task)}
-                                                        className="p-2 text-[#4c739a] hover:bg-red-100 hover:text-red-600 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
+                                                        onClick={() =>
+                                                            handleEdit(task)}
+                                                        className="p-2 text-[#4c739a] hover:bg-white hover:text-primary dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
+                                                        title="Editar"
                                                     >
-                                                        <span className="material-symbols-outlined text-[16px]">delete</span>
-                                                    </button>)}
-                                            </div>
+                                                        <span className="material-symbols-outlined text-[18px]">
+                                                            edit
+                                                        </span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() =>
+                                                            handleClone(task)}
+                                                        className="p-2 text-[#4c739a] hover:bg-white hover:text-blue-600 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
+                                                        title="Clonar"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[18px]">
+                                                            content_copy
+                                                        </span>
+                                                    </button>
+                                                    {task.recurrence_active && (
+                                                        <button
+                                                            onClick={() =>
+                                                                handleToggleRecurrence(
+                                                                    task,
+                                                                )}
+                                                            className="p-2 text-[#4c739a] hover:bg-white hover:text-amber-600 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
+                                                            title="Interromper Recorrência"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[18px]">
+                                                                event_busy
+                                                            </span>
+                                                        </button>
+                                                    )}
+                                                    {!task.recurrence_active &&
+                                                        [
+                                                            "diaria",
+                                                            "semanal",
+                                                            "quinzenal",
+                                                            "mensal",
+                                                        ].includes(
+                                                            task.periodicity,
+                                                        ) && (
+                                                        <button
+                                                            onClick={() =>
+                                                                handleToggleRecurrence(
+                                                                    task,
+                                                                )}
+                                                            className="p-2 text-[#4c739a] hover:bg-white hover:text-green-600 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
+                                                            title="Ativar Recorrência"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[18px]">
+                                                                update
+                                                            </span>
+                                                        </button>
+                                                    )}
+                                                    {canDelete() && (
+                                                        <button
+                                                            onClick={() =>
+                                                                handleDelete(
+                                                                    task,
+                                                                )}
+                                                            className="p-2 text-[#4c739a] hover:bg-red-100 hover:text-red-600 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[16px]">
+                                                                delete
+                                                            </span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )
+                                : (
+                                    <tr>
+                                        <td
+                                            colSpan={6}
+                                            className="p-8 text-center text-[#4c739a] text-sm italic"
+                                        >
+                                            Nenhuma tarefa encontrada com os
+                                            filtros atuais.
                                         </td>
                                     </tr>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td colSpan={6} className="p-8 text-center text-[#4c739a] text-sm italic">
-                                        Nenhuma tarefa encontrada com os filtros atuais.
-                                    </td>
-                                </tr>
-                            )}
+                                )}
                         </tbody>
                     </table>
                 </div>
+
+                {/* Pagination Controls */}
+                {totalTasks > 0 && (
+                    <div className="flex items-center justify-between border-t border-[#e7edf3] dark:divide-slate-800 pt-4 mt-2">
+                        <div className="text-xs text-[#4c739a] font-medium">
+                            Mostrando{" "}
+                            <span className="font-bold text-[#0d141b] dark:text-white">
+                                {(currentPage - 1) * itemsPerPage + 1}
+                            </span>{" "}
+                            a{" "}
+                            <span className="font-bold text-[#0d141b] dark:text-white">
+                                {Math.min(
+                                    currentPage * itemsPerPage,
+                                    totalTasks,
+                                )}
+                            </span>{" "}
+                            de{" "}
+                            <span className="font-bold text-[#0d141b] dark:text-white">
+                                {totalTasks}
+                            </span>{" "}
+                            tarefas
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() =>
+                                    setCurrentPage((prev) =>
+                                        Math.max(1, prev - 1)
+                                    )}
+                                disabled={currentPage === 1}
+                                className="p-2 rounded-lg border border-[#e7edf3] dark:border-slate-800 bg-white dark:bg-slate-900 text-[#4c739a] hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">
+                                    chevron_left
+                                </span>
+                            </button>
+
+                            {[...Array(
+                                Math.min(
+                                    5,
+                                    Math.ceil(totalTasks / itemsPerPage),
+                                ),
+                            )].map((_, i) => (
+                                <button
+                                    key={i + 1}
+                                    onClick={() => setCurrentPage(i + 1)}
+                                    className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
+                                        currentPage === i + 1
+                                            ? "bg-primary text-white"
+                                            : "hover:bg-slate-100 dark:hover:bg-slate-800 text-[#4c739a]"
+                                    }`}
+                                >
+                                    {i + 1}
+                                </button>
+                            ))}
+
+                            <button
+                                onClick={() =>
+                                    setCurrentPage((prev) =>
+                                        Math.min(
+                                            Math.ceil(
+                                                totalTasks / itemsPerPage,
+                                            ),
+                                            prev + 1,
+                                            5,
+                                        )
+                                    )}
+                                disabled={currentPage === 5 ||
+                                    currentPage >=
+                                        Math.ceil(totalTasks / itemsPerPage)}
+                                className="p-2 rounded-lg border border-[#e7edf3] dark:border-slate-800 bg-white dark:bg-slate-900 text-[#4c739a] hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">
+                                    chevron_right
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
             {/* Delete Confirmation Modal */}
             {taskToDelete && (
@@ -1048,11 +1739,18 @@ const TaskForm: React.FC = () => {
                     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-[#e7edf3] dark:border-slate-800 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
                         <div className="p-6 text-center">
                             <div className="size-16 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mx-auto mb-4">
-                                <span className="material-symbols-outlined text-red-500 text-[32px]">delete_forever</span>
+                                <span className="material-symbols-outlined text-red-500 text-[32px]">
+                                    delete_forever
+                                </span>
                             </div>
-                            <h3 className="text-xl font-bold text-[#0d141b] dark:text-white mb-2">Confirmar Exclusão</h3>
+                            <h3 className="text-xl font-bold text-[#0d141b] dark:text-white mb-2">
+                                Confirmar Exclusão
+                            </h3>
                             <p className="text-[#4c739a] dark:text-slate-400">
-                                Tem certeza que deseja deletar a tarefa <span className="font-bold text-[#0d141b] dark:text-white">"{taskToDelete.name}"</span>?
+                                Tem certeza que deseja deletar a tarefa{" "}
+                                <span className="font-bold text-[#0d141b] dark:text-white">
+                                    "{taskToDelete.name}"
+                                </span>?
                                 <br />Esta ação não pode ser desfeita.
                             </p>
                         </div>
@@ -1068,17 +1766,19 @@ const TaskForm: React.FC = () => {
                                 className="flex-1 px-4 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold shadow-lg shadow-red-500/20 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
                                 disabled={loading}
                             >
-                                {loading ? (
-                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white"></div>
-                                ) : (
-                                    'Excluir Registro'
-                                )}
+                                {loading
+                                    ? (
+                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white">
+                                        </div>
+                                    )
+                                    : (
+                                        "Excluir Registro"
+                                    )}
                             </button>
                         </div>
                     </div>
                 </div>
             )}
-
         </div>
     );
 };

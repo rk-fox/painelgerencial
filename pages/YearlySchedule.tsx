@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
+import { parseLocalDate, formatLocalDate } from '../utils/dateUtils';
 
 interface Member {
     id: string;
@@ -17,12 +18,28 @@ interface Mission {
     local: string;
     data_inicio: string;
     data_fim: string;
-    tipo: string;
     deslocamento: string;
     fav: boolean;
     qtd_equipe: number;
     equipe: string[] | null;
+    sector?: string;
 }
+
+// Rank Priority Logic
+const getRankPriority = (rankStr: string | null, abrevStr: string | null): number => {
+    const s = (rankStr || abrevStr || '').toUpperCase().trim();
+    if (s.includes('MAJOR') || s.includes('MAJ')) return 0;
+    if (s.includes('CAPIT')) return 1;
+    if (s.includes('1º TEN') || s.includes('1.º TEN') || s.includes('1TEN')) return 2;
+    if (s.includes('2º TEN') || s.includes('2.º TEN') || s.includes('2TEN') || s.includes('ASP')) return 3;
+    if (s.includes('SUBOF') || s.includes('SO.')) return 4;
+    if (s.includes('1º SAR') || s.includes('1.º SAR') || s.includes('1SGT')) return 5;
+    if (s.includes('2º SAR') || s.includes('2.º SAR') || s.includes('2SGT')) return 6;
+    if (s.includes('3º SAR') || s.includes('3.º SAR') || s.includes('3SGT')) return 7;
+    if (s.includes('SGT')) return 7;
+    if (s.includes('CIV')) return 8;
+    return 99;
+};
 
 const YearlySchedule: React.FC = () => {
     const navigate = useNavigate();
@@ -33,29 +50,71 @@ const YearlySchedule: React.FC = () => {
     const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
     const [isMonthPopupOpen, setIsMonthPopupOpen] = useState(false);
     const [isReviewPopupOpen, setIsReviewPopupOpen] = useState(false);
+    const [currentUser, setCurrentUser] = useState<any>(null);
+    const [activeSector, setActiveSector] = useState<string>('CP');
     const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
     useEffect(() => {
+        const userJson = localStorage.getItem('currentUser');
+        if (userJson) {
+            const user = JSON.parse(userJson);
+            setCurrentUser(user);
+            if (user.sector === 'EA') {
+                setActiveSector('EA');
+            } else {
+                setActiveSector('CP');
+            }
+        }
         fetchAvailableYears();
-        fetchMembers();
     }, []);
 
     useEffect(() => {
-        if (selectedYear) {
-            fetchMissions(selectedYear);
+        if (activeSector) {
+            fetchMembers();
+            if (selectedYear) {
+                fetchMissions(selectedYear);
+            }
         }
-    }, [selectedYear]);
+    }, [activeSector, selectedYear]);
+
+    const getThresholds = (sector: string) => {
+        if (sector === 'EA') {
+            return { low: 2, medium: 4 }; // Low 1-2, Med 3-4, High 5+
+        }
+        return { low: 3, medium: 6 }; // Low 1-3, Med 4-6, High 7+
+    };
 
     const fetchAvailableYears = async () => {
-        const { data, error } = await supabase
-            .from('missions')
-            .select('data_inicio');
-        if (!error && data) {
-            const years = [...new Set(data.map(m => new Date(m.data_inicio).getFullYear()))].sort((a, b) => b - a);
-            setAvailableYears(years.length > 0 ? years : [new Date().getFullYear()]);
-            if (years.length > 0 && !years.includes(selectedYear)) {
-                setSelectedYear(years[0]);
+        try {
+            const startCheckYear = 2022;
+            const endCheckYear = new Date().getFullYear() + 2;
+            const foundYears: number[] = [];
+
+            for (let year = startCheckYear; year <= endCheckYear; year++) {
+                let query = supabase
+                    .from('missions')
+                    .select('id', { count: 'exact', head: true })
+                    .gte('data_inicio', `${year}-01-01`)
+                    .lte('data_inicio', `${year}-12-31`);
+                
+                if (activeSector === 'CP' || activeSector === 'EA') {
+                    query = query.eq('sector', activeSector);
+                }
+
+                const { count } = await query;
+                if (count && count > 0) {
+                    foundYears.push(year);
+                }
             }
+
+            const sortedYears = foundYears.sort((a, b) => b - a);
+            setAvailableYears(sortedYears.length > 0 ? sortedYears : [new Date().getFullYear()]);
+            
+            if (sortedYears.length > 0 && !sortedYears.includes(selectedYear)) {
+                setSelectedYear(sortedYears[0]);
+            }
+        } catch (error) {
+            console.error('Error fetching available years:', error);
         }
     };
 
@@ -63,31 +122,64 @@ const YearlySchedule: React.FC = () => {
         const startDate = `${year}-01-01`;
         const endDate = `${year}-12-31`;
         
-        const { data, error } = await supabase
+        let query = supabase
             .from('missions')
             .select('*')
             .gte('data_inicio', startDate)
             .lte('data_inicio', endDate)
             .order('data_inicio');
+            
+        if (activeSector === 'CP' || activeSector === 'EA') {
+            query = query.eq('sector', activeSector);
+        }
+
+        const { data, error } = await query;
         if (!error && data) {
             setMissions(data);
         }
     };
 
     const fetchMembers = async () => {
-        const { data, error } = await supabase
-            .from('members')
-            .select('id, name, war_name, rank, abrev');
+        let query = supabase.from('members').select('id, name, war_name, rank, abrev');
+        if (activeSector === 'CP' || activeSector === 'EA') {
+            query = query.eq('sector', activeSector);
+        }
+        const { data, error } = await query;
         if (!error && data) {
-            setMembers(data);
+            const sorted = data.sort((a, b) => {
+                const pA = getRankPriority(a.rank, a.abrev);
+                const pB = getRankPriority(b.rank, b.abrev);
+                if (pA !== pB) return pA - pB;
+                const nameA = a.war_name || a.name || '';
+                const nameB = b.war_name || b.name || '';
+                return nameA.localeCompare(nameB);
+            });
+            setMembers(sorted);
         }
     };
 
     const getMemberNames = (equipe: string[] | null): string[] => {
         if (!equipe || equipe.length === 0) return [];
-        return equipe.map(id => {
-            const member = members.find(m => m.id === id);
-            return member ? (member.war_name || member.name) : 'Desconhecido';
+        
+        // Pega os objetos dos membros da equipe
+        const teamMembers = equipe
+            .map(id => members.find(m => m.id === id))
+            .filter((m): m is Member => !!m);
+
+        // Ordena por Rank e depois por Nome
+        teamMembers.sort((a, b) => {
+            const pA = getRankPriority(a.rank, a.abrev);
+            const pB = getRankPriority(b.rank, b.abrev);
+            if (pA !== pB) return pA - pB;
+            const nameA = a.war_name || a.name || '';
+            const nameB = b.war_name || b.name || '';
+            return nameA.localeCompare(nameB);
+        });
+
+        return teamMembers.map(member => {
+            const abbrev = member.abrev || '';
+            const name = member.war_name || member.name;
+            return abbrev ? `${abbrev} ${name}` : name;
         });
     };
 
@@ -96,9 +188,7 @@ const YearlySchedule: React.FC = () => {
     // Função auxiliar para formatar a data visualmente (O "Terceiro Ajuste")
     // Transforma '2024-01-20' em '20/01/2024' manualmente
     const formatDateString = (dateString: string): string => {
-        if (!dateString) return '';
-        const parts = dateString.split('T')[0].split('-'); // ['2024', '01', '20']
-        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        return formatLocalDate(dateString, '');
     };
 
     const getMissionsForMonth = (month: number, onlyStartingInMonth: boolean = false): Mission[] => {
@@ -106,10 +196,9 @@ const YearlySchedule: React.FC = () => {
         const lastDayOfMonth = new Date(selectedYear, month + 1, 0, 23, 59, 59).getTime();
 
         return missions.filter(m => {
-            const sParts = m.data_inicio.split('T')[0].split('-').map(Number);
-            const eParts = m.data_fim.split('T')[0].split('-').map(Number);
-            const startDate = new Date(sParts[0], sParts[1] - 1, sParts[2]).getTime();
-            const endDate = new Date(eParts[0], eParts[1] - 1, eParts[2], 23, 59, 59).getTime();
+            const startDate = parseLocalDate(m.data_inicio)?.getTime() || 0;
+            const endD = parseLocalDate(m.data_fim);
+            const endDate = endD ? new Date(endD.getFullYear(), endD.getMonth(), endD.getDate(), 23, 59, 59).getTime() : 0;
 
             // For the yearly review list, we only want to show missions that START in that month
             if (onlyStartingInMonth) {
@@ -126,14 +215,9 @@ const YearlySchedule: React.FC = () => {
             // Data do calendário que estamos verificando (Meia-noite Local)
             const checkDate = new Date(selectedYear, month, day).getTime();
 
-            // Pega as datas de inicio e fim quebradas em partes (Ano, Mês, Dia)
-            const sParts = m.data_inicio.split('T')[0].split('-').map(Number);
-            const eParts = m.data_fim.split('T')[0].split('-').map(Number);
-
-            // Recria as datas localmente para evitar conversão UTC -> Local (-3h)
-            // Lembre-se: no JS, mês começa em 0, por isso subtraímos 1
-            const startDate = new Date(sParts[0], sParts[1] - 1, sParts[2]).getTime();
-            const endDate = new Date(eParts[0], eParts[1] - 1, eParts[2]).getTime();
+            // Pega as datas de inicio e fim
+            const startDate = parseLocalDate(m.data_inicio)?.getTime() || 0;
+            const endDate = parseLocalDate(m.data_fim)?.getTime() || 0;
 
             return checkDate >= startDate && checkDate <= endDate;
         });
@@ -158,8 +242,9 @@ const YearlySchedule: React.FC = () => {
     };
 
     const calculateDuration = (startDate: string, endDate: string): number => {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
+        const start = parseLocalDate(startDate);
+        const end = parseLocalDate(endDate);
+        if (!start || !end) return 0;
         const diffTime = Math.abs(end.getTime() - start.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         return diffDays + 0.5;
@@ -200,6 +285,21 @@ const YearlySchedule: React.FC = () => {
         }
     };
 
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (missionToDelete) {
+                if (e.key === 'Enter') {
+                    confirmDelete();
+                } else if (e.key === 'Escape') {
+                    setMissionToDelete(null);
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [missionToDelete, confirmDelete]);
+
     return (
         <div className="animate-in fade-in duration-500">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -217,6 +317,30 @@ const YearlySchedule: React.FC = () => {
                             <option key={year} value={year}>{year}</option>
                         ))}
                     </select>
+                    {currentUser?.sector === 'CH' && (
+                        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <button
+                                onClick={() => setActiveSector('CP')}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                                    activeSector === 'CP'
+                                        ? 'bg-white dark:bg-slate-700 text-primary shadow-sm'
+                                        : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                                }`}
+                            >
+                                CAPACIDADE (CP)
+                            </button>
+                            <button
+                                onClick={() => setActiveSector('EA')}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                                    activeSector === 'EA'
+                                        ? 'bg-white dark:bg-slate-700 text-primary shadow-sm'
+                                        : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                                }`}
+                            >
+                                ESPAÇO AÉREO (EA)
+                            </button>
+                        </div>
+                    )}
                     <button
                         onClick={() => setIsReviewPopupOpen(true)}
                         className="px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95 flex items-center gap-2"
@@ -248,6 +372,7 @@ const YearlySchedule: React.FC = () => {
                         monthIndex={index}
                         selectedYear={selectedYear}
                         getTeamSizeForDay={getTeamSizeForDay}
+                        activeSector={activeSector}
                     />
                 ))}
             </div>
@@ -255,9 +380,9 @@ const YearlySchedule: React.FC = () => {
             <div className="mt-8 bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 rounded-2xl p-6 flex flex-col md:flex-row items-center gap-6">
                 <div className="text-sm font-bold text-slate-500 uppercase tracking-widest">Efetividade (Integrantes fora):</div>
                 <div className="flex flex-wrap gap-4">
-                    <LegendItem color="bg-green-500" label="Baixa (1-3)" />
-                    <LegendItem color="bg-yellow-500" label="Média (4-6)" />
-                    <LegendItem color="bg-red-500" label="Alta (7+)" />
+                    <LegendItem color="bg-green-500" label={`Baixa (1-${getThresholds(activeSector).low})`} />
+                    <LegendItem color="bg-yellow-500" label={`Média (${getThresholds(activeSector).low + 1}-${getThresholds(activeSector).medium})`} />
+                    <LegendItem color="bg-red-500" label={`Alta (${getThresholds(activeSector).medium + 1}+)`} />
                     <div className="flex items-center gap-2 ml-4">
                         <div className="size-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded"></div>
                         <span className="text-xs font-medium dark:text-slate-300">Sem Missão</span>
@@ -298,9 +423,10 @@ const YearlySchedule: React.FC = () => {
                                         let textClass = "";
 
                                         if (dayMissions.length > 0) {
+                                            const thresholds = getThresholds(activeSector);
                                             textClass = "text-white";
-                                            if (teamSize >= 7) bgClass = "bg-red-500";
-                                            else if (teamSize >= 4) bgClass = "bg-yellow-500";
+                                            if (teamSize >= thresholds.medium + 1) bgClass = "bg-red-500";
+                                            else if (teamSize >= thresholds.low + 1) bgClass = "bg-yellow-500";
                                             else bgClass = "bg-green-500";
                                         }
 
@@ -343,7 +469,6 @@ const YearlySchedule: React.FC = () => {
                                                     <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">Local</th>
                                                     <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">Período</th>
                                                     <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">Duração</th>
-                                                    <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">Tipo</th>
                                                     <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">Equipe</th>
                                                     <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">Ações</th>
                                                 </tr>
@@ -365,11 +490,6 @@ const YearlySchedule: React.FC = () => {
                                                         <td className="py-3 px-2">
                                                             <span className="bg-primary/10 text-primary px-2 py-1 rounded-lg font-bold text-xs">
                                                                 {calculateDuration(mission.data_inicio, mission.data_fim)} dias
-                                                            </span>
-                                                        </td>
-                                                        <td className="py-3 px-2">
-                                                            <span className="bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300">
-                                                                {mission.tipo}
                                                             </span>
                                                         </td>
                                                         <td className="py-3 px-2 relative group">
@@ -449,7 +569,6 @@ const YearlySchedule: React.FC = () => {
                                                         <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">Local</th>
                                                         <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">Período</th>
                                                         <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">Duração</th>
-                                                        <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">Tipo</th>
                                                         <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">Equipe</th>
                                                         <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">Ações</th>
                                                     </tr>
@@ -471,11 +590,6 @@ const YearlySchedule: React.FC = () => {
                                                             <td className="py-3 px-2">
                                                                 <span className="bg-primary/10 text-primary px-2 py-1 rounded-lg font-bold text-xs">
                                                                     {calculateDuration(mission.data_inicio, mission.data_fim)} dias
-                                                                </span>
-                                                            </td>
-                                                            <td className="py-3 px-2">
-                                                                <span className="bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300">
-                                                                    {mission.tipo}
                                                                 </span>
                                                             </td>
                                                             <td className="py-3 px-2">
@@ -569,9 +683,10 @@ interface MonthCardProps {
     monthIndex: number;
     selectedYear: number;
     getTeamSizeForDay: (month: number, day: number) => number;
+    activeSector: string;
 }
 
-const MonthCard: React.FC<MonthCardProps> = ({ month, year, days, startDay, heatmapData, missionsCount, onMonthClick, monthIndex, getTeamSizeForDay }) => {
+const MonthCard: React.FC<MonthCardProps> = ({ month, year, days, startDay, heatmapData, missionsCount, onMonthClick, monthIndex, getTeamSizeForDay, activeSector }) => {
     const cells = [];
     for (let i = 0; i < startDay; i++) {
         cells.push(<div key={`empty-${i}`} className="aspect-square"></div>);
@@ -582,9 +697,10 @@ const MonthCard: React.FC<MonthCardProps> = ({ month, year, days, startDay, heat
         let bgClass = "bg-slate-50 dark:bg-slate-800 text-[#0d141b] dark:text-white";
         let textClass = "";
         if (heatmapData.includes(i)) {
+            const thresholds = activeSector === 'EA' ? { low: 2, medium: 4 } : { low: 3, medium: 6 };
             textClass = "text-white";
-            if (teamSize >= 7) bgClass = "bg-red-500";
-            else if (teamSize >= 4) bgClass = "bg-yellow-500";
+            if (teamSize >= thresholds.medium + 1) bgClass = "bg-red-500";
+            else if (teamSize >= thresholds.low + 1) bgClass = "bg-yellow-500";
             else bgClass = "bg-green-500";
         }
 

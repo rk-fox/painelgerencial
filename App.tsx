@@ -10,6 +10,7 @@ import YearlySchedule from './pages/YearlySchedule';
 import ScheduleAdjustment from './pages/ScheduleAdjustment';
 import MonthlyPlanner from './pages/MonthlyPlanner';
 import SdiaPage from './pages/Sdia';
+import ResetPassword from './pages/ResetPassword';
 import Layout from './components/Layout';
 
 const App: React.FC = () => {
@@ -17,6 +18,7 @@ const App: React.FC = () => {
     <HashRouter>
       <Routes>
         <Route path="/" element={<Login />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
         {/* Authenticated Layout Routes */}
         <Route path="/app" element={<Layout />}>

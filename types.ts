@@ -12,7 +12,7 @@ export interface Member {
   email: string;
   rank: string;
   abrev?: string;
-  specialty: 'BCT' | 'AIS' | 'CTA';
+   specialty?: 'BCT' | 'AIS' | 'CTA' | '';
   entry_date: string;
   last_promotion_date?: string;
   phone?: string;
@@ -20,8 +20,7 @@ export interface Member {
   avatar: string;
   courses?: string[];
   sector?: string;
-  password_hash?: string;
-  requires_password?: boolean;
+  user_id?: string;
 }
 
 export interface Task {

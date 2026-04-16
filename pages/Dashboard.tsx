@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
+import { parseLocalDate } from '../utils/dateUtils';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -10,6 +11,14 @@ const Dashboard: React.FC = () => {
 
   const [filterSpecialties, setFilterSpecialties] = useState<string[]>([]);
   const [filterPeriodicities, setFilterPeriodicities] = useState<string[]>([]);
+
+  const getUserSector = () => {
+    const userJson = localStorage.getItem('currentUser');
+    if (userJson) {
+      return JSON.parse(userJson).sector;
+    }
+    return null;
+  };
 
   // Rank definitions for permission logic
   const rankOrder: Record<string, number> = {
@@ -22,9 +31,10 @@ const Dashboard: React.FC = () => {
   };
 
   useEffect(() => {
+    let user = null;
     const userJson = localStorage.getItem('currentUser');
     if (userJson) {
-      const user = JSON.parse(userJson);
+      user = JSON.parse(userJson);
       setCurrentUser(user);
 
       // Initialize filters based on permissions
@@ -40,26 +50,34 @@ const Dashboard: React.FC = () => {
         setFilterSpecialties([user.specialty]);
       }
     }
-    fetchTasks();
+    fetchTasks(user);
   }, []);
 
-  const fetchTasks = async () => {
+  const fetchTasks = async (userObj = currentUser) => {
     try {
       setLoading(true);
       const today = new Date();
       today.setHours(23, 59, 59, 999); // Include tasks starting today (comparing with task start_date which is usually just a date string YYYY-MM-DD or ISODate)
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('tasks')
         .select('*')
         .order('created_at', { ascending: false });
+
+      const sector = userObj?.sector || getUserSector();
+      if (sector && (sector === 'CP' || sector === 'EA')) {
+        query = query.eq('sector', sector);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
       // Filter tasks that strictly haven't started yet
       const activeTasks = (data || []).filter((task: any) => {
           if (!task.start_date) return true; // Show if no start date
-          const startDate = new Date(task.start_date);
+          const startDate = parseLocalDate(task.start_date);
+          if (!startDate) return true;
           // Set start date time to 00:00:00 to ensure we include tasks starting today
           startDate.setHours(0, 0, 0, 0); 
           const now = new Date();
@@ -320,13 +338,13 @@ const Dashboard: React.FC = () => {
       //if (t.assigned_to !== currentUser.id) return false;
       if (t.periodicity !== 'pontual' || t.status === 'concluida' || !t.end_date) return false;
 
-      const endDate = new Date(t.end_date);
-      // Reset times
-      const todayZero = new Date(now.setHours(0, 0, 0, 0));
-      // Subtrai 1 dia do "hoje" para compensar o atraso do fuso horário/UTC
-      todayZero.setDate(todayZero.getDate() - 1);
-      const endZero = new Date(endDate.setHours(0, 0, 0, 0));
-      const threeDaysZero = new Date(threeDaysFromNow.setHours(0, 0, 0, 0));
+      const endD = parseLocalDate(t.end_date);
+      if (!endD) return false;
+
+      // Reset times properly using local components to avoid shifting
+      const todayZero = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const threeDaysZero = new Date(threeDaysFromNow.getFullYear(), threeDaysFromNow.getMonth(), threeDaysFromNow.getDate());
+      const endZero = new Date(endD.getFullYear(), endD.getMonth(), endD.getDate());
 
       return endZero >= todayZero && endZero <= threeDaysZero;
     }).length;

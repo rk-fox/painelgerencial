@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
+import { parseLocalDate, formatLocalDate } from '../utils/dateUtils';
 
 interface Member {
     id: string;
@@ -9,6 +10,22 @@ interface Member {
     rank: string | null;
     abrev: string | null;
 }
+
+// Rank Priority Logic
+const getRankPriority = (rankStr: string | null, abrevStr: string | null): number => {
+    const s = (rankStr || abrevStr || '').toUpperCase().trim();
+    if (s.includes('MAJOR') || s.includes('MAJ')) return 0;
+    if (s.includes('CAPIT')) return 1;
+    if (s.includes('1º TEN') || s.includes('1.º TEN') || s.includes('1TEN')) return 2;
+    if (s.includes('2º TEN') || s.includes('2.º TEN') || s.includes('2TEN') || s.includes('ASP')) return 3;
+    if (s.includes('SUBOF') || s.includes('SO.')) return 4;
+    if (s.includes('1º SAR') || s.includes('1.º SAR') || s.includes('1SGT')) return 5;
+    if (s.includes('2º SAR') || s.includes('2.º SAR') || s.includes('2SGT')) return 6;
+    if (s.includes('3º SAR') || s.includes('3.º SAR') || s.includes('3SGT')) return 7;
+    if (s.includes('SGT')) return 7;
+    if (s.includes('CIV')) return 8;
+    return 99;
+};
 
 interface Sdia {
     id: string;
@@ -23,7 +40,14 @@ interface Sdia {
     analise: string;
     impacto: boolean;
     analista: string;
+    sector?: string;
     created_at?: string;
+}
+
+interface User {
+  id: string;
+  name: string;
+  sector?: string;
 }
 
 const SdiaPage: React.FC = () => {
@@ -34,6 +58,7 @@ const SdiaPage: React.FC = () => {
     const [members, setMembers] = useState<Member[]>([]);
     const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
     const [isMonthPopupOpen, setIsMonthPopupOpen] = useState(false);
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
     
     // Form State
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -48,8 +73,9 @@ const SdiaPage: React.FC = () => {
         analise: '',
         impacto: false,
         analista: '',
-        data_inicio: new Date().toISOString().split('T')[0],
-        data_fim: new Date().toISOString().split('T')[0]
+        data_inicio: new Date().toLocaleDateString('en-CA'),
+        data_fim: new Date().toLocaleDateString('en-CA'),
+        sector: ''
     });
 
     const [sdiaToDelete, setSdiaToDelete] = useState<Sdia | null>(null);
@@ -59,6 +85,14 @@ const SdiaPage: React.FC = () => {
     useEffect(() => {
         fetchAvailableYears();
         fetchMembers();
+        const userStr = localStorage.getItem('currentUser');
+        if (userStr) {
+            try {
+                setCurrentUser(JSON.parse(userStr));
+            } catch (e) {
+                console.error('Error parsing user', e);
+            }
+        }
     }, []);
 
     useEffect(() => {
@@ -72,7 +106,10 @@ const SdiaPage: React.FC = () => {
             .from('sdia')
             .select('data_inicio');
         if (!error && data) {
-            const years = [...new Set(data.map(m => new Date(m.data_inicio).getFullYear()))].sort((a, b) => b - a);
+            const years = [...new Set(data.map(m => {
+                const parsed = parseLocalDate(m.data_inicio);
+                return parsed ? parsed.getFullYear() : new Date().getFullYear();
+            }))].sort((a, b) => b - a);
             setAvailableYears(years.length > 0 ? years : [new Date().getFullYear()]);
             if (years.length > 0 && !years.includes(selectedYear)) {
                 setSelectedYear(years[0]);
@@ -86,12 +123,21 @@ const SdiaPage: React.FC = () => {
         const startDate = `${year}-01-01`;
         const endDate = `${year}-12-31`;
         
-        const { data, error } = await supabase
+        const userJson = localStorage.getItem('currentUser');
+        const sector = userJson ? JSON.parse(userJson).sector : null;
+
+        let query = supabase
             .from('sdia')
             .select('*')
             .gte('data_inicio', startDate)
             .lte('data_inicio', endDate)
             .order('data_inicio');
+
+        if (sector && (sector === 'CP' || sector === 'EA')) {
+            query = query.eq('sector', sector);
+        }
+
+        const { data, error } = await query;
         if (!error && data) {
             setSdias(data);
         }
@@ -100,10 +146,17 @@ const SdiaPage: React.FC = () => {
     const fetchMembers = async () => {
         const { data, error } = await supabase
             .from('members')
-            .select('id, name, war_name, rank, abrev')
-            .order('name');
+            .select('id, name, war_name, rank, abrev');
         if (!error && data) {
-            setMembers(data);
+            const sorted = data.sort((a, b) => {
+                const pA = getRankPriority(a.rank, a.abrev);
+                const pB = getRankPriority(b.rank, b.abrev);
+                if (pA !== pB) return pA - pB;
+                const nameA = a.war_name || a.name || '';
+                const nameB = b.war_name || b.name || '';
+                return nameA.localeCompare(nameB);
+            });
+            setMembers(sorted);
         }
     };
 
@@ -113,9 +166,7 @@ const SdiaPage: React.FC = () => {
     };
 
     const formatDateString = (dateString: string): string => {
-        if (!dateString) return '';
-        const parts = dateString.split('T')[0].split('-');
-        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        return formatLocalDate(dateString, '');
     };
 
     const getSdiasForMonth = (month: number): Sdia[] => {
@@ -123,10 +174,9 @@ const SdiaPage: React.FC = () => {
         const lastDayOfMonth = new Date(selectedYear, month + 1, 0, 23, 59, 59).getTime();
 
         return sdias.filter(s => {
-            const sParts = s.data_inicio.split('T')[0].split('-').map(Number);
-            const eParts = s.data_fim.split('T')[0].split('-').map(Number);
-            const startDate = new Date(sParts[0], sParts[1] - 1, sParts[2]).getTime();
-            const endDate = new Date(eParts[0], eParts[1] - 1, eParts[2], 23, 59, 59).getTime();
+            const startDate = parseLocalDate(s.data_inicio)?.getTime() || 0;
+            const endD = parseLocalDate(s.data_fim);
+            const endDate = endD ? new Date(endD.getFullYear(), endD.getMonth(), endD.getDate(), 23, 59, 59).getTime() : 0;
 
             return (startDate <= lastDayOfMonth && endDate >= firstDayOfMonth);
         });
@@ -135,10 +185,8 @@ const SdiaPage: React.FC = () => {
     const getSdiasForDay = (month: number, day: number): Sdia[] => {
         return sdias.filter(s => {
             const checkDate = new Date(selectedYear, month, day).getTime();
-            const sParts = s.data_inicio.split('T')[0].split('-').map(Number);
-            const eParts = s.data_fim.split('T')[0].split('-').map(Number);
-            const startDate = new Date(sParts[0], sParts[1] - 1, sParts[2]).getTime();
-            const endDate = new Date(eParts[0], eParts[1] - 1, eParts[2]).getTime();
+            const startDate = parseLocalDate(s.data_inicio)?.getTime() || 0;
+            const endDate = parseLocalDate(s.data_fim)?.getTime() || 0;
             return checkDate >= startDate && checkDate <= endDate;
         });
     };
@@ -168,6 +216,11 @@ const SdiaPage: React.FC = () => {
     const handleSaveSdia = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
+            if (currentUser?.sector === 'CH' && !editingSdia && !formData.sector) {
+                alert('Por favor, selecione para qual seção (Capacidade ATC ou Espaço Aéreo) esta SDIA será criada.');
+                return;
+            }
+
             if (editingSdia) {
                 const { error } = await supabase
                     .from('sdia')
@@ -177,7 +230,10 @@ const SdiaPage: React.FC = () => {
             } else {
                 const { error } = await supabase
                     .from('sdia')
-                    .insert([formData]);
+                    .insert([{ 
+                        ...formData, 
+                        sector: currentUser?.sector === 'CH' ? formData.sector : currentUser?.sector 
+                    }]);
                 if (error) throw error;
             }
             setIsFormOpen(false);
@@ -214,6 +270,21 @@ const SdiaPage: React.FC = () => {
         }
     };
 
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (sdiaToDelete) {
+                if (e.key === 'Enter') {
+                    confirmDelete();
+                } else if (e.key === 'Escape') {
+                    setSdiaToDelete(null);
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [sdiaToDelete, confirmDelete]);
+
     return (
         <div className="animate-in fade-in duration-500">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -244,8 +315,9 @@ const SdiaPage: React.FC = () => {
                                 analise: '',
                                 impacto: false,
                                 analista: '',
-                                data_inicio: new Date().toISOString().split('T')[0],
-                                data_fim: new Date().toISOString().split('T')[0]
+                                data_inicio: new Date().toLocaleDateString('en-CA'),
+                                data_fim: new Date().toLocaleDateString('en-CA'),
+                                sector: ''
                             });
                             setIsFormOpen(true);
                         }}
@@ -522,6 +594,21 @@ const SdiaPage: React.FC = () => {
                                         ))}
                                     </select>
                                 </div>
+                                {currentUser?.sector === 'CH' && !editingSdia && (
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Seção de Destino</label>
+                                        <select 
+                                            required
+                                            value={formData.sector || ''}
+                                            onChange={e => setFormData({...formData, sector: e.target.value})}
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-primary"
+                                        >
+                                            <option value="">Selecione o Setor...</option>
+                                            <option value="CP">Capacidade ATC (CP)</option>
+                                            <option value="EA">Espaço Aéreo (EA)</option>
+                                        </select>
+                                    </div>
+                                )}
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Descrição</label>
                                     <textarea 

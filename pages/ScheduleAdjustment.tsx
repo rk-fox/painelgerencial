@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabase';
+import { parseLocalDate } from '../utils/dateUtils';
 
 interface Member {
     id: string;
@@ -9,6 +10,15 @@ interface Member {
     rank: string | null;
     abrev: string | null;
     status: string | null;
+    sector?: string;
+}
+
+interface User {
+    id: string;
+    war_name: string;
+    rank: string;
+    abrev: string;
+    sector?: string;
 }
 
 interface MemberWithDiarias extends Member {
@@ -25,12 +35,15 @@ const ScheduleAdjustment: React.FC = () => {
     const [nome, setNome] = useState('');
     const [descricao, setDescricao] = useState('');
     const [local, setLocal] = useState('');
-    const [tipo, setTipo] = useState('Geral');
     const [deslocamento, setDeslocamento] = useState('Aéreo');
+    const [qtdEquipeManual, setQtdEquipeManual] = useState(0);
     const [fav, setFav] = useState(false);
     const [dataInicio, setDataInicio] = useState('');
     const [dataFim, setDataFim] = useState('');
     const [selectedTeam, setSelectedTeam] = useState<string[]>([]);
+    const [selectedSector, setSelectedSector] = useState<'CP' | 'EA' | ''>('');
+    const [maxOficialDiarias, setMaxOficialDiarias] = useState(0);
+    const [maxGraduadoDiarias, setMaxGraduadoDiarias] = useState(0);
 
     // UI state
     const [members, setMembers] = useState<MemberWithDiarias[]>([]);
@@ -39,50 +52,126 @@ const ScheduleAdjustment: React.FC = () => {
     const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
     const [isSelectingStart, setIsSelectingStart] = useState(true);
     const [loading, setLoading] = useState(false);
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
 
     const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
     useEffect(() => {
-        fetchMembersWithDiarias();
+        const storedUser = localStorage.getItem('currentUser');
+        if (storedUser) {
+            try {
+                const user = JSON.parse(storedUser);
+                setCurrentUser(user);
+                // Pre-set sector if not CH
+                if (user.sector !== 'CH') {
+                    setSelectedSector(user.sector as 'CP' | 'EA');
+                }
+            } catch (e) {
+                console.error("Error parsing user from localStorage", e);
+            }
+        }
+
         if (isEditMode) {
             loadMission(missionId);
         }
-    }, [missionId]);
+    }, [missionId, isEditMode]);
 
-    const fetchMembersWithDiarias = async () => {
+    // Re-fetch members whenever the effective sector changes
+    useEffect(() => {
+        const activeSector = currentUser?.sector === 'CH' ? selectedSector : currentUser?.sector;
+        if (activeSector) {
+            fetchMembersWithDiarias(activeSector);
+        }
+    }, [selectedSector, currentUser]);
+
+    const getRankPriority = (rank: string | null, abrev: string | null): number => {
+        const s = (rank || abrev || '').toUpperCase();
+        if (s.includes('MAJ')) return 0;
+        if (s.includes('CAP')) return 1;
+        if (s.includes('1º TEN') || s.includes('1TEN')) return 2;
+        if (s.includes('2º TEN') || s.includes('2TEN')) return 3;
+        if (s.includes('SUB') || s.includes('SO')) return 4;
+        if (s.includes('1º SAR') || s.includes('1SGT') || (s.includes('1º') && s.includes('SGT'))) return 5;
+        if (s.includes('2º SAR') || s.includes('2SGT') || (s.includes('2º') && s.includes('SGT'))) return 6;
+        if (s.includes('3º SAR') || s.includes('3SGT') || (s.includes('3º') && s.includes('SGT'))) return 7;
+        if (s.includes('CIVIL')) return 8;
+        
+        // Fallback checks for simple abbreviations if the specific ones above aren't found
+        if (s.includes('TEN')) return 2;
+        if (s.includes('SGT')) return 7;
+        
+        return 9;
+    };
+
+    const fetchMembersWithDiarias = async (filterSector?: string) => {
         const year = new Date().getFullYear();
         const startDate = `${year}-01-01`;
         const endDate = `${year}-12-31`;
 
-        // Fetch all members
-        const { data: membersData, error: membersError } = await supabase
+        // Fetch members of the relevant sector
+        let query = supabase
             .from('members')
-            .select('id, name, war_name, rank, abrev, status');
+            .select('id, name, war_name, rank, abrev, status, sector');
+        
+        if (filterSector) {
+            query = query.eq('sector', filterSector);
+        }
+
+        const { data: membersData, error: membersError } = await query;
 
         if (membersError || !membersData) return;
 
-        // Fetch all missions for the year
+        // Fetch all missions for the year to calculate totals
         const { data: missionsData } = await supabase
             .from('missions')
-            .select('equipe, data_inicio, data_fim')
+            .select('equipe, data_inicio, data_fim, sector')
             .gte('data_inicio', startDate)
             .lte('data_inicio', endDate);
 
         // Calculate diárias for each member
-        const membersWithDiarias: MemberWithDiarias[] = membersData.map(member => {
-            let totalDiarias = 0;
-            if (missionsData) {
-                missionsData.forEach(mission => {
-                    if (mission.equipe && mission.equipe.includes(member.id)) {
-                        const duration = calculateDuration(mission.data_inicio, mission.data_fim);
-                        totalDiarias += duration;
-                    }
-                });
+        const membersWithDiarias: MemberWithDiarias[] = membersData
+            .map(member => {
+                let totalDiarias = 0;
+                if (missionsData) {
+                    missionsData.forEach(mission => {
+                        // Only count mission days if the mission matches the member's sector
+                        // (Usually they match, but this is safer)
+                        if (mission.sector === member.sector && mission.equipe && mission.equipe.includes(member.id)) {
+                            const duration = calculateDuration(mission.data_inicio, mission.data_fim);
+                            totalDiarias += duration;
+                        }
+                    });
+                }
+                return { ...member, diariasNoAno: totalDiarias };
+            });
+
+        // Identify max diárias for Oficiais and Graduados in THIS sector
+        let maxOf = 0;
+        let maxGrad = 0;
+
+        membersWithDiarias.forEach(m => {
+            const priority = getRankPriority(m.rank, m.abrev);
+            if (priority <= 3) { // Oficiais: Maj, Cap, Ten
+                if (m.diariasNoAno > maxOf) maxOf = m.diariasNoAno;
+            } else if (priority <= 8) { // Graduados: SO, Sgt, Civil
+                if (m.diariasNoAno > maxGrad) maxGrad = m.diariasNoAno;
             }
-            return { ...member, diariasNoAno: totalDiarias };
         });
 
-        setMembers(membersWithDiarias);
+        setMaxOficialDiarias(maxOf);
+        setMaxGraduadoDiarias(maxGrad);
+
+        // Sort and set
+        const sortedMembers = membersWithDiarias.sort((a, b) => {
+            const pA = getRankPriority(a.rank, a.abrev);
+            const pB = getRankPriority(b.rank, b.abrev);
+            if (pA !== pB) return pA - pB;
+            const nameA = a.war_name || a.name || '';
+            const nameB = b.war_name || b.name || '';
+            return nameA.localeCompare(nameB);
+        });
+
+        setMembers(sortedMembers);
     };
 
     const loadMission = async (id: string) => {
@@ -96,23 +185,31 @@ const ScheduleAdjustment: React.FC = () => {
             setNome(data.nome);
             setDescricao(data.descricao || '');
             setLocal(data.local);
-            setTipo(data.tipo);
             setDeslocamento(data.deslocamento);
+            if (!data.equipe || data.equipe.length === 0) {
+                setQtdEquipeManual(data.qtd_equipe || 0);
+            }
             setFav(data.fav);
             setDataInicio(data.data_inicio);
             setDataFim(data.data_fim);
             setSelectedTeam(data.equipe || []);
             
+            // Set sector for filtering members
+            if (data.sector) {
+                setSelectedSector(data.sector);
+            }
+            
             // Set calendar to mission month
-            const missionDate = new Date(data.data_inicio);
+            const missionDate = parseLocalDate(data.data_inicio) || new Date();
             setCurrentMonth(missionDate.getMonth());
             setCurrentYear(missionDate.getFullYear());
         }
     };
 
     const calculateDuration = (startDate: string, endDate: string): number => {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
+        const start = parseLocalDate(startDate);
+        const end = parseLocalDate(endDate);
+        if (!start || !end) return 0;
         const diffTime = Math.abs(end.getTime() - start.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         return diffDays + 0.5;
@@ -152,7 +249,10 @@ const ScheduleAdjustment: React.FC = () => {
             setDataFim('');
             setIsSelectingStart(false);
         } else {
-            if (new Date(dateStr) >= new Date(dataInicio)) {
+            const currentObj = parseLocalDate(dateStr)?.getTime() || 0;
+            const startObj = parseLocalDate(dataInicio)?.getTime() || 0;
+            
+            if (currentObj >= startObj) {
                 setDataFim(dateStr);
             } else {
                 setDataFim(dataInicio);
@@ -165,12 +265,14 @@ const ScheduleAdjustment: React.FC = () => {
     const isDayInRange = (day: number): 'start' | 'end' | 'middle' | null => {
         if (!dataInicio) return null;
         const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const current = new Date(dateStr);
-        const start = new Date(dataInicio);
-        const end = dataFim ? new Date(dataFim) : null;
-
+        
         if (dateStr === dataInicio) return 'start';
-        if (end && dateStr === dataFim) return 'end';
+        if (dataFim && dateStr === dataFim) return 'end';
+
+        const current = parseLocalDate(dateStr)?.getTime() || 0;
+        const start = parseLocalDate(dataInicio)?.getTime() || 0;
+        const end = dataFim ? (parseLocalDate(dataFim)?.getTime() || 0) : null;
+
         if (end && current > start && current < end) return 'middle';
         return null;
     };
@@ -224,6 +326,11 @@ const ScheduleAdjustment: React.FC = () => {
             return;
         }
 
+        if (currentUser?.sector === 'CH' && !isEditMode && !selectedSector) {
+            alert('Por favor, selecione para qual seção (Capacidade ATC ou Espaço Aéreo) esta missão será criada.');
+            return;
+        }
+
         setLoading(true);
 
         const missionData = {
@@ -232,12 +339,14 @@ const ScheduleAdjustment: React.FC = () => {
             local,
             data_inicio: dataInicio,
             data_fim: dataFim,
-            tipo,
             deslocamento,
             fav,
-            qtd_equipe: selectedTeam.length,
-            equipe: selectedTeam.length > 0 ? selectedTeam : null
+            qtd_equipe: selectedTeam.length > 0 ? selectedTeam.length : qtdEquipeManual,
+            equipe: selectedTeam.length > 0 ? selectedTeam : null,
+            sector: isEditMode ? undefined : (currentUser?.sector === 'CH' ? selectedSector : currentUser?.sector)
         };
+        
+        console.log('Final missionData with sector:', missionData);
 
         try {
             if (isEditMode) {
@@ -256,9 +365,9 @@ const ScheduleAdjustment: React.FC = () => {
 
                 // Create Task if FAV is false
                 if (fav === false) {
-                    const missionStart = new Date(dataInicio);
-                    const missionStartCopy1 = new Date(missionStart);
-                    const missionStartCopy2 = new Date(missionStart);
+                    const missionStart = parseLocalDate(dataInicio) || new Date();
+                    const missionStartCopy1 = parseLocalDate(dataInicio) || new Date();
+                    const missionStartCopy2 = parseLocalDate(dataInicio) || new Date();
 
                     // Start Date: 50 days before (adjusted to previous Friday if weekend)
                     missionStartCopy1.setDate(missionStartCopy1.getDate() - 50);
@@ -278,7 +387,8 @@ const ScheduleAdjustment: React.FC = () => {
                         end_date: missionStartCopy2.toISOString(),
                         status: 'pendente',
                         quantidade: 1, // User said 1 or team size, deciding on 1 for document task
-                        created_at: new Date().toISOString()
+                        created_at: new Date().toISOString(),
+                        sector: currentUser?.sector
                     };
 
                     const { error: taskError } = await supabase
@@ -363,17 +473,20 @@ const ScheduleAdjustment: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="flex flex-col gap-2">
-                                    <label className="text-slate-700 dark:text-slate-300 text-sm font-bold">Tipo de Diária</label>
-                                    <div className="flex p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl h-12">
-                                        {['Geral', 'Capital', 'Especial'].map(t => (
-                                            <button 
-                                                key={t}
-                                                onClick={() => setTipo(t)}
-                                                className={`flex-1 rounded-lg font-bold text-xs transition-all active:scale-95 ${tipo === t ? 'bg-white dark:bg-slate-700 shadow-sm text-primary' : 'text-slate-500 hover:text-slate-700'}`}
-                                            >
-                                                {t}
-                                            </button>
-                                        ))}
+                                    <label className="text-slate-700 dark:text-slate-300 text-sm font-bold">Tamanho da Equipe</label>
+                                    <div className="relative">
+                                        <span className="material-symbols-outlined absolute left-3 top-3 text-slate-400 text-xl">groups</span>
+                                        <input 
+                                            type="number"
+                                            value={selectedTeam.length > 0 ? selectedTeam.length : (qtdEquipeManual || '')}
+                                            onChange={(e) => setQtdEquipeManual(Number(e.target.value))}
+                                            disabled={selectedTeam.length > 0}
+                                            className={`w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 focus:ring-primary h-12 pl-11 text-sm ${selectedTeam.length > 0 ? 'opacity-70 cursor-not-allowed font-bold text-primary' : ''}`} 
+                                            placeholder="Qtd de integrantes (se equipe estiver vazia)" 
+                                        />
+                                        {selectedTeam.length > 0 && (
+                                            <span className="absolute right-3 top-3 text-[10px] font-bold text-primary bg-primary/10 px-2 py-1 rounded-lg">DEFINIDO PELA EQUIPE</span>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -409,6 +522,20 @@ const ScheduleAdjustment: React.FC = () => {
                                         </button>
                                     </div>
                                 </div>
+                                {currentUser?.sector === 'CH' && !isEditMode && (
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-slate-700 dark:text-slate-300 text-sm font-bold">Seção de Destino *</label>
+                                        <select 
+                                            value={selectedSector}
+                                            onChange={(e) => setSelectedSector(e.target.value)}
+                                            className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 focus:ring-primary h-12 px-4 text-sm"
+                                        >
+                                            <option value="">Selecione o Setor...</option>
+                                            <option value="CP">Capacidade ATC (CP)</option>
+                                            <option value="EA">Espaço Aéreo (EA)</option>
+                                        </select>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -529,7 +656,17 @@ const ScheduleAdjustment: React.FC = () => {
                             {filteredMembers.map(member => {
                                 const isSelected = selectedTeam.includes(member.id);
                                 const isAvailable = member.status === 'Ativo';
-                                const diariasClass = member.diariasNoAno >= 20 ? 'text-amber-600 font-bold uppercase tracking-wider' : 'text-slate-500';
+                                const priority = getRankPriority(member.rank, member.abrev);
+                                const isOficial = priority <= 3;
+                                const isGraduado = priority > 3 && priority <= 8;
+                                
+                                // Highlight only if total > 0 and it's the max for their group in this sector
+                                const isHighlighted = (isOficial && member.diariasNoAno === maxOficialDiarias && maxOficialDiarias > 0) ||
+                                                    (isGraduado && member.diariasNoAno === maxGraduadoDiarias && maxGraduadoDiarias > 0);
+
+                                const diariasClass = isHighlighted 
+                                    ? 'text-amber-600 font-bold uppercase tracking-wider' 
+                                    : 'text-slate-500';
 
                                 return (
                                     <div 

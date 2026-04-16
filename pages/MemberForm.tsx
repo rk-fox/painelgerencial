@@ -23,6 +23,7 @@ const MemberForm: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   const [formData, setFormData] = useState({
     fullname: '',
@@ -33,14 +34,22 @@ const MemberForm: React.FC = () => {
     specialty: '',
     email: '',
     phone: '',
+    sector: '',
     courses: [] as string[],
   });
 
   useEffect(() => {
+    const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    setCurrentUser(user);
+    
+    if (!isEditMode && user?.sector && user.sector !== 'CH') {
+      setFormData(prev => ({ ...prev, sector: user.sector }));
+    }
+
     if (isEditMode) {
       fetchMemberData();
     }
-  }, [id]);
+  }, [id, isEditMode]);
 
   const fetchMemberData = async () => {
     try {
@@ -63,6 +72,7 @@ const MemberForm: React.FC = () => {
           specialty: data.specialty || '',
           email: data.email || '',
           phone: data.phone || '',
+          sector: data.sector || '',
           courses: Array.isArray(data.courses) ? data.courses : [],
         });
         if (data.avatar) {
@@ -143,17 +153,17 @@ const MemberForm: React.FC = () => {
         rank: formData.rank,
         abrev: rankMap[formData.rank] || '',
         entry_date: formData.entry_date,
-        last_promotion_date: formData.last_promotion_date,
-        specialty: formData.specialty,
+        last_promotion_date: formData.last_promotion_date || null,
+        specialty: formData.specialty || null,
         courses: formData.courses,
         email: formData.email,
         phone: formData.phone,
+        sector: formData.sector,
         avatar: avatarUrl || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y',
       };
 
       if (!isEditMode) {
         memberData.status = 'Ativo';
-        memberData.requires_password = true;
       }
 
       const query = isEditMode
@@ -252,7 +262,23 @@ const MemberForm: React.FC = () => {
               </div>
 
               {/* Rank and Dates Row */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {currentUser?.sector === 'CH' && (
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-bold text-[#0d141b] dark:text-white" htmlFor="sector">Setor</label>
+                    <select
+                      className="rounded-lg border-[#d1d5db] bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:border-primary focus:ring-primary h-12 px-4 w-full"
+                      id="sector"
+                      required
+                      value={formData.sector}
+                      onChange={handleInputChange}
+                    >
+                      <option value="" disabled>Selecione</option>
+                      <option value="EA">Espaço Aéreo (EA)</option>
+                      <option value="CP">Capacidade (CP)</option>
+                    </select>
+                  </div>
+                )}
                 <div className="flex flex-col gap-2">
                   <label className="text-sm font-bold text-[#0d141b] dark:text-white" htmlFor="rank">Graduação / Posto</label>
                   <select
@@ -309,7 +335,7 @@ const MemberForm: React.FC = () => {
                   name="specialty"
                   type="radio"
                   value="BCT"
-                  required
+                  required={formData.rank !== 'Civil'}
                   checked={formData.specialty === 'BCT'}
                   onChange={handleInputChange}
                 />

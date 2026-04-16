@@ -11,6 +11,8 @@ interface Task {
     recurrence_active: boolean;
     status: string;
     preassigned_to?: string | null;
+    assigned_to?: string | null;
+    sector?: string;
 }
 
 interface MemberBasic {
@@ -40,6 +42,21 @@ interface Mission {
 }
 
 const UNAVAIL_TYPES = ['SALOP', 'CAIS', 'RISAER', 'Férias', 'Dispensa', 'Home Office', 'Aniversário', 'Outros'];
+// Rank Priority Logic
+const getRankPriority = (rankStr: string | null, abrevStr: string | null): number => {
+    const s = (rankStr || abrevStr || '').toUpperCase().trim();
+    if (s.includes('MAJOR') || s.includes('MAJ')) return 0;
+    if (s.includes('CAPIT')) return 1;
+    if (s.includes('1º TEN') || s.includes('1.º TEN') || s.includes('1TEN')) return 2;
+    if (s.includes('2º TEN') || s.includes('2.º TEN') || s.includes('2TEN') || s.includes('ASP')) return 3;
+    if (s.includes('SUBOF') || s.includes('SO.')) return 4;
+    if (s.includes('1º SAR') || s.includes('1.º SAR') || s.includes('1SGT')) return 5;
+    if (s.includes('2º SAR') || s.includes('2.º SAR') || s.includes('2SGT')) return 6;
+    if (s.includes('3º SAR') || s.includes('3.º SAR') || s.includes('3SGT')) return 7;
+    if (s.includes('SGT')) return 7;
+    if (s.includes('CIV')) return 8;
+    return 99;
+};
 const ABREV_ORDER = ['SO.', 'Sgt.', 'Cv.'];
 
 const MonthlyPlanner: React.FC = () => {
@@ -52,7 +69,10 @@ const MonthlyPlanner: React.FC = () => {
     const [allMembers, setAllMembers] = useState<MemberBasic[]>([]);
     const [unavailabilities, setUnavailabilities] = useState<Unavailability[]>([]);
     const [missions, setMissions] = useState<Mission[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [taskCache, setTaskCache] = useState<Record<string, Task[]>>({});
+    const [_loading, setLoading] = useState(true);
+    const [tasksLoading, setTasksLoading] = useState(false);
+    const [displayFilter, setDisplayFilter] = useState<'geral' | 'efetivo' | 'tarefas'>('geral');
 
     // Unavailability Modal
     const [showUnavailModal, setShowUnavailModal] = useState(false);
@@ -78,31 +98,126 @@ const MonthlyPlanner: React.FC = () => {
     ];
 
     useEffect(() => {
-        fetchAll();
+        fetchInitialData();
     }, []);
 
-    const fetchAll = async () => {
+    useEffect(() => {
+        fetchTasksForMonth(anchorDate.getFullYear(), anchorDate.getMonth());
+    }, [anchorDate]);
+
+    const fetchTasksForMonth = async (year: number, month: number, forceRefresh = false) => {
+        const cacheKey = `${year}-${month}`;
+        if (!forceRefresh && taskCache[cacheKey]) {
+            setTasks(taskCache[cacheKey]);
+            return;
+        }
+
+        try {
+            setTasksLoading(true);
+            const userJson = localStorage.getItem('currentUser');
+            const sector = userJson ? JSON.parse(userJson).sector : null;
+
+            // Dates for the start and end of the month
+            const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+            const lastDay = new Date(year, month + 1, 0).getDate();
+            const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+            let allTasks: Task[] = [];
+            
+            // 🚀 Instant loading for 2026+ (Small volume)
+            if (year >= 2026) {
+                let query = supabase.from('tasks').select('*');
+                if (sector && (sector === 'CP' || sector === 'EA')) query = query.eq('sector', sector);
+                const { data, error } = await query
+                    .lte('start_date', endDate)
+                    .or(`end_date.is.null,end_date.gte.${startDate}`);
+                if (error) throw error;
+                allTasks = data || [];
+            } else {
+                // 📂 Historical heavy data (2022-2025): Fast parallel fetch (0-2000)
+                const fetchRange = (from: number, to: number) => {
+                    let q = supabase.from('tasks').select('*');
+                    if (sector && (sector === 'CP' || sector === 'EA')) q = q.eq('sector', sector);
+                    return q.lte('start_date', endDate)
+                            .or(`end_date.is.null,end_date.gte.${startDate}`)
+                            .range(from, to);
+                };
+
+                const [res1, res2] = await Promise.all([
+                    fetchRange(0, 999),
+                    fetchRange(1000, 1999)
+                ]);
+
+                if (res1.error) throw res1.error;
+                if (res2.error) throw res2.error;
+                allTasks = [...(res1.data || []), ...(res2.data || [])];
+            }
+
+            setTasks(allTasks);
+            setTaskCache(prev => ({ ...prev, [cacheKey]: allTasks }));
+        } catch (err: any) {
+            console.error('Error fetching monthly tasks:', err.message);
+        } finally {
+            setTasksLoading(false);
+        }
+    };
+
+    const fetchAll = () => {
+        // Redownload global data + current month
+        fetchInitialData();
+        fetchTasksForMonth(anchorDate.getFullYear(), anchorDate.getMonth(), true);
+    };
+
+    const fetchInitialData = async () => {
         setLoading(true);
         try {
-            const [tasksRes, membersRes, allMembersRes, unavailRes, missionsRes] = await Promise.all([
-                supabase.from('tasks').select('*'),
-                supabase.from('members').select('id, name, war_name, rank, abrev, avatar, specialty').in('abrev', ABREV_ORDER),
-                supabase.from('members').select('id, name, war_name, rank, abrev, avatar, specialty'),
-                supabase.from('unavailability').select('*'),
-                supabase.from('missions').select('id, nome, data_inicio, data_fim, equipe'),
+            const userJson = localStorage.getItem('currentUser');
+            let sector = null;
+            if (userJson) {
+                const user = JSON.parse(userJson);
+                sector = user?.sector;
+            }
+
+            // Fetch Global Data (Missões e Indisponibilidades como eram antes)
+            let missionsQuery = supabase.from('missions').select('id, nome, data_inicio, data_fim, equipe, sector');
+            let unavailQuery = supabase.from('unavailability').select('*');
+            let membersQuery = supabase.from('members').select('id, name, war_name, rank, abrev, avatar, specialty').in('abrev', ABREV_ORDER);
+            let allMembersQuery = supabase.from('members').select('id, name, war_name, rank, abrev, avatar, specialty');
+
+            if (sector && (sector === 'CP' || sector === 'EA')) {
+                missionsQuery = missionsQuery.eq('sector', sector);
+                unavailQuery = unavailQuery.eq('sector', sector);
+                membersQuery = membersQuery.eq('sector', sector);
+                allMembersQuery = allMembersQuery.eq('sector', sector).in('abrev', ABREV_ORDER);
+            }
+
+            const [missionsRes, unavailRes, membersRes, allMembersRes] = await Promise.all([
+                missionsQuery,
+                unavailQuery,
+                membersQuery,
+                allMembersQuery,
             ]);
-            if (tasksRes.error) throw tasksRes.error;
+            
+            if (missionsRes.error) throw missionsRes.error;
+            if (unavailRes.error) throw unavailRes.error;
             if (membersRes.error) throw membersRes.error;
             if (allMembersRes.error) throw allMembersRes.error;
-            if (unavailRes.error) throw unavailRes.error;
-            if (missionsRes.error) throw missionsRes.error;
-            setTasks(tasksRes.data || []);
-            setMembers(membersRes.data || []);
-            setAllMembers(allMembersRes.data || []);
-            setUnavailabilities(unavailRes.data || []);
+
             setMissions(missionsRes.data || []);
-        } catch (err: any) {
-            console.error('Error fetching data:', err.message);
+            setUnavailabilities(unavailRes.data || []);
+            setMembers(membersRes.data || []);
+
+            const sortedAll = [...(allMembersRes.data || [])].sort((a, b) => {
+                const pA = getRankPriority(a.rank, a.abrev);
+                const pB = getRankPriority(b.rank, b.abrev);
+                if (pA !== pB) return pA - pB;
+                const nameA = a.war_name || a.name || '';
+                const nameB = b.war_name || b.name || '';
+                return nameA.localeCompare(nameB);
+            });
+            setAllMembers(sortedAll);
+        } catch (err) {
+            console.error('Error fetching initial data:', err);
         } finally {
             setLoading(false);
         }
@@ -141,7 +256,7 @@ const MonthlyPlanner: React.FC = () => {
         return { start: nextSunday, end: nextSaturday };
     };
 
-    const nextWeekRange = getNextWeekRange();
+    const _nextWeekRange = getNextWeekRange();
 
     // Returns tasks for a given day with a flag indicating if each is projected
     const getTasksForDay = (
@@ -165,14 +280,14 @@ const MonthlyPlanner: React.FC = () => {
     const results: { task: Task; isProjected: boolean }[] = [];
 
     // ✅ Extrai data ignorando timezone (CRÍTICO)
-    const toLocalDate = (input: any) => {
+    const toLocalDate = (input: string | null) => {
         if (!input) return null;
 
         const [year, month, day] = input.split('T')[0].split('-').map(Number);
         return new Date(year, month - 1, day); // sempre LOCAL
     };
 
-    const toLocalDateString = (input: any) => {
+    const toLocalDateString = (input: string | null) => {
         if (!input) return '';
         return input.split('T')[0]; // já correto (YYYY-MM-DD)
     };
@@ -262,6 +377,10 @@ const MonthlyPlanner: React.FC = () => {
         const newDate = new Date(anchorDate);
         if (viewMode === 'month') newDate.setMonth(newDate.getMonth() - 1);
         else newDate.setDate(newDate.getDate() - 7);
+        
+        // Bloquear navegação para antes de 2026
+        if (newDate.getFullYear() < 2026) return;
+        
         setAnchorDate(newDate);
     };
 
@@ -269,6 +388,10 @@ const MonthlyPlanner: React.FC = () => {
         const newDate = new Date(anchorDate);
         if (viewMode === 'month') newDate.setMonth(newDate.getMonth() + 1);
         else newDate.setDate(newDate.getDate() + 7);
+        
+        // Bloquear navegação para depois de 2026
+        if (newDate.getFullYear() > 2026) return;
+        
         setAnchorDate(newDate);
     };
 
@@ -322,9 +445,11 @@ const MonthlyPlanner: React.FC = () => {
             }
             setShowUnavailModal(false);
             fetchAll();
-        } catch (err: any) {
-            console.error('Error saving unavailability:', err.message);
-            alert('Erro ao salvar indisponibilidade: ' + err.message);
+        } catch (err: unknown) {
+            if (err instanceof Error) {
+                console.error('Error saving unavailability:', err.message);
+                alert('Erro ao salvar indisponibilidade: ' + err.message);
+            }
         }
     };
 
@@ -335,8 +460,10 @@ const MonthlyPlanner: React.FC = () => {
             if (error) throw error;
             setShowUnavailModal(false);
             fetchAll();
-        } catch (err: any) {
-            console.error('Error deleting unavailability:', err.message);
+        } catch (err: unknown) {
+            if (err instanceof Error) {
+                console.error('Error deleting unavailability:', err.message);
+            }
         }
     };
 
@@ -358,8 +485,10 @@ const MonthlyPlanner: React.FC = () => {
             if (error) throw error;
             setShowAssignModal(false);
             fetchAll();
-        } catch (err: any) {
-            console.error('Error assigning task:', err.message);
+        } catch (err: unknown) {
+            if (err instanceof Error) {
+                console.error('Error assigning task:', err.message);
+            }
         }
     };
 
@@ -379,10 +508,11 @@ const MonthlyPlanner: React.FC = () => {
     };
 
     // ========== Render Helpers ==========
-    const renderTaskItem = (task: Task, day: number, isProjected: boolean, tooltipDown: boolean = false) => {
-        const assignedMember = task.preassigned_to ? allMembersMap[task.preassigned_to] : null;
+    const renderTaskItem = (task: Task, day: number, isProjected: boolean, _tooltipDown: boolean = false) => {
+        const assignedMemberId = task.assigned_to || task.preassigned_to;
+        const assignedMember = assignedMemberId ? allMembersMap[assignedMemberId] : null;
 
-        const periodColors: any = {
+        const periodColors: Record<string, string> = {
             'diaria': 'bg-slate-100 border-slate-200 text-slate-700 dark:bg-slate-800/40 dark:border-slate-700 dark:text-slate-300',
             'semanal': 'bg-indigo-50 border-indigo-100 text-indigo-700 dark:bg-indigo-900/20 dark:border-indigo-800 dark:text-indigo-400',
             'quinzenal': 'bg-blue-50 border-blue-100 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400',
@@ -391,7 +521,7 @@ const MonthlyPlanner: React.FC = () => {
             'pontual': 'bg-rose-50 border-rose-100 text-rose-700 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-400',
         };
 
-        const periodBar: any = {
+        const periodBar: Record<string, string> = {
             'diaria': 'bg-slate-400',
             'semanal': 'bg-indigo-500',
             'quinzenal': 'bg-blue-500',
@@ -407,7 +537,8 @@ const MonthlyPlanner: React.FC = () => {
             <div
                 key={`${task.id}-${day}-${isProjected ? 'p' : 'r'}`}
                 onClick={(e) => openAssignModal(task, isProjected, e)}
-                className={`group/task relative flex items-center h-12 ${colors} border rounded-lg px-3 overflow-visible transition-all hover:shadow-md ${isProjected ? 'cursor-default opacity-70' : 'cursor-pointer'}`}
+                title={`${task.name} (${task.periodicity})${assignedMember ? ` — Atribuído a: ${assignedMember.rank} ${assignedMember.war_name || assignedMember.name}` : ''}`}
+                className={`group/task relative flex items-center h-12 ${colors} border rounded-lg px-3 overflow-visible transition-all hover:shadow-md ${isProjected ? 'cursor-default' : 'cursor-pointer'}`}
             >
                 <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${barColor}`} />
 
@@ -428,15 +559,6 @@ const MonthlyPlanner: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Custom Tooltip */}
-                {assignedMember && (
-                    <div className={`absolute ${tooltipDown ? 'top-full mt-2' : 'bottom-full mb-2'} left-1/2 -translate-x-1/2 opacity-0 group-hover/task:opacity-100 transition-opacity z-[70] pointer-events-none`}>
-                        <div className="bg-slate-900 dark:bg-slate-800 text-white text-[10px] font-bold rounded-lg px-3 py-1.5 whitespace-nowrap shadow-xl border border-white/10 relative">
-                            {assignedMember.abrev || assignedMember.rank} {assignedMember.war_name || assignedMember.name}
-                            <div className={`absolute ${tooltipDown ? 'bottom-full border-b-slate-900 dark:border-b-slate-800' : 'top-full border-t-slate-900 dark:border-t-slate-800'} left-1/2 -translate-x-1/2 border-[6px] border-transparent`} />
-                        </div>
-                    </div>
-                )}
             </div>
         );
     };
@@ -448,6 +570,7 @@ const MonthlyPlanner: React.FC = () => {
             <div
                 key={`unavail-${u.id}-${dateStr}`}
                 onClick={(e) => openEditUnavail(u, e)}
+                title={`${member.rank} ${member.war_name || member.name} — ${u.type}`}
                 className={`flex items-center gap-1.5 h-8 ${unavailColor(u.type)} border rounded-lg px-2 cursor-pointer hover:shadow-md transition-all`}
             >
                 <span className="material-symbols-outlined text-[14px]">event_busy</span>
@@ -467,6 +590,7 @@ const MonthlyPlanner: React.FC = () => {
             <div
                 key={`mission-${m.id}-${dateStr}`}
                 className="group/mission relative flex items-center gap-1.5 h-8 bg-cyan-100 border border-cyan-300 text-cyan-800 dark:bg-cyan-900/30 dark:border-cyan-800 dark:text-cyan-400 rounded-lg px-2 cursor-default hover:shadow-md transition-all overflow-visible"
+                title={`${m.nome} — Equipe: ${teamMembers.map(mem => mem.war_name || mem.name).join(', ')}`}
                 onClick={(e) => e.stopPropagation()}
             >
                 <span className="material-symbols-outlined text-[14px]">flight_takeoff</span>
@@ -499,15 +623,61 @@ const MonthlyPlanner: React.FC = () => {
         const dayMissions = getMissionsForDay(dateStr);
 
         return (
-            <>
-                {dayMissions.map(m => renderMissionItem(m, dateStr))}
-                {dayUnavails.map(u => renderUnavailItem(u, dateStr))}
-                {dayTaskItems.map(({ task, isProjected }, index) => {
-                    // Tooltip goes down if it's the first task item in the list
-                    const tooltipDown = index === 0;
-                    return renderTaskItem(task, dateObj.getDate(), isProjected, tooltipDown);
-                })}
-            </>
+            <div className="flex flex-col gap-1 h-full overflow-y-auto pr-1 pb-1 custom-scrollbar">
+                {/* Missões e Indisponibilidades (Geral ou Efetivo) */}
+                {(displayFilter === 'geral' || displayFilter === 'efetivo') && (
+                    <>
+                        {dayMissions.map(m => renderMissionItem(m, dateStr))}
+                        {dayUnavails.map(u => renderUnavailItem(u, dateStr))}
+                    </>
+                )}
+
+                {/* Tarefas (Geral ou Tarefas) */}
+                {(displayFilter === 'geral' || displayFilter === 'tarefas') && (
+                    <>
+                        {dayTaskItems.map(({ task, isProjected }, index) => {
+                            const _tooltipDown = index === 0;
+                            return renderTaskItem(task, dateObj.getDate(), isProjected, _tooltipDown);
+                        })}
+                    </>
+                )}
+
+                {/* Disponibilidade (Apenas Efetivo e Dias Úteis) */}
+                {displayFilter === 'efetivo' && (dateObj.getDay() !== 0 && dateObj.getDay() !== 6) && (
+                    <div className="flex flex-col gap-1 mt-1 pt-1 border-t border-slate-100 dark:border-slate-800">
+                        {allMembers.map(member => {
+                            const isInMission = dayMissions.some(m => (m.equipe || []).includes(member.id));
+                            const isInUnavail = dayUnavails.some(u => u.member === member.id);
+
+                            if (!isInMission && !isInUnavail) {
+                                return (
+                                    <div 
+                                        key={`avail-${member.id}`} 
+                                        className="relative flex items-center h-12 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-lg px-3 transition-all cursor-default overflow-hidden group/avail"
+                                        title={`Disponível: ${member.abrev || member.rank} ${member.war_name || member.name}`}
+                                    >
+                                        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-slate-400" />
+                                        <img 
+                                            src={member.avatar} 
+                                            alt="" 
+                                            className="size-7 rounded-full object-cover border-2 border-white dark:border-slate-700 shadow-sm ml-1 mr-1.5 flex-shrink-0 grayscale-[0.3]" 
+                                        />
+                                        <div className="w-full flex flex-col justify-center gap-0.5 min-w-0">
+                                            <div className="text-[11px] font-black leading-none truncate uppercase tracking-tight text-slate-700 dark:text-slate-200">
+                                                {member.abrev || member.rank} {member.war_name || member.name}
+                                            </div>
+                                            <div className="text-[9px] font-bold opacity-60 leading-none truncate capitalize text-slate-500">
+                                                Disponível
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            }
+                            return null;
+                        })}
+                    </div>
+                )}
+            </div>
         );
     };
 
@@ -518,6 +688,7 @@ const MonthlyPlanner: React.FC = () => {
             <div className="flex items-center justify-between px-6 py-4 bg-[#f8fafc] dark:bg-background-dark">
                 <div className="flex items-center gap-6">
                     <button
+                        type="button"
                         onClick={() => navigate(-1)}
                         className="flex items-center justify-center p-2 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors"
                     >
@@ -529,12 +700,38 @@ const MonthlyPlanner: React.FC = () => {
                 <div className="flex items-center gap-4">
                     <div className="flex bg-slate-200 dark:bg-slate-800 p-1 rounded-xl">
                         <button
+                            type="button"
+                            onClick={() => setDisplayFilter('geral')}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all uppercase tracking-wider ${displayFilter === 'geral' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500'}`}
+                        >
+                            Geral
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setDisplayFilter('efetivo')}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all uppercase tracking-wider ${displayFilter === 'efetivo' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500'}`}
+                        >
+                            Efetivo
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setDisplayFilter('tarefas')}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all uppercase tracking-wider ${displayFilter === 'tarefas' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500'}`}
+                        >
+                            Tarefas
+                        </button>
+                    </div>
+
+                    <div className="flex bg-slate-200 dark:bg-slate-800 p-1 rounded-xl">
+                        <button
+                            type="button"
                             onClick={() => setViewMode('month')}
                             className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'month' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500'}`}
                         >
                             Mês
                         </button>
                         <button
+                            type="button"
                             onClick={() => setViewMode('week')}
                             className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'week' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500'}`}
                         >
@@ -544,6 +741,7 @@ const MonthlyPlanner: React.FC = () => {
 
                     <div className="flex items-center bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
                         <button
+                            type="button"
                             onClick={handlePrev}
                             className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800 text-[#4c739a] border-r border-[#e7edf3] dark:border-slate-800 transition-colors"
                         >
@@ -558,6 +756,7 @@ const MonthlyPlanner: React.FC = () => {
                             </span>
                         </div>
                         <button
+                            type="button"
                             onClick={handleNext}
                             className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800 text-[#4c739a] border-l border-[#e7edf3] dark:border-slate-800 transition-colors"
                         >
@@ -721,6 +920,7 @@ const MonthlyPlanner: React.FC = () => {
                             <div>
                                 {unavailForm.id && (
                                     <button
+                                        type="button"
                                         onClick={deleteUnavail}
                                         className="px-4 py-2.5 rounded-xl text-sm font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                                     >
@@ -730,12 +930,14 @@ const MonthlyPlanner: React.FC = () => {
                             </div>
                             <div className="flex gap-2">
                                 <button
+                                    type="button"
                                     onClick={() => setShowUnavailModal(false)}
                                     className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                                 >
                                     Cancelar
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={saveUnavail}
                                     disabled={!unavailForm.member || !unavailForm.type || !unavailForm.start_date || !unavailForm.end_date}
                                     className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-blue-200 dark:shadow-none"
@@ -776,12 +978,14 @@ const MonthlyPlanner: React.FC = () => {
 
                         <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
                             <button
+                                type="button"
                                 onClick={() => setShowAssignModal(false)}
                                 className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                             >
                                 Cancelar
                             </button>
                             <button
+                                type="button"
                                 onClick={saveAssignment}
                                 className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200 dark:shadow-none"
                             >

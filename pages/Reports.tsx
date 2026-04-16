@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { Member } from '../types';
+import { parseLocalDate, formatLocalDate } from '../utils/dateUtils';
 
 interface MemberRanking {
     id: string;
@@ -70,15 +71,25 @@ const Reports: React.FC = () => {
     const [rankingTimeRange, setRankingTimeRange] = useState<string>('year');
     const [selectedRankingYear, setSelectedRankingYear] = useState<number>(new Date().getFullYear());
     const [availableRankingYears, setAvailableRankingYears] = useState<number[]>([]);
+    const [selectedActivityYear, setSelectedActivityYear] = useState<number>(new Date().getFullYear());
+    const [availableActivityYears, setAvailableActivityYears] = useState<number[]>([]);
 
     useEffect(() => {
         fetchAvailableYears();
+        fetchAvailableTaskYears();
     }, []);
 
     useEffect(() => {
         fetchReportData();
         fetchMissionStats();
         fetchSectionTimeRanking();
+    }, [rankingTimeRange, selectedActivityYear]);
+    
+    // Add effect to handle range changes vs year filter
+    useEffect(() => {
+        if (rankingTimeRange !== 'year') {
+            setSelectedActivityYear(new Date().getFullYear());
+        }
     }, [rankingTimeRange]);
 
     useEffect(() => {
@@ -86,18 +97,13 @@ const Reports: React.FC = () => {
         fetchUnavailRanking();
     }, [selectedRankingYear, selectedUnavailType]);
 
-    // Parse date string to Date object
-    const parseLocalDate = (dateStr: string): Date => {
-    const [year, month, day] = dateStr.split('-').map(Number);
-    return new Date(year, month - 1, day);
-};
-
     // Calculate weekdays between two dates (excluding weekends)
     const countWeekdays = (startDate: string, endDate: string): number => {
         const start = parseLocalDate(startDate);
         const end = parseLocalDate(endDate);
+        if (!start || !end) return 0;
         let count = 0;
-        const current = new Date(start);
+        const current = new Date(start.getFullYear(), start.getMonth(), start.getDate());
         
         while (current <= end) {
             const dayOfWeek = current.getDay();
@@ -113,8 +119,9 @@ const Reports: React.FC = () => {
     const countWeekendays = (startDate: string, endDate: string): number => {
         const start = parseLocalDate(startDate);
         const end = parseLocalDate(endDate);
+        if (!start || !end) return 0;
         let count = 0;
-        const current = new Date(start);
+        const current = new Date(start.getFullYear(), start.getMonth(), start.getDate());
         
         while (current <= end) {
             const dayOfWeek = current.getDay();
@@ -126,13 +133,28 @@ const Reports: React.FC = () => {
         return count;
     };
 
+    const getUserSector = () => {
+        const userJson = localStorage.getItem('currentUser');
+        if (userJson) {
+            const user = JSON.parse(userJson);
+            return user.sector;
+        }
+        return null;
+    };
+
     const fetchAvailableYears = async () => {
         try {
-            const { data, error } = await supabase
-                .from('missions')
-                .select('data_inicio');
+            const sector = getUserSector();
+            let query = supabase.from('missions').select('data_inicio');
+            if (sector && (sector === 'CP' || sector === 'EA')) {
+                query = query.eq('sector', sector);
+            }
+            const { data, error } = await query;
             if (!error && data) {
-                const years = [...new Set(data.map(m => new Date(m.data_inicio).getFullYear()))].sort((a, b) => b - a);
+                const years = [...new Set(data.map(m => {
+                    const parsed = parseLocalDate(m.data_inicio);
+                    return parsed ? parsed.getFullYear() : new Date().getFullYear();
+                }))].sort((a, b) => b - a);
                 setAvailableRankingYears(years.length > 0 ? years : [new Date().getFullYear()]);
                 if (years.length > 0 && !years.includes(selectedRankingYear)) {
                     setSelectedRankingYear(years[0]);
@@ -144,9 +166,41 @@ const Reports: React.FC = () => {
     };
 
     // Calculate duration (last day = 0.5)
+    const fetchAvailableTaskYears = async () => {
+        try {
+            const sector = getUserSector();
+            const startCheckYear = 2022;
+            const endCheckYear = new Date().getFullYear() + 2;
+            const foundYears: number[] = [];
+
+            // Efficiently check each year individually to bypass 1000 row limit
+            for (let year = startCheckYear; year <= endCheckYear; year++) {
+                let query = supabase
+                    .from('tasks')
+                    .select('id', { count: 'exact', head: true })
+                    .gte('start_date', `${year}-01-01`)
+                    .lte('start_date', `${year}-12-31`);
+                
+                if (sector && (sector === 'CP' || sector === 'EA')) {
+                    query = query.eq('sector', sector);
+                }
+
+                const { count } = await query;
+                if (count && count > 0) {
+                    foundYears.push(year);
+                }
+            }
+
+            setAvailableActivityYears(foundYears.length > 0 ? foundYears.sort((a, b) => b - a) : [new Date().getFullYear()]);
+        } catch (error) {
+            console.error('Error fetching activity years:', error);
+        }
+    };
+
     const calculateDuration = (startDate: string, endDate: string): number => {
         const start = parseLocalDate(startDate);
         const end = parseLocalDate(endDate);
+        if (!start || !end) return 0;
         const diffTime = Math.abs(end.getTime() - start.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)+1);
         return diffDays - 0.5;
@@ -155,20 +209,30 @@ const Reports: React.FC = () => {
     const fetchMissionStats = async () => {
         const currentYear = new Date().getFullYear();
         const previousYear = currentYear - 1;
+        const sector = getUserSector();
 
-        // Fetch current year missions
-        const { data: currentMissions } = await supabase
+        let queryCurrent = supabase
             .from('missions')
             .select('*')
             .gte('data_inicio', `${currentYear}-01-01`)
             .lte('data_inicio', `${currentYear}-12-31`);
 
-        // Fetch previous year missions (count only)
-        const { data: previousMissions } = await supabase
+        let queryPrev = supabase
             .from('missions')
             .select('id')
             .gte('data_inicio', `${previousYear}-01-01`)
             .lte('data_inicio', `${previousYear}-12-31`);
+
+        if (sector && (sector === 'CP' || sector === 'EA')) {
+            queryCurrent = queryCurrent.eq('sector', sector);
+            queryPrev = queryPrev.eq('sector', sector);
+        }
+
+        // Fetch current year missions
+        const { data: currentMissions } = await queryCurrent;
+
+        // Fetch previous year missions (count only)
+        const { data: previousMissions } = await queryPrev;
 
         let totalDays = 0;
         let totalDiarias = 0;
@@ -199,11 +263,22 @@ const Reports: React.FC = () => {
     const fetchMemberRanking = async () => {
         try {
             const currentYear = new Date().getFullYear();
+            const sector = getUserSector();
+
+            let memQuery = supabase.from('members').select('*');
+            let missQuery = supabase
+                .from('missions')
+                .select('id, data_inicio, data_fim, equipe')
+                .gte('data_inicio', `${selectedRankingYear}-01-01`)
+                .lte('data_inicio', `${selectedRankingYear}-12-31`);
+
+            if (sector && (sector === 'CP' || sector === 'EA')) {
+                memQuery = memQuery.eq('sector', sector);
+                missQuery = missQuery.eq('sector', sector);
+            }
 
             // Fetch members
-            const { data: membersData } = await supabase
-                .from('members')
-                .select('*');
+            const { data: membersData } = await memQuery;
 
             // Filter for SO. and Sgt.
             const eligibleMembers = membersData?.filter(m => 
@@ -211,11 +286,7 @@ const Reports: React.FC = () => {
             ) || [];
 
             // Fetch missions for selected year
-            const { data: missionsData } = await supabase
-                .from('missions')
-                .select('id, data_inicio, data_fim, equipe')
-                .gte('data_inicio', `${selectedRankingYear}-01-01`)
-                .lte('data_inicio', `${selectedRankingYear}-12-31`);
+            const { data: missionsData } = await missQuery;
 
             // Calculate totals
             const memberMap = new Map<string, number>();
@@ -271,9 +342,12 @@ const Reports: React.FC = () => {
             }
 
             // Fetch members
-            const { data: membersData } = await supabase
-                .from('members')
-                .select('*');
+            let memQuery = supabase.from('members').select('*');
+            const sector = getUserSector();
+            if (sector && (sector === 'CP' || sector === 'EA')) {
+                memQuery = memQuery.eq('sector', sector);
+            }
+            const { data: membersData } = await memQuery;
 
             const eligibleMembers = membersData?.filter(m => 
                 ['SO.', 'Sgt.', 'Cv.'].includes(m.abrev || '')
@@ -286,9 +360,11 @@ const Reports: React.FC = () => {
                 if (u.type === selectedUnavailType && memberMap.has(u.member)) {
                     const start = parseLocalDate(u.start_date);
                     const end = parseLocalDate(u.end_date);
-                    const diffTime = Math.abs(end.getTime() - start.getTime());
-                    const duration = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-                    memberMap.set(u.member, (memberMap.get(u.member) || 0) + duration);
+                    if (start && end) {
+                        const diffTime = Math.abs(end.getTime() - start.getTime());
+                        const duration = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                        memberMap.set(u.member, (memberMap.get(u.member) || 0) + duration);
+                    }
                 }
             });
 
@@ -312,9 +388,12 @@ const Reports: React.FC = () => {
 
     const fetchSectionTimeRanking = async () => {
         try {
-            const { data: membersData } = await supabase
-                .from('members')
-                .select('id, name, war_name, abrev, avatar, entry_date, status');
+            let memQuery = supabase.from('members').select('id, name, war_name, abrev, avatar, entry_date, status');
+            const sector = getUserSector();
+            if (sector && (sector === 'CP' || sector === 'EA')) {
+                memQuery = memQuery.eq('sector', sector);
+            }
+            const { data: membersData } = await memQuery;
 
             if (!membersData) return;
 
@@ -323,6 +402,7 @@ const Reports: React.FC = () => {
                 .filter(m => m.entry_date && ['SO.', 'Sgt.', 'Cv.'].includes(m.abrev || ''))
                 .map(m => {
                     const entryDate = parseLocalDate(m.entry_date);
+                    if (!entryDate) return null;
                     const diffMs = today.getTime() - entryDate.getTime();
                     const years = Math.round((diffMs / (1000 * 60 * 60 * 24 * 365.25)) * 10) / 10;
                     return {
@@ -334,6 +414,7 @@ const Reports: React.FC = () => {
                         years: Math.max(years, 0),
                     };
                 })
+                .filter((item): item is SectionTimeEntry => item !== null)
                 .sort((a, b) => b.years - a.years);
 
             setSectionTimeRanking(ranking);
@@ -344,18 +425,71 @@ const Reports: React.FC = () => {
 
     const fetchReportData = async () => {
         try {
-            // Fetch status counts
-            const { data: tasks, error: tasksError } = await supabase
-                .from('tasks')
-                .select('status, quantidade, category, start_date, end_date');
+            setLoading(true);
+            const now = new Date();
+            let startDateRange = '';
+            let endDateRange = '';
 
-            if (tasksError) throw tasksError;
+            if (rankingTimeRange === '30d') {
+                const date = new Date();
+                date.setDate(now.getDate() - 30);
+                startDateRange = date.toISOString().split('T')[0];
+                endDateRange = now.toISOString().split('T')[0];
+            } else if (rankingTimeRange === 'trimestre') {
+                const date = new Date();
+                date.setDate(now.getDate() - 90);
+                startDateRange = date.toISOString().split('T')[0];
+                endDateRange = now.toISOString().split('T')[0];
+            } else { // year
+                startDateRange = `${selectedActivityYear}-01-01`;
+                endDateRange = `${selectedActivityYear}-12-31`;
+            }
 
+            const sector = getUserSector();
+            
+            // Function to fetch all tasks in range handling 1000 limit
+            const fetchAllTasks = async (start: string, end: string) => {
+                let allData: any[] = [];
+                let from = 0;
+                let to = 999;
+                let hasMore = true;
+
+                while (hasMore) {
+                    let query = supabase
+                        .from('tasks')
+                        .select('status, quantidade, category, start_date, end_date')
+                        .gte('start_date', start)
+                        .lte('start_date', end)
+                        .range(from, to);
+                    
+                    if (sector && (sector === 'CP' || sector === 'EA')) {
+                        query = query.eq('sector', sector);
+                    }
+
+                    const { data, error } = await query;
+                    if (error) throw error;
+                    if (!data || data.length === 0) {
+                        hasMore = false;
+                    } else {
+                        allData = [...allData, ...data];
+                        if (data.length < 1000) {
+                            hasMore = false;
+                        } else {
+                            from += 1000;
+                            to += 1000;
+                        }
+                    }
+                }
+                return allData;
+            };
+
+            const tasks = await fetchAllTasks(startDateRange, endDateRange);
+            
             // Calculate status counts
             const counts: StatusCounts = { pendente: 0, iniciada: 0, concluida: 0 };
             const categoryMap = new Map<string, number>();
 
-            tasks?.forEach(task => {
+            tasks.forEach(task => {
                 const qty = task.quantidade || 1;
 
                 // Status counts
@@ -365,48 +499,39 @@ const Reports: React.FC = () => {
 
                 // Category ranking logic
                 if (task.status === 'concluida' && task.category) {
-                    const taskDateStr = task.end_date || task.start_date;
-                    if (!taskDateStr) return;
-
-                    const taskDate = new Date(taskDateStr);
-                    const now = new Date();
-                    let isInRange = false;
-
-                    if (rankingTimeRange === '30d') {
-                        const thirtyDaysAgo = new Date();
-                        thirtyDaysAgo.setDate(now.getDate() - 30);
-                        isInRange = taskDate >= thirtyDaysAgo;
-                    } else if (rankingTimeRange === 'trimestre') {
-                        const ninetyDaysAgo = new Date();
-                        ninetyDaysAgo.setDate(now.getDate() - 90);
-                        isInRange = taskDate >= ninetyDaysAgo;
-                    } else { // year
-                        isInRange = taskDate.getFullYear() === now.getFullYear();
-                    }
-
-                    if (isInRange) {
-                        const current = categoryMap.get(task.category) || 0;
-                        categoryMap.set(task.category, current + qty);
-                    }
+                    const current = categoryMap.get(task.category) || 0;
+                    categoryMap.set(task.category, current + qty);
                 }
             });
 
             setStatusCounts(counts);
 
-            // Calculate Tasks Per Day Average
+            // Calculate Tasks Per Day Average (Always for current year to keep consistent card)
             const today = new Date();
+            const todayYear = today.getFullYear();
             const todayStr = today.toISOString().split('T')[0];
-            const startOfYearStr = `${today.getFullYear()}-01-01`;
-            const weekdaysInYearWindow = countWeekdays(startOfYearStr, todayStr);
+            const startOfYearStr = `${todayYear}-01-01`;
             
-            const totalTasksInWindow = tasks?.reduce((acc, task) => {
+            // We need current year tasks for this specific calculation if not already loaded
+            let currentYearTasks = tasks;
+            if (selectedActivityYear !== todayYear || rankingTimeRange !== 'year') {
+                const { data: cyTasks } = await supabase
+                    .from('tasks')
+                    .select('quantidade, start_date')
+                    .gte('start_date', startOfYearStr)
+                    .lte('start_date', todayStr);
+                currentYearTasks = cyTasks || [];
+            }
+
+            const weekdaysInYearWindow = countWeekdays(startOfYearStr, todayStr);
+            const totalTasksInWindow = currentYearTasks.reduce((acc, task) => {
                 if (!task.start_date) return acc;
                 const taskDate = task.start_date.split('T')[0];
                 if (taskDate <= todayStr) {
                     return acc + (task.quantidade || 1);
                 }
                 return acc;
-            }, 0) || 0;
+            }, 0);
 
             if (weekdaysInYearWindow > 0) {
                 const avg = totalTasksInWindow / weekdaysInYearWindow;
@@ -503,16 +628,28 @@ const Reports: React.FC = () => {
                             <h4 className="text-base font-bold text-slate-800 dark:text-white">Ranking de Atividades</h4>
                             <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Categorias por Quantidade Concluída</p>
                         </div>
-                        <select 
-                            value={rankingTimeRange}
-                            onChange={(e) => setRankingTimeRange(e.target.value)}
-                            //className="bg-slate-50 w-[100px] dark:bg-slate-800 border-none rounded-lg text-[10px] font-bold px-3 py-1 text-slate-500 focus:ring-1 focus:ring-primary cursor-pointer"
-                            className="block appearance-none w-[120px] box-border flex-none bg-slate-50 dark:bg-slate-800 rounded-lg text-[10px] font-bold px-3 py-1 text-slate-500 focus:ring-1 focus:ring-primary cursor-pointer"
-                        >
-                            <option value="30d">Últimos 30 dias</option>
-                            <option value="trimestre">Último trimestre</option>
-                            <option value="year">Esse ano</option>
-                        </select>
+                        <div className="flex items-center gap-2">
+                            <select 
+                                value={rankingTimeRange}
+                                onChange={(e) => setRankingTimeRange(e.target.value)}
+                                className="block appearance-none w-[120px] box-border flex-none bg-slate-50 dark:bg-slate-800 rounded-lg text-[10px] font-bold px-3 py-1 text-slate-500 focus:ring-1 focus:ring-primary cursor-pointer"
+                            >
+                                <option value="30d">Últimos 30 dias</option>
+                                <option value="trimestre">Último trimestre</option>
+                                <option value="year">Por Ano</option>
+                            </select>
+                            {rankingTimeRange === 'year' && (
+                                <select 
+                                    value={selectedActivityYear}
+                                    onChange={(e) => setSelectedActivityYear(Number(e.target.value))}
+                                    className="block appearance-none w-[70px] box-border flex-none bg-slate-50 dark:bg-slate-800 rounded-lg text-[10px] font-bold px-3 py-1 text-slate-500 focus:ring-1 focus:ring-primary cursor-pointer"
+                                >
+                                    {availableActivityYears.map(year => (
+                                        <option key={year} value={year}>{year}</option>
+                                    ))}
+                                </select>
+                            )}
+                        </div>
                     </div>
                     <div className="space-y-6">
                         {loading ? (
