@@ -12,6 +12,8 @@ interface User {
   specialty: string;
   avatar: string;
   sector?: string;
+  last_promotion_date?: string;
+  guia_antiguidade?: number;
 }
 
 // Rank Priority Logic
@@ -79,7 +81,9 @@ const Login: React.FC = () => {
   const checkSession = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
-      navigate("/app/dashboard");
+      const userJson = localStorage.getItem('currentUser');
+      const sector = userJson ? JSON.parse(userJson).sector : null;
+      navigate(sector === 'CH' ? '/app/tasks/new' : '/app/dashboard');
     }
   };
 
@@ -96,9 +100,16 @@ const Login: React.FC = () => {
         const pA = getRankPriority(a.rank, a.abrev);
         const pB = getRankPriority(b.rank, b.abrev);
         if (pA !== pB) return pA - pB;
-        const nameA = a.war_name || a.name || "";
-        const nameB = b.war_name || b.name || "";
-        return nameA.localeCompare(nameB);
+
+        // Sort by last promotion date (oldest to newest)
+        const dateA = a.last_promotion_date ? new Date(a.last_promotion_date).getTime() : Infinity;
+        const dateB = b.last_promotion_date ? new Date(b.last_promotion_date).getTime() : Infinity;
+        if (dateA !== dateB) return dateA - dateB;
+
+        // Tie-breaker: guia_antiguidade
+        const guiaA = a.guia_antiguidade ?? 9999;
+        const guiaB = b.guia_antiguidade ?? 9999;
+        return guiaA - guiaB;
       });
       setUsers(sortedUsers);
     } catch (err: any) {
@@ -166,7 +177,8 @@ const Login: React.FC = () => {
                   user_id: signUpData.user.id,
                 }),
               );
-              navigate("/app/dashboard");
+              const destination = selectedUser.sector === 'CH' ? '/app/tasks/new' : '/app/dashboard';
+              navigate(destination);
             } else {
               setError("Verifique seu e-mail para confirmar a conta");
             }
@@ -181,7 +193,8 @@ const Login: React.FC = () => {
           "currentUser",
           JSON.stringify({ ...selectedUser, user_id: signInData.user.id }),
         );
-        navigate("/app/dashboard");
+        const destination = selectedUser.sector === 'CH' ? '/app/tasks/new' : '/app/dashboard';
+        navigate(destination);
       }
     } catch (err: any) {
       console.error("Login error:", err.message);

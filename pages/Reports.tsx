@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { Member } from '../types';
 import { parseLocalDate, formatLocalDate } from '../utils/dateUtils';
+import MemberProfileModal from '../components/MemberProfileModal';
 
 interface MemberRanking {
     id: string;
@@ -66,6 +67,7 @@ const Reports: React.FC = () => {
     const [unavailRankings, setUnavailRankings] = useState<UnavailabilityRanking[]>([]);
     const [availableUnavailTypes, setAvailableUnavailTypes] = useState<string[]>([]);
     const [selectedUnavailType, setSelectedUnavailType] = useState<string>('Dispensa');
+    const [selectedMember, setSelectedMember] = useState<Member | null>(null);
     
     // Filters State
     const [rankingTimeRange, setRankingTimeRange] = useState<string>('year');
@@ -97,22 +99,20 @@ const Reports: React.FC = () => {
         fetchUnavailRanking();
     }, [selectedRankingYear, selectedUnavailType]);
 
-    // Calculate weekdays between two dates (excluding weekends)
-    const countWeekdays = (startDate: string, endDate: string): number => {
-        const start = parseLocalDate(startDate);
-        const end = parseLocalDate(endDate);
-        if (!start || !end) return 0;
-        let count = 0;
-        const current = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-        
-        while (current <= end) {
-            const dayOfWeek = current.getDay();
-            if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Not Sunday (0) or Saturday (6)
-                count++;
+    const handleMemberClick = async (memberId: string) => {
+        try {
+            const { data, error } = await supabase
+                .from('members')
+                .select('*')
+                .eq('id', memberId)
+                .single();
+            
+            if (!error && data) {
+                setSelectedMember(data);
             }
-            current.setDate(current.getDate() + 1);
+        } catch (error) {
+            console.error('Error fetching member details:', error);
         }
-        return count;
     };
 
     // Calculate weekdays between two dates (excluding weekends)
@@ -126,6 +126,23 @@ const Reports: React.FC = () => {
         while (current <= end) {
             const dayOfWeek = current.getDay();
             if (dayOfWeek === 0 || dayOfWeek === 6) { // Sunday (0) or Saturday (6)
+                count++;
+            }
+            current.setDate(current.getDate() + 1);
+        }
+        return count;
+    };
+
+    const countWeekdays = (startDate: string, endDate: string): number => {
+        const start = parseLocalDate(startDate);
+        const end = parseLocalDate(endDate);
+        if (!start || !end) return 0;
+        let count = 0;
+        const current = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+        
+        while (current <= end) {
+            const dayOfWeek = current.getDay();
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Not Sunday (0) and Not Saturday (6)
                 count++;
             }
             current.setDate(current.getDate() + 1);
@@ -768,7 +785,11 @@ const Reports: React.FC = () => {
                     </div>
                     <div className="space-y-6">
                         {memberRankings.map((member) => (
-                            <div key={member.id} className="relative">
+                            <div 
+                                key={member.id} 
+                                className="relative cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 p-2 rounded-xl transition-colors group"
+                                onClick={() => handleMemberClick(member.id)}
+                            >
                                 <div className="flex items-center gap-4 mb-2">
                                     {/* Avatar */}
                                     <div className="flex-shrink-0">
@@ -840,7 +861,11 @@ const Reports: React.FC = () => {
                     </div>
                     <div className="space-y-6">
                         {unavailRankings.map((member) => (
-                            <div key={member.id} className="relative">
+                            <div 
+                                key={member.id} 
+                                className="relative cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 p-2 rounded-xl transition-colors group"
+                                onClick={() => handleMemberClick(member.id)}
+                            >
                                 <div className="flex items-center gap-4 mb-2">
                                     <div className="flex-shrink-0">
                                         {member.avatar ? (
@@ -890,7 +915,11 @@ const Reports: React.FC = () => {
                     </div>
                     <div className="space-y-6">
                         {sectionTimeRanking.map((member) => (
-                            <div key={member.id} className="relative">
+                            <div 
+                                key={member.id} 
+                                className="relative cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 p-2 rounded-xl transition-colors group"
+                                onClick={() => handleMemberClick(member.id)}
+                            >
                                 <div className="flex items-center gap-4 mb-2">
                                     <div className="flex-shrink-0">
                                         {member.avatar ? (
@@ -928,6 +957,13 @@ const Reports: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {selectedMember && (
+                <MemberProfileModal 
+                    member={selectedMember} 
+                    onClose={() => setSelectedMember(null)} 
+                />
+            )}
         </div>
     );
 };

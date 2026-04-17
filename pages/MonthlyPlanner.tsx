@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
+import { Member } from '../types';
+import MemberProfileModal from '../components/MemberProfileModal';
 
 interface Task {
     id: string;
@@ -73,6 +75,7 @@ const MonthlyPlanner: React.FC = () => {
     const [_loading, setLoading] = useState(true);
     const [tasksLoading, setTasksLoading] = useState(false);
     const [displayFilter, setDisplayFilter] = useState<'geral' | 'efetivo' | 'tarefas'>('geral');
+    const [selectedMember, setSelectedMember] = useState<Member | null>(null);
 
     // Unavailability Modal
     const [showUnavailModal, setShowUnavailModal] = useState(false);
@@ -492,6 +495,23 @@ const MonthlyPlanner: React.FC = () => {
         }
     };
 
+    const handleMemberClick = async (memberId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        try {
+            const { data, error } = await supabase
+                .from('members')
+                .select('*')
+                .eq('id', memberId)
+                .single();
+            
+            if (!error && data) {
+                setSelectedMember(data);
+            }
+        } catch (error) {
+            console.error('Error fetching member details:', error);
+        }
+    };
+
     // ========== Unavailability color map ==========
     const unavailColor = (type: string) => {
         switch (type) {
@@ -653,8 +673,9 @@ const MonthlyPlanner: React.FC = () => {
                                 return (
                                     <div 
                                         key={`avail-${member.id}`} 
-                                        className="relative flex items-center h-12 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-lg px-3 transition-all cursor-default overflow-hidden group/avail"
-                                        title={`Disponível: ${member.abrev || member.rank} ${member.war_name || member.name}`}
+                                        onClick={(e) => handleMemberClick(member.id, e)}
+                                        className="relative flex items-center h-12 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-lg px-3 transition-all cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 overflow-hidden group/avail shadow-sm hover:shadow-md"
+                                        title={`Ver currículo: ${member.abrev || member.rank} ${member.war_name || member.name}`}
                                     >
                                         <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-slate-400" />
                                         <img 
@@ -1014,6 +1035,13 @@ const MonthlyPlanner: React.FC = () => {
                     background: #cbd5e1;
                 }
             `}} />
+
+            {selectedMember && (
+                <MemberProfileModal 
+                    member={selectedMember} 
+                    onClose={() => setSelectedMember(null)} 
+                />
+            )}
         </div>
     );
 };

@@ -94,6 +94,8 @@ const TaskForm: React.FC = () => {
     const [currentPage, setCurrentPage] = useState<number>(1);
     const [totalTasks, setTotalTasks] = useState<number>(0);
     const itemsPerPage = 100;
+    const hasActiveFilters = searchTerm !== "" || filterStatuses.length > 0 ||
+        filterSpecialties.length > 0 || filterPeriodicities.length > 0;
 
     // Category State
     const [categories, setCategories] = useState<Category[]>([]);
@@ -129,12 +131,21 @@ const TaskForm: React.FC = () => {
         fetchTasks();
     }, [selectedYear, currentPage]);
 
+    // When filters change, reset to page 1 and re-fetch all tasks
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, filterStatuses, filterSpecialties, filterPeriodicities]);
+
+    useEffect(() => {
+        fetchTasks();
+    }, [hasActiveFilters]);
+
     const fetchMembers = async () => {
         try {
             const { data, error } = await supabase
                 .from("members")
                 .select(
-                    "id, name, avatar, abrev, war_name, status, rank, sector",
+                    "id, name, avatar, abrev, war_name, status, rank, sector, last_promotion_date, guia_antiguidade",
                 );
             if (error) throw error;
 
@@ -154,13 +165,30 @@ const TaskForm: React.FC = () => {
             }
 
             const sorted = filtered.sort((a, b) => {
+                // 1ª Camada: Posto/Graduação (Rank)
                 const pA = getRankPriority(a.rank, a.abrev);
                 const pB = getRankPriority(b.rank, b.abrev);
                 if (pA !== pB) return pA - pB;
+
+                // 2ª Camada: Data da última promoção (Mais antiga primeiro)
+                // Usamos um fallback para uma data muito futura caso esteja nulo
+                const dateA = new Date(a.last_promotion_date || "9999-12-31")
+                    .getTime();
+                const dateB = new Date(b.last_promotion_date || "9999-12-31")
+                    .getTime();
+                if (dateA !== dateB) return dateA - dateB;
+
+                // 3ª Camada: Guia de Antiguidade (Menor número = mais antigo)
+                const guiaA = a.guia_antiguidade || 999999;
+                const guiaB = b.guia_antiguidade || 999999;
+                if (guiaA !== guiaB) return guiaA - guiaB;
+
+                // Desempate final: Nome de Guerra
                 const nameA = a.war_name || a.name || "";
                 const nameB = b.war_name || b.name || "";
                 return nameA.localeCompare(nameB);
             });
+
             setMembers(sorted);
         } catch (err) {
             console.error("Error fetching members:", err);
@@ -186,9 +214,6 @@ const TaskForm: React.FC = () => {
             const userJson = localStorage.getItem("currentUser");
             const sector = userJson ? JSON.parse(userJson).sector : null;
 
-            const startRange = (currentPage - 1) * itemsPerPage;
-            const endRange = currentPage * itemsPerPage - 1;
-
             let query = supabase
                 .from("tasks")
                 .select("*", { count: "exact" })
@@ -200,15 +225,24 @@ const TaskForm: React.FC = () => {
                 query = query.eq("sector", sector);
             }
 
-            // Aplicar range para paginação
-            const { data, error, count } = await query.range(
-                startRange,
-                endRange,
-            );
-
-            if (error) throw error;
-            setTasks(data || []);
-            setTotalTasks(count || 0);
+            // If filters are active, fetch ALL tasks so client-side filtering + pagination works correctly
+            if (hasActiveFilters) {
+                const { data, error, count } = await query;
+                if (error) throw error;
+                setTasks(data || []);
+                setTotalTasks(count || 0);
+            } else {
+                // No filters: use server-side pagination
+                const startRange = (currentPage - 1) * itemsPerPage;
+                const endRange = currentPage * itemsPerPage - 1;
+                const { data, error, count } = await query.range(
+                    startRange,
+                    endRange,
+                );
+                if (error) throw error;
+                setTasks(data || []);
+                setTotalTasks(count || 0);
+            }
         } catch (err: any) {
             console.error("Error fetching tasks:", err.message);
         } finally {
@@ -646,6 +680,18 @@ const TaskForm: React.FC = () => {
         if (valA > valB) return sortDirection === "asc" ? 1 : -1;
         return 0;
     });
+
+    // When filters are active, paginate client-side over the full filtered set.
+    // When no filters, server already returned the right page.
+    const displayedTasks = hasActiveFilters
+        ? filteredTasks.slice(
+            (currentPage - 1) * itemsPerPage,
+            currentPage * itemsPerPage,
+        )
+        : filteredTasks;
+
+    const totalCount = hasActiveFilters ? filteredTasks.length : totalTasks;
+    const totalPages = Math.ceil(totalCount / itemsPerPage);
 
     if (view === "form") {
         // FORM VIEW
@@ -1481,9 +1527,9 @@ const TaskForm: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[#e7edf3] dark:divide-slate-800">
-                            {filteredTasks.length > 0
+                            {displayedTasks.length > 0
                                 ? (
-                                    filteredTasks.map((task) => (
+                                    displayedTasks.map((task) => (
                                         <tr
                                             key={task.id}
                                             className="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
@@ -1656,7 +1702,7 @@ const TaskForm: React.FC = () => {
                 </div>
 
                 {/* Pagination Controls */}
-                {totalTasks > 0 && (
+                {totalCount > 0 && (
                     <div className="flex items-center justify-between border-t border-[#e7edf3] dark:divide-slate-800 pt-4 mt-2">
                         <div className="text-xs text-[#4c739a] font-medium">
                             Mostrando{" "}
@@ -1667,12 +1713,12 @@ const TaskForm: React.FC = () => {
                             <span className="font-bold text-[#0d141b] dark:text-white">
                                 {Math.min(
                                     currentPage * itemsPerPage,
-                                    totalTasks,
+                                    totalCount,
                                 )}
                             </span>{" "}
                             de{" "}
                             <span className="font-bold text-[#0d141b] dark:text-white">
-                                {totalTasks}
+                                {totalCount}
                             </span>{" "}
                             tarefas
                         </div>
@@ -1690,12 +1736,7 @@ const TaskForm: React.FC = () => {
                                 </span>
                             </button>
 
-                            {[...Array(
-                                Math.min(
-                                    5,
-                                    Math.ceil(totalTasks / itemsPerPage),
-                                ),
-                            )].map((_, i) => (
+                            {[...Array(Math.min(5, totalPages))].map((_, i) => (
                                 <button
                                     key={i + 1}
                                     onClick={() => setCurrentPage(i + 1)}
@@ -1712,17 +1753,9 @@ const TaskForm: React.FC = () => {
                             <button
                                 onClick={() =>
                                     setCurrentPage((prev) =>
-                                        Math.min(
-                                            Math.ceil(
-                                                totalTasks / itemsPerPage,
-                                            ),
-                                            prev + 1,
-                                            5,
-                                        )
+                                        Math.min(totalPages, prev + 1)
                                     )}
-                                disabled={currentPage === 5 ||
-                                    currentPage >=
-                                        Math.ceil(totalTasks / itemsPerPage)}
+                                disabled={currentPage >= totalPages}
                                 className="p-2 rounded-lg border border-[#e7edf3] dark:border-slate-800 bg-white dark:bg-slate-900 text-[#4c739a] hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                             >
                                 <span className="material-symbols-outlined text-[20px]">

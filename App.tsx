@@ -33,12 +33,18 @@ const App: React.FC = () => {
           <Route path="sdia" element={<SdiaPage />} />
           <Route path="reports" element={<Reports />} />
 
-          {/* Default redirect to dashboard */}
-          <Route path="" element={<Navigate to="dashboard" replace />} />
+          {/* Default redirect — CH goes to tasks, others go to dashboard */}
+          <Route path="" element={<DefaultRedirect />} />
         </Route>
       </Routes>
     </HashRouter>
   );
+};
+
+const DefaultRedirect: React.FC = () => {
+  const userJson = localStorage.getItem('currentUser');
+  const sector = userJson ? JSON.parse(userJson).sector : null;
+  return <Navigate to={sector === 'CH' ? 'tasks/new' : 'dashboard'} replace />;
 };
 
 export default App;

@@ -149,12 +149,14 @@ const Layout: React.FC = () => {
         </div>
 
         <nav className={`flex-1 px-4 space-y-1 mt-4 ${isSidebarCollapsed ? 'overflow-hidden' : 'overflow-y-auto'}`}>
-          <SidebarItem
-            to="/app/dashboard"
-            icon="dashboard"
-            label="Dashboard"
-            collapsed={isSidebarCollapsed}
-          />
+          {currentUser?.sector !== 'CH' && (
+            <SidebarItem
+              to="/app/dashboard"
+              icon="dashboard"
+              label="Dashboard"
+              collapsed={isSidebarCollapsed}
+            />
+          )}
           <SidebarItem
             to="/app/tasks/new"
             icon="assignment"
@@ -238,7 +240,7 @@ const Layout: React.FC = () => {
                       <div className="divide-y divide-[#e7edf3] dark:divide-slate-800">
                         {newTasks.map(task => (
                           <div key={task.id} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer" onClick={() => {
-                            navigate('/app/dashboard');
+                            navigate(currentUser?.sector === 'CH' ? '/app/tasks/new' : '/app/dashboard');
                             setIsNotificationsOpen(false);
                           }}>
                             <div className="flex items-start gap-2 mb-1">
