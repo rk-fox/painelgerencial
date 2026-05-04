@@ -427,34 +427,44 @@ const MonthlyPlanner: React.FC = () => {
     };
 
     const saveUnavail = async () => {
-        if (!unavailForm.member || !unavailForm.type || !unavailForm.start_date || !unavailForm.end_date) {
-            console.warn("Missing fields in unavailability form", unavailForm);
-            return;
+    if (!unavailForm.member || !unavailForm.type || !unavailForm.start_date || !unavailForm.end_date) {
+        console.warn("Missing fields in unavailability form", unavailForm);
+        return;
+    }
+    try {
+        // 1. Recupera o setor do usuário atual no localStorage
+        const userJson = localStorage.getItem('currentUser');
+        const sector = userJson ? JSON.parse(userJson).sector : null;
+
+        // 2. Monta o payload (usando Record<string, any> para evitar erros do TypeScript ao adicionar a prop)
+        const payload: Record<string, any> = {
+            member: unavailForm.member,
+            type: unavailForm.type,
+            start_date: unavailForm.start_date,
+            end_date: unavailForm.end_date,
+        };
+
+        // 3. Adiciona o setor ao payload caso ele exista
+        if (sector) {
+            payload.sector = sector;
         }
-        try {
-            const payload = {
-                member: unavailForm.member,
-                type: unavailForm.type,
-                start_date: unavailForm.start_date,
-                end_date: unavailForm.end_date,
-            };
-            
-            if (unavailForm.id) {
-                const { error } = await supabase.from('unavailability').update(payload).eq('id', unavailForm.id);
-                if (error) throw error;
-            } else {
-                const { error } = await supabase.from('unavailability').insert(payload);
-                if (error) throw error;
-            }
-            setShowUnavailModal(false);
-            fetchAll();
-        } catch (err: unknown) {
-            if (err instanceof Error) {
-                console.error('Error saving unavailability:', err.message);
-                alert('Erro ao salvar indisponibilidade: ' + err.message);
-            }
+        
+        if (unavailForm.id) {
+            const { error } = await supabase.from('unavailability').update(payload).eq('id', unavailForm.id);
+            if (error) throw error;
+        } else {
+            const { error } = await supabase.from('unavailability').insert(payload);
+            if (error) throw error;
         }
-    };
+        setShowUnavailModal(false);
+        fetchAll();
+    } catch (err: unknown) {
+        if (err instanceof Error) {
+            console.error('Error saving unavailability:', err.message);
+            alert('Erro ao salvar indisponibilidade: ' + err.message);
+        }
+    }
+};
 
     const deleteUnavail = async () => {
         if (!unavailForm.id) return;
