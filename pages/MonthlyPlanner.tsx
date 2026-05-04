@@ -560,8 +560,8 @@ const MonthlyPlanner: React.FC = () => {
             'pontual': 'bg-rose-500',
         };
 
-        const colors = periodColors[task.periodicity] || periodColors['diária'];
-        const barColor = periodBar[task.periodicity] || periodBar['diária'];
+        const colors = periodColors[task.periodicity] || periodColors['diaria'];
+        const barColor = periodBar[task.periodicity] || periodBar['diaria'];
 
         return (
             <div
