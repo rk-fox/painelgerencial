@@ -237,27 +237,18 @@ const MonthlyPlanner: React.FC = () => {
         return input.split('T')[0];
     };
 
-    // 1. Mapear o status da recorrência mestre e o último responsável conhecido (Otimizado)
-    const recurrenceMap = useMemo(() => {
-        const map = new Map<string, { 
-            start_date: string, 
-            recurrence_active: boolean,
-            assigned_to: string | null 
-        }>();
+    // 1. Agrupar tarefas por nome e ordenar por data para busca de estado vigente (Otimizado)
+    const taskHistoryMap = useMemo(() => {
+        const groups = new Map<string, Task[]>();
         tasks.forEach(t => {
-            const p = t.periodicity?.toLowerCase();
-            if (p === 'pontual' || p === 'temporada') return;
-
-            const existing = map.get(t.name);
-            if (!existing || t.start_date > existing.start_date) {
-                map.set(t.name, { 
-                    start_date: t.start_date, 
-                    recurrence_active: t.recurrence_active,
-                    assigned_to: t.assigned_to || null
-                });
-            }
+            if (!groups.has(t.name)) groups.set(t.name, []);
+            groups.get(t.name)!.push(t);
         });
-        return map;
+        // Ordenar cada grupo por data decrescente para facilitar o "find" da mais recente anterior
+        groups.forEach(list => {
+            list.sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime());
+        });
+        return groups;
     }, [tasks]);
 
     // 2. Identificar tarefas únicas para base de projeção
@@ -338,12 +329,19 @@ const MonthlyPlanner: React.FC = () => {
         const projectedNames = new Set<string>();
 
         // B. Processar PROJEÇÕES
+        const todayMidnight = new Date();
+        todayMidnight.setHours(0, 0, 0, 0);
+
         masterTasks.forEach(task => {
             const tStartStr = toLocalDateString(task.start_date);
             if (tStartStr === dateString) return; 
 
             const tStart = new Date(task.start_date.split('T')[0] + 'T12:00:00');
             const compareDate = new Date(dateString + 'T12:00:00');
+            
+            // TRAVA LÓGICA: Não projetar para o passado (apenas de hoje em diante)
+            if (compareDate < todayMidnight) return;
+            
             if (compareDate <= tStart) return;
 
             const p = task.periodicity.toLowerCase();
@@ -363,17 +361,23 @@ const MonthlyPlanner: React.FC = () => {
             if (matches) {
                 if (realNamesToday.has(task.name) || projectedNames.has(task.name)) return;
 
-                const status = recurrenceMap.get(task.name);
-                if (status) {
-                    const latestRealDate = new Date(status.start_date.split('T')[0] + 'T12:00:00');
-                    const isAfterLastReal = compareDate > latestRealDate;
-                    
-                    // Só projeta se (Recorrência ativa E for após a última real) OU (Ainda for antes/durante a última real)
-                    if ((status.recurrence_active && isAfterLastReal) || !isAfterLastReal) {
+                // BUSCA DO ESTADO VIGENTE: A tarefa mais recente que seja ANTERIOR ou IGUAL ao dia atual
+                const history = taskHistoryMap.get(task.name);
+                const currentStatus = history?.find(t => new Date(t.start_date.split('T')[0] + 'T12:00:00') <= compareDate);
+
+                if (currentStatus) {
+                    // Só projeta se a recorrência estava ativa NAQUELE momento
+                    if (currentStatus.recurrence_active) {
                         results.push({ 
-                            task: { ...task, assigned_to: status.assigned_to }, 
+                            task: { ...task, assigned_to: currentStatus.assigned_to }, 
                             isProjected: true 
                         });
+                        projectedNames.add(task.name);
+                    }
+                } else {
+                    // Se não achou histórico anterior, usa a master task como referência inicial
+                    if (task.recurrence_active) {
+                        results.push({ task: { ...task }, isProjected: true });
                         projectedNames.add(task.name);
                     }
                 }
