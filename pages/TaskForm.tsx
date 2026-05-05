@@ -381,6 +381,27 @@ const TaskForm: React.FC = () => {
         setError(null);
     };
 
+    const handleRevertStatus = async () => {
+        if (!editingTask || !editingTask.id) return;
+        setLoading(true);
+        try {
+            const { error: updateError } = await supabase
+                .from("tasks")
+                .update({ status: "pendente" })
+                .eq("id", editingTask.id);
+            if (updateError) throw updateError;
+
+            await fetchTasks();
+            setView("list");
+            setEditingTask(null);
+        } catch (err: any) {
+            console.error("Error reverting status:", err.message);
+            setError("Erro ao reverter status: " + err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         setFormData((prev) => ({ ...prev, category: e.target.value }));
     };
@@ -937,6 +958,19 @@ const TaskForm: React.FC = () => {
                         </div>
 
                         <div className="p-6 border-t border-[#e7edf3] dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-end gap-3">
+                            {editingTask && editingTask.status === "concluida" && (
+                                <button
+                                    className="mr-auto px-6 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-sm font-bold hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400 transition-colors flex items-center gap-2"
+                                    type="button"
+                                    onClick={handleRevertStatus}
+                                    disabled={loading}
+                                >
+                                    <span className="material-symbols-outlined text-[20px]">
+                                        history
+                                    </span>
+                                    Reverter Status
+                                </button>
+                            )}
                             <button
                                 className="px-6 py-2.5 rounded-lg border border-[#cfdbe7] dark:border-slate-700 text-[#0d141b] dark:text-white text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                                 type="button"
