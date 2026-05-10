@@ -237,7 +237,7 @@ const SdiaPage: React.FC = () => {
         for (let day = 1; day <= daysInMonth; day++) {
             const daySdias = getSdiasForDay(month, day);
             if (daySdias.length > 0) {
-                const hasImpact = daySdias.some(s => s.impacto);
+                const hasImpact = daySdias.some(s => s.cap);
                 data.push({ day, hasImpact });
             }
         }
@@ -423,7 +423,7 @@ const SdiaPage: React.FC = () => {
                                 const daySdias = getSdiasForDay(index, day);
                                 let bgClass = "bg-slate-50 dark:bg-slate-800 text-[#0d141b] dark:text-white";
                                 if (daySdias.length > 0) {
-                                    bgClass = daySdias.some(s => s.impacto) ? "bg-red-500 text-white" : "bg-green-500 text-white";
+                                    bgClass = daySdias.some(s => s.cap) ? "bg-red-500 text-white" : "bg-green-500 text-white";
                                 }
                                 return (
                                     <div key={day} className={`aspect-square flex items-center justify-center text-xs font-bold rounded-sm ${bgClass}`}>
@@ -437,15 +437,15 @@ const SdiaPage: React.FC = () => {
             </div>
 
             <div className="mt-8 bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 rounded-2xl p-6 flex flex-col md:flex-row items-center gap-6">
-                <div className="text-sm font-bold text-slate-500 uppercase tracking-widest">Legenda de Impacto:</div>
+                <div className="text-sm font-bold text-slate-500 uppercase tracking-widest">Legenda de Capacidade:</div>
                 <div className="flex flex-wrap gap-4">
                     <div className="flex items-center gap-2">
                         <div className="size-4 bg-red-500 rounded"></div>
-                        <span className="text-xs font-medium dark:text-slate-300">Com Impacto</span>
+                        <span className="text-xs font-medium dark:text-slate-300">Com Redução</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="size-4 bg-green-500 rounded"></div>
-                        <span className="text-xs font-medium dark:text-slate-300">Sem Impacto</span>
+                        <span className="text-xs font-medium dark:text-slate-300">Sem Redução</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="size-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded"></div>
@@ -482,7 +482,7 @@ const SdiaPage: React.FC = () => {
                                         const daySdias = getSdiasForDay(selectedMonth, day);
                                         let bgClass = "bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-white";
                                         if (daySdias.length > 0) {
-                                            bgClass = daySdias.some(s => s.impacto) ? "bg-red-500 text-white" : "bg-green-500 text-white";
+                                            bgClass = daySdias.some(s => s.cap) ? "bg-red-500 text-white" : "bg-green-500 text-white";
                                         }
 
                                         return (
@@ -494,8 +494,8 @@ const SdiaPage: React.FC = () => {
                                                             {daySdias.map(s => (
                                                                 <div key={s.id} className="flex items-center gap-2">
                                                                     <span className="font-semibold">{s.indicativo}</span>
-                                                                    <span className={s.impacto ? 'text-red-400' : 'text-green-400'}>
-                                                                        - {s.impacto ? 'Com Impacto' : 'Sem Impacto'}
+                                                                    <span className={s.cap ? 'text-red-400' : 'text-green-400'}>
+                                                                        - {s.cap ? 'Com Redução' : 'Sem Redução'}
                                                                     </span>
                                                                 </div>
                                                             ))}
