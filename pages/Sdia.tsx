@@ -42,6 +42,10 @@ interface Sdia {
     analista: string;
     sector?: string;
     created_at?: string;
+    cap: boolean;
+    arr?: number | null;
+    dep?: number | null;
+    r60?: number | null;
 }
 
 interface User {
@@ -59,6 +63,8 @@ const SdiaPage: React.FC = () => {
     const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
     const [isMonthPopupOpen, setIsMonthPopupOpen] = useState(false);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [isReviewReducPopupOpen, setIsReviewReducPopupOpen] = useState(false);
+    const [capSdias, setCapSdias] = useState<Sdia[]>([]);
     
     // Form State
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -75,7 +81,11 @@ const SdiaPage: React.FC = () => {
         analista: '',
         data_inicio: new Date().toLocaleDateString('en-CA'),
         data_fim: new Date().toLocaleDateString('en-CA'),
-        sector: ''
+        sector: '',
+        cap: false,
+        arr: null,
+        dep: null,
+        r60: null
     });
 
     const [sdiaToDelete, setSdiaToDelete] = useState<Sdia | null>(null);
@@ -144,9 +154,18 @@ const SdiaPage: React.FC = () => {
     };
 
     const fetchMembers = async () => {
-        const { data, error } = await supabase
+        const userJson = localStorage.getItem('currentUser');
+        const sector = userJson ? JSON.parse(userJson).sector : null;
+
+        let query = supabase
             .from('members')
             .select('id, name, war_name, rank, abrev');
+
+        if (sector && (sector === 'CP' || sector === 'EA')) {
+            query = query.eq('sector', sector);
+        }
+
+        const { data, error } = await query;
         if (!error && data) {
             const sorted = data.sort((a, b) => {
                 const pA = getRankPriority(a.rank, a.abrev);
@@ -163,6 +182,26 @@ const SdiaPage: React.FC = () => {
     const getAnalystName = (id: string): string => {
         const member = members.find(m => m.id === id);
         return member ? `${member.abrev || ''} ${member.war_name || member.name}` : 'Desconhecido';
+    };
+
+    const fetchCapSdias = async () => {
+        const userJson = localStorage.getItem('currentUser');
+        const sector = userJson ? JSON.parse(userJson).sector : null;
+
+        let query = supabase
+            .from('sdia')
+            .select('*')
+            .eq('cap', true)
+            .order('data_inicio', { ascending: false });
+
+        if (sector && (sector === 'CP' || sector === 'EA')) {
+            query = query.eq('sector', sector);
+        }
+
+        const { data, error } = await query;
+        if (!error && data) {
+            setCapSdias(data);
+        }
     };
 
     const formatDateString = (dateString: string): string => {
@@ -221,18 +260,30 @@ const SdiaPage: React.FC = () => {
                 return;
             }
 
+            if (formData.cap && (formData.r60 === null || formData.r60 === undefined || formData.r60 === 0)) {
+                alert('O campo R60 (Capacidade Horária) é obrigatório quando "Impacto na capacidade" está marcado.');
+                return;
+            }
+
+            const dataToSave = {
+                ...formData,
+                arr: formData.cap ? (formData.arr || null) : null,
+                dep: formData.cap ? (formData.dep || null) : null,
+                r60: formData.cap ? (formData.r60 || null) : null,
+            };
+
             if (editingSdia) {
                 const { error } = await supabase
                     .from('sdia')
-                    .update(formData)
+                    .update(dataToSave)
                     .eq('id', editingSdia.id);
                 if (error) throw error;
             } else {
                 const { error } = await supabase
                     .from('sdia')
                     .insert([{ 
-                        ...formData, 
-                        sector: currentUser?.sector === 'CH' ? formData.sector : currentUser?.sector 
+                        ...dataToSave, 
+                        sector: currentUser?.sector === 'CH' ? dataToSave.sector : currentUser?.sector 
                     }]);
                 if (error) throw error;
             }
@@ -302,6 +353,13 @@ const SdiaPage: React.FC = () => {
                             <option key={year} value={year}>{year}</option>
                         ))}
                     </select>
+                    <button
+                        onClick={() => { fetchCapSdias(); setIsReviewReducPopupOpen(true); }}
+                        className="px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95 flex items-center gap-2"
+                    >
+                        <span className="material-symbols-outlined text-sm">visibility</span>
+                        Rever Reduções
+                    </button>
                     <button 
                         onClick={() => {
                             setEditingSdia(null);
@@ -317,7 +375,11 @@ const SdiaPage: React.FC = () => {
                                 analista: '',
                                 data_inicio: new Date().toLocaleDateString('en-CA'),
                                 data_fim: new Date().toLocaleDateString('en-CA'),
-                                sector: ''
+                                sector: '',
+                                cap: false,
+                                arr: null,
+                                dep: null,
+                                r60: null
                             });
                             setIsFormOpen(true);
                         }}
@@ -628,16 +690,71 @@ const SdiaPage: React.FC = () => {
                                     ></textarea>
                                 </div>
                                 <div className="md:col-span-2">
-                                    <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-                                        <input 
-                                            type="checkbox" id="impacto"
-                                            checked={formData.impacto}
-                                            onChange={e => setFormData({...formData, impacto: e.target.checked})}
-                                            className="size-5 rounded border-slate-300 text-primary focus:ring-primary"
-                                        />
-                                        <label htmlFor="impacto" className="text-sm font-black text-slate-700 dark:text-white cursor-pointer select-none">
-                                            Apresenta Impacto Operacional?
-                                        </label>
+                                    <div className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                                        <div className="flex items-center gap-3">
+                                            <input 
+                                                type="checkbox" id="impacto"
+                                                checked={formData.impacto}
+                                                onChange={e => setFormData({...formData, impacto: e.target.checked})}
+                                                className="size-5 rounded border-slate-300 text-primary focus:ring-primary"
+                                            />
+                                            <label htmlFor="impacto" className="text-sm font-black text-slate-700 dark:text-white cursor-pointer select-none">
+                                                Apresenta Impacto Operacional?
+                                            </label>
+                                        </div>
+                                        <div className="w-px h-6 bg-slate-300 dark:bg-slate-600"></div>
+                                        <div className="flex items-center gap-3">
+                                            <input 
+                                                type="checkbox" id="cap"
+                                                checked={formData.cap}
+                                                onChange={e => setFormData({...formData, cap: e.target.checked, ...(!e.target.checked ? { arr: null, dep: null, r60: null } : {})})}
+                                                className="size-5 rounded border-slate-300 text-primary focus:ring-primary"
+                                            />
+                                            <label htmlFor="cap" className="text-sm font-black text-slate-700 dark:text-white cursor-pointer select-none">
+                                                Impacto na capacidade?
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                {/* Capacity fields - only enabled when cap is checked */}
+                                <div className="md:col-span-2">
+                                    <div className={`grid grid-cols-3 gap-4 p-4 rounded-xl border transition-all ${formData.cap ? 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800' : 'bg-slate-50/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-50'}`}>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">ARR (Pousos/60min)</label>
+                                            <input 
+                                                type="number" min="0"
+                                                disabled={!formData.cap}
+                                                value={formData.arr ?? ''}
+                                                onChange={e => setFormData({...formData, arr: e.target.value ? Number(e.target.value) : null})}
+                                                placeholder="—"
+                                                className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary disabled:bg-slate-100 dark:disabled:bg-slate-900 disabled:cursor-not-allowed text-center font-bold"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">DEP (Decolagens/60min)</label>
+                                            <input 
+                                                type="number" min="0"
+                                                disabled={!formData.cap}
+                                                value={formData.dep ?? ''}
+                                                onChange={e => setFormData({...formData, dep: e.target.value ? Number(e.target.value) : null})}
+                                                placeholder="—"
+                                                className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary disabled:bg-slate-100 dark:disabled:bg-slate-900 disabled:cursor-not-allowed text-center font-bold"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">
+                                                R60 (Cap. Horária) {formData.cap && <span className="text-red-500">*</span>}
+                                            </label>
+                                            <input 
+                                                type="number" min="0"
+                                                disabled={!formData.cap}
+                                                required={formData.cap}
+                                                value={formData.r60 ?? ''}
+                                                onChange={e => setFormData({...formData, r60: e.target.value ? Number(e.target.value) : null})}
+                                                placeholder="—"
+                                                className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary disabled:bg-slate-100 dark:disabled:bg-slate-900 disabled:cursor-not-allowed text-center font-bold"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -656,6 +773,73 @@ const SdiaPage: React.FC = () => {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Review Reduções Popup Modal */}
+            {isReviewReducPopupOpen && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setIsReviewReducPopupOpen(false)}>
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-auto" onClick={e => e.stopPropagation()}>
+                        <div className="border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10">
+                            <div className="flex items-center gap-3">
+                                <h2 className="text-xl font-bold text-slate-800 dark:text-white">
+                                    Reduções de Capacidade
+                                </h2>
+                                <span className="bg-primary/10 text-primary text-xs font-bold px-2 py-0.5 rounded-full">
+                                    {capSdias.length} {capSdias.length === 1 ? 'registro' : 'registros'}
+                                </span>
+                            </div>
+                            <button onClick={() => setIsReviewReducPopupOpen(false)} className="size-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                                <span className="material-symbols-outlined text-slate-500">close</span>
+                            </button>
+                        </div>
+                        <div className="p-6">
+                            {capSdias.length === 0 ? (
+                                <p className="text-slate-500 text-center py-8">Nenhuma SDIA com impacto na capacidade cadastrada.</p>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="border-b border-slate-200 dark:border-slate-700">
+                                                <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">SDIA</th>
+                                                <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">Indicativo</th>
+                                                <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">Início</th>
+                                                <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">Fim</th>
+                                                <th className="text-center py-3 px-2 font-bold text-slate-500 uppercase text-xs">Pousos/60min</th>
+                                                <th className="text-center py-3 px-2 font-bold text-slate-500 uppercase text-xs">Decolagens/60min</th>
+                                                <th className="text-center py-3 px-2 font-bold text-slate-500 uppercase text-xs">Capacidade Horária</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {capSdias.map(sdia => (
+                                                <tr key={sdia.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                                    <td className="py-3 px-2 font-bold text-slate-800 dark:text-white">{sdia.nr_sdia}</td>
+                                                    <td className="py-3 px-2 text-slate-600 dark:text-slate-400">{sdia.indicativo}</td>
+                                                    <td className="py-3 px-2 text-slate-600 dark:text-slate-400">{formatDateString(sdia.data_inicio)}</td>
+                                                    <td className="py-3 px-2 text-slate-600 dark:text-slate-400">{formatDateString(sdia.data_fim)}</td>
+                                                    <td className="py-3 px-2 text-center">
+                                                        <span className="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg text-xs font-bold">
+                                                            {sdia.arr ?? '—'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-3 px-2 text-center">
+                                                        <span className="bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 px-2 py-1 rounded-lg text-xs font-bold">
+                                                            {sdia.dep ?? '—'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-3 px-2 text-center">
+                                                        <span className="bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 px-2 py-1 rounded-lg text-xs font-bold">
+                                                            {sdia.r60 ?? '—'}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
