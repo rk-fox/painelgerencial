@@ -446,8 +446,10 @@ const TaskForm: React.FC = () => {
             return;
         }
 
-        const recurrenceActive = ["diaria", "semanal", "quinzenal", "mensal"]
-            .includes(formData.periodicity);
+        const recurrenceActive = editingTask
+            ? (editingTask.recurrence_active ?? false)
+            : ["diaria", "semanal", "quinzenal", "mensal"]
+                .includes(formData.periodicity);
 
         try {
             const payload = {

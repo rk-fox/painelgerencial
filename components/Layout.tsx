@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 
@@ -9,6 +9,8 @@ const Layout: React.FC = () => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const notificationRef = useRef<HTMLDivElement>(null);
+  const bellButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const getSession = async () => {
@@ -80,6 +82,25 @@ const Layout: React.FC = () => {
 
     return () => subscription.unsubscribe();
   }, [navigate]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        isNotificationsOpen &&
+        notificationRef.current &&
+        !notificationRef.current.contains(event.target as Node) &&
+        bellButtonRef.current &&
+        !bellButtonRef.current.contains(event.target as Node)
+      ) {
+        setIsNotificationsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isNotificationsOpen]);
 
   const checkNotifications = async (user: any) => {
     if (!user || (!user.last_login && !user.last_sign_in_at)) return;
@@ -214,6 +235,7 @@ const Layout: React.FC = () => {
           <div className={`flex items-center ${isSidebarCollapsed ? 'flex-col gap-4' : 'justify-between px-2'}`}>
             <div className="relative">
               <button
+                ref={bellButtonRef}
                 className="text-[#4c739a] hover:text-primary transition-all active:scale-95 relative"
                 title="Notificações"
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
@@ -226,7 +248,7 @@ const Layout: React.FC = () => {
 
               {/* Notifications Popup */}
               {isNotificationsOpen && (
-                <div className="absolute bottom-full left-0 mb-2 w-72 bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                <div ref={notificationRef} className="absolute bottom-full left-0 mb-2 w-72 bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                   <div className="p-3 border-b border-[#e7edf3] dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
                     <h3 className="font-bold text-xs text-[#0d141b] dark:text-white uppercase tracking-wider">Novas Tarefas</h3>
                     <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">{newTasks.length}</span>

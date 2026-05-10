@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+
 import { supabase } from '../supabase';
 import { parseLocalDate, formatLocalDate } from '../utils/dateUtils';
 
@@ -55,7 +55,6 @@ interface User {
 }
 
 const SdiaPage: React.FC = () => {
-    const navigate = useNavigate();
     const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
     const [availableYears, setAvailableYears] = useState<number[]>([]);
     const [sdias, setSdias] = useState<Sdia[]>([]);
@@ -103,15 +102,17 @@ const SdiaPage: React.FC = () => {
                 console.error('Error parsing user', e);
             }
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
         if (selectedYear) {
             fetchSdias(selectedYear);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedYear]);
 
-    const fetchAvailableYears = async () => {
+    const fetchAvailableYears = useCallback(async () => {
         const { data, error } = await supabase
             .from('sdia')
             .select('data_inicio');
@@ -127,9 +128,10 @@ const SdiaPage: React.FC = () => {
         } else {
             setAvailableYears([new Date().getFullYear()]);
         }
-    };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
-    const fetchSdias = async (year: number) => {
+    const fetchSdias = useCallback(async (year: number) => {
         const startDate = `${year}-01-01`;
         const endDate = `${year}-12-31`;
         
@@ -151,9 +153,9 @@ const SdiaPage: React.FC = () => {
         if (!error && data) {
             setSdias(data);
         }
-    };
+    }, []);
 
-    const fetchMembers = async () => {
+    const fetchMembers = useCallback(async () => {
         const userJson = localStorage.getItem('currentUser');
         const sector = userJson ? JSON.parse(userJson).sector : null;
 
@@ -177,7 +179,7 @@ const SdiaPage: React.FC = () => {
             });
             setMembers(sorted);
         }
-    };
+    }, []);
 
     const getAnalystName = (id: string): string => {
         const member = members.find(m => m.id === id);
@@ -304,12 +306,12 @@ const SdiaPage: React.FC = () => {
 
     const handleCloneSdia = (sdia: Sdia) => {
         setEditingSdia(null);
-        const { id, created_at, ...cloneData } = sdia;
+        const { id: _id, created_at: _created_at, ...cloneData } = sdia;
         setFormData(cloneData);
         setIsFormOpen(true);
     };
 
-    const confirmDelete = async () => {
+    const confirmDelete = useCallback(async () => {
         if (!sdiaToDelete) return;
         const { error } = await supabase
             .from('sdia')
@@ -319,7 +321,7 @@ const SdiaPage: React.FC = () => {
             fetchSdias(selectedYear);
             setSdiaToDelete(null);
         }
-    };
+    }, [sdiaToDelete, selectedYear, fetchSdias]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {

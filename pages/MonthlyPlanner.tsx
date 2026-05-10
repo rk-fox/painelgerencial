@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { Member } from '../types';
@@ -72,7 +72,7 @@ const MonthlyPlanner: React.FC = () => {
     const [unavailabilities, setUnavailabilities] = useState<Unavailability[]>([]);
     const [missions, setMissions] = useState<Mission[]>([]);
     const [taskCache, setTaskCache] = useState<Record<string, Task[]>>({});
-    const [_loading, setLoading] = useState(true);
+    const [, setLoading] = useState(true);
     const [tasksLoading, setTasksLoading] = useState(false);
     const [displayFilter, setDisplayFilter] = useState<'geral' | 'efetivo' | 'tarefas'>('geral');
     const [selectedMember, setSelectedMember] = useState<Member | null>(null);
@@ -102,10 +102,12 @@ const MonthlyPlanner: React.FC = () => {
 
     useEffect(() => {
         fetchInitialData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
         fetchTasksForMonth(anchorDate.getFullYear(), anchorDate.getMonth());
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [anchorDate]);
 
     const fetchTasksForMonth = async (year: number, month: number, forceRefresh = false) => {
