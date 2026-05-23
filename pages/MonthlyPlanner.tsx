@@ -33,6 +33,7 @@ interface Unavailability {
     type: string;
     start_date: string;
     end_date: string;
+    detalhes?: string | null;
 }
 
 interface Mission {
@@ -85,7 +86,8 @@ const MonthlyPlanner: React.FC = () => {
         type: string;
         start_date: string;
         end_date: string;
-    }>({ member: '', type: '', start_date: '', end_date: '' });
+        detalhes: string;
+    }>({ member: '', type: '', start_date: '', end_date: '', detalhes: '' });
 
     // Task Assignment Modal
     const [showAssignModal, setShowAssignModal] = useState(false);
@@ -445,7 +447,7 @@ const MonthlyPlanner: React.FC = () => {
 
     // ========== Unavailability CRUD ==========
     const openUnavailModal = (dateStr: string) => {
-        setUnavailForm({ member: '', type: '', start_date: dateStr, end_date: '' });
+        setUnavailForm({ member: '', type: '', start_date: dateStr, end_date: '', detalhes: '' });
         setShowUnavailModal(true);
     };
 
@@ -457,6 +459,7 @@ const MonthlyPlanner: React.FC = () => {
             type: u.type,
             start_date: u.start_date.split('T')[0],
             end_date: u.end_date.split('T')[0],
+            detalhes: u.detalhes || '',
         });
         setShowUnavailModal(true);
     };
@@ -477,6 +480,7 @@ const MonthlyPlanner: React.FC = () => {
             type: unavailForm.type,
             start_date: unavailForm.start_date,
             end_date: unavailForm.end_date,
+            detalhes: ['Home Office', 'Dispensa', 'Outros'].includes(unavailForm.type) ? (unavailForm.detalhes || null) : null,
         };
 
         // 3. Adiciona o setor ao payload caso ele exista
@@ -635,7 +639,7 @@ const MonthlyPlanner: React.FC = () => {
             <div
                 key={`unavail-${u.id}-${dateStr}`}
                 onClick={(e) => openEditUnavail(u, e)}
-                title={`${member.rank} ${member.war_name || member.name} — ${u.type}`}
+                title={`${member.rank} ${member.war_name || member.name} — ${u.type}${u.detalhes ? ` (${u.detalhes})` : ''}`}
                 className={`flex items-center gap-1.5 h-8 ${unavailColor(u.type)} border rounded-lg px-2 cursor-pointer hover:shadow-md transition-all`}
             >
                 <span className="material-symbols-outlined text-[14px]">event_busy</span>
@@ -950,7 +954,15 @@ const MonthlyPlanner: React.FC = () => {
                                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Tipo</label>
                                 <select
                                     value={unavailForm.type}
-                                    onChange={e => setUnavailForm({ ...unavailForm, type: e.target.value })}
+                                    onChange={e => {
+                                        const newType = e.target.value;
+                                        const isEnabled = ['Home Office', 'Dispensa', 'Outros'].includes(newType);
+                                        setUnavailForm({ 
+                                            ...unavailForm, 
+                                            type: newType,
+                                            detalhes: isEnabled ? unavailForm.detalhes : ''
+                                        });
+                                    }}
                                     className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-[#0d141b] dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 >
                                     <option value="">Selecione...</option>
@@ -958,6 +970,18 @@ const MonthlyPlanner: React.FC = () => {
                                         <option key={t} value={t}>{t}</option>
                                     ))}
                                 </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Detalhes</label>
+                                <input
+                                    type="text"
+                                    placeholder={['Home Office', 'Dispensa', 'Outros'].includes(unavailForm.type) ? "Informações adicionais..." : "Disponível apenas para Home Office, Dispensa e Outros"}
+                                    value={unavailForm.detalhes}
+                                    disabled={!['Home Office', 'Dispensa', 'Outros'].includes(unavailForm.type)}
+                                    onChange={e => setUnavailForm({ ...unavailForm, detalhes: e.target.value })}
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-[#0d141b] dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                />
                             </div>
 
                             <div className="grid grid-cols-2 gap-3">
