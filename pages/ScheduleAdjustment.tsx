@@ -11,6 +11,8 @@ interface Member {
     abrev: string | null;
     status: string | null;
     sector?: string;
+    last_promotion_date?: string;
+    guia_antiguidade?: number;
 }
 
 interface User {
@@ -111,7 +113,7 @@ const ScheduleAdjustment: React.FC = () => {
         // Fetch members of the relevant sector
         let query = supabase
             .from('members')
-            .select('id, name, war_name, rank, abrev, status, sector');
+            .select('id, name, war_name, rank, abrev, status, sector, last_promotion_date, guia_antiguidade');
         
         if (filterSector) {
             query = query.eq('sector', filterSector);
@@ -166,6 +168,15 @@ const ScheduleAdjustment: React.FC = () => {
             const pA = getRankPriority(a.rank, a.abrev);
             const pB = getRankPriority(b.rank, b.abrev);
             if (pA !== pB) return pA - pB;
+
+            const dateA = a.last_promotion_date ? new Date(a.last_promotion_date).getTime() : Infinity;
+            const dateB = b.last_promotion_date ? new Date(b.last_promotion_date).getTime() : Infinity;
+            if (dateA !== dateB) return dateA - dateB;
+
+            const guiaA = a.guia_antiguidade ?? 9999;
+            const guiaB = b.guia_antiguidade ?? 9999;
+            if (guiaA !== guiaB) return guiaA - guiaB;
+
             const nameA = a.war_name || a.name || '';
             const nameB = b.war_name || b.name || '';
             return nameA.localeCompare(nameB);
@@ -527,7 +538,7 @@ const ScheduleAdjustment: React.FC = () => {
                                         <label className="text-slate-700 dark:text-slate-300 text-sm font-bold">Seção de Destino *</label>
                                         <select 
                                             value={selectedSector}
-                                            onChange={(e) => setSelectedSector(e.target.value)}
+                                            onChange={(e) => setSelectedSector(e.target.value as 'CP' | 'EA' | '')}
                                             className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 focus:ring-primary h-12 px-4 text-sm"
                                         >
                                             <option value="">Selecione o Setor...</option>

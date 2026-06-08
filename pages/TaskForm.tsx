@@ -107,7 +107,7 @@ const TaskForm: React.FC = () => {
     const [formData, setFormData] = useState({
         name: "",
         category: "",
-        specialties: [] as string[],
+        specialties: ["BCT", "AIS"] as string[],
         description: "",
         periodicity: "diaria",
         start_date: "",
@@ -333,7 +333,7 @@ const TaskForm: React.FC = () => {
         setFormData({
             name: "",
             category: "",
-            specialties: [],
+            specialties: ["BCT", "AIS"],
             description: "",
             periodicity: "diaria",
             start_date: new Date().toLocaleDateString("en-CA"),
@@ -441,6 +441,15 @@ const TaskForm: React.FC = () => {
         if (formData.periodicity === "pontual" && !formData.end_date) {
             setError(
                 "A data de conclusão é obrigatória para tarefas pontuais.",
+            );
+            setLoading(false);
+            return;
+        }
+
+        // Validation for Specialties
+        if (formData.specialties.length === 0) {
+            setError(
+                "Você deve selecionar pelo menos uma especialidade (BCT ou AIS).",
             );
             setLoading(false);
             return;

@@ -537,9 +537,15 @@ const SdiaPage: React.FC = () => {
                                                             {formatDateString(sdia.data_inicio)} - {formatDateString(sdia.data_fim)}
                                                         </td>
                                                         <td className="py-3 px-2">
-                                                            <span className={`px-2 py-1 rounded-lg text-xs font-bold ${sdia.impacto ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
-                                                                {sdia.impacto ? 'COM IMPACTO' : 'SEM IMPACTO'}
-                                                            </span>
+                                                            {sdia.impacto ? (
+                                                                <span className="px-2 py-1 rounded-lg text-xs font-bold bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                                                    COM IMPACTO
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-slate-400 dark:text-slate-500 font-medium">
+                                                                    SEM IMPACTO
+                                                                </span>
+                                                            )}
                                                         </td>
                                                         <td className="py-3 px-2 text-slate-600 dark:text-slate-400">
                                                             {getAnalystName(sdia.analista)}

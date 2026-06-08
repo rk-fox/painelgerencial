@@ -25,6 +25,10 @@ interface MemberBasic {
     abrev?: string;
     avatar: string;
     specialty: string;
+    sector?: string;
+    last_promotion_date?: string;
+    guia_antiguidade?: number;
+    status?: string;
 }
 
 interface Unavailability {
@@ -34,6 +38,7 @@ interface Unavailability {
     start_date: string;
     end_date: string;
     detalhes?: string | null;
+    sector?: string;
 }
 
 interface Mission {
@@ -42,6 +47,7 @@ interface Mission {
     data_inicio: string;
     data_fim: string;
     equipe: string[] | null;
+    sector?: string;
 }
 
 const UNAVAIL_TYPES = ['SALOP', 'CAIS', 'RISAER', 'Férias', 'Dispensa', 'Home Office', 'Aniversário', 'Outros'];
@@ -77,6 +83,8 @@ const MonthlyPlanner: React.FC = () => {
     const [tasksLoading, setTasksLoading] = useState(false);
     const [displayFilter, setDisplayFilter] = useState<'geral' | 'efetivo' | 'tarefas'>('geral');
     const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+    const [currentUser, setCurrentUser] = useState<any>(null);
+    const [selectedSectorFilter, setSelectedSectorFilter] = useState<'Todos' | 'Capacidade' | 'Espaço Aéreo'>('Todos');
 
     // Unavailability Modal
     const [showUnavailModal, setShowUnavailModal] = useState(false);
@@ -103,6 +111,10 @@ const MonthlyPlanner: React.FC = () => {
     ];
 
     useEffect(() => {
+        const userJson = localStorage.getItem('currentUser');
+        if (userJson) {
+            setCurrentUser(JSON.parse(userJson));
+        }
         fetchInitialData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -181,8 +193,8 @@ const MonthlyPlanner: React.FC = () => {
             // Fetch Global Data (Missões e Indisponibilidades como eram antes)
             let missionsQuery = supabase.from('missions').select('id, nome, data_inicio, data_fim, equipe, sector');
             let unavailQuery = supabase.from('unavailability').select('*');
-            let membersQuery = supabase.from('members').select('id, name, war_name, rank, abrev, avatar, specialty').in('abrev', ABREV_ORDER);
-            let allMembersQuery = supabase.from('members').select('id, name, war_name, rank, abrev, avatar, specialty');
+            let membersQuery = supabase.from('members').select('id, name, war_name, rank, abrev, avatar, specialty, sector, last_promotion_date, guia_antiguidade, status').in('abrev', ABREV_ORDER);
+            let allMembersQuery = supabase.from('members').select('id, name, war_name, rank, abrev, avatar, specialty, sector, last_promotion_date, guia_antiguidade, status');
 
             if (sector && (sector === 'CP' || sector === 'EA')) {
                 missionsQuery = missionsQuery.eq('sector', sector);
@@ -211,6 +223,15 @@ const MonthlyPlanner: React.FC = () => {
                 const pA = getRankPriority(a.rank, a.abrev);
                 const pB = getRankPriority(b.rank, b.abrev);
                 if (pA !== pB) return pA - pB;
+
+                const dateA = a.last_promotion_date ? new Date(a.last_promotion_date).getTime() : Infinity;
+                const dateB = b.last_promotion_date ? new Date(b.last_promotion_date).getTime() : Infinity;
+                if (dateA !== dateB) return dateA - dateB;
+
+                const guiaA = a.guia_antiguidade ?? 9999;
+                const guiaB = b.guia_antiguidade ?? 9999;
+                if (guiaA !== guiaB) return guiaA - guiaB;
+
                 const nameA = a.war_name || a.name || '';
                 const nameB = b.war_name || b.name || '';
                 return nameA.localeCompare(nameB);
@@ -229,6 +250,48 @@ const MonthlyPlanner: React.FC = () => {
         return map;
     }, [allMembers]);
 
+    const filteredTasks = useMemo(() => {
+        if (currentUser?.sector === 'CH' && selectedSectorFilter !== 'Todos') {
+            const sectorKey = selectedSectorFilter === 'Capacidade' ? 'CP' : 'EA';
+            return tasks.filter(t => t.sector === sectorKey);
+        }
+        return tasks;
+    }, [tasks, currentUser, selectedSectorFilter]);
+
+    const filteredMissions = useMemo(() => {
+        if (currentUser?.sector === 'CH' && selectedSectorFilter !== 'Todos') {
+            const sectorKey = selectedSectorFilter === 'Capacidade' ? 'CP' : 'EA';
+            return missions.filter(m => m.sector === sectorKey);
+        }
+        return missions;
+    }, [missions, currentUser, selectedSectorFilter]);
+
+    const filteredUnavailabilities = useMemo(() => {
+        if (currentUser?.sector === 'CH' && selectedSectorFilter !== 'Todos') {
+            const sectorKey = selectedSectorFilter === 'Capacidade' ? 'CP' : 'EA';
+            return unavailabilities.filter(u => u.sector === sectorKey);
+        }
+        return unavailabilities;
+    }, [unavailabilities, currentUser, selectedSectorFilter]);
+
+    const filteredMembers = useMemo(() => {
+        const activeMembers = members.filter(m => m.status !== 'Indisponível');
+        if (currentUser?.sector === 'CH' && selectedSectorFilter !== 'Todos') {
+            const sectorKey = selectedSectorFilter === 'Capacidade' ? 'CP' : 'EA';
+            return activeMembers.filter(m => m.sector === sectorKey);
+        }
+        return activeMembers;
+    }, [members, currentUser, selectedSectorFilter]);
+
+    const filteredAllMembers = useMemo(() => {
+        const activeMembers = allMembers.filter(m => m.status !== 'Indisponível');
+        if (currentUser?.sector === 'CH' && selectedSectorFilter !== 'Todos') {
+            const sectorKey = selectedSectorFilter === 'Capacidade' ? 'CP' : 'EA';
+            return activeMembers.filter(m => m.sector === sectorKey);
+        }
+        return activeMembers;
+    }, [allMembers, currentUser, selectedSectorFilter]);
+
     // Helpers de Data Estáveis
     const toLocalDate = (input: string | null) => {
         if (!input) return null;
@@ -244,7 +307,7 @@ const MonthlyPlanner: React.FC = () => {
     // 1. Agrupar tarefas por nome e ordenar por data para busca de estado vigente (Otimizado)
     const taskHistoryMap = useMemo(() => {
         const groups = new Map<string, Task[]>();
-        tasks.forEach(t => {
+        filteredTasks.forEach(t => {
             if (!groups.has(t.name)) groups.set(t.name, []);
             groups.get(t.name)!.push(t);
         });
@@ -253,12 +316,12 @@ const MonthlyPlanner: React.FC = () => {
             list.sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime());
         });
         return groups;
-    }, [tasks]);
+    }, [filteredTasks]);
 
     // 2. Identificar tarefas únicas para base de projeção
     const masterTasks = useMemo(() => {
         const unique = new Map<string, Task>();
-        tasks.forEach(t => {
+        filteredTasks.forEach(t => {
             const p = t.periodicity?.toLowerCase();
             if (p !== 'pontual' && p !== 'temporada') {
                 const existing = unique.get(t.name);
@@ -269,7 +332,7 @@ const MonthlyPlanner: React.FC = () => {
             }
         });
         return Array.from(unique.values());
-    }, [tasks]);
+    }, [filteredTasks]);
 
     const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
     const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
@@ -319,14 +382,14 @@ const MonthlyPlanner: React.FC = () => {
 
         // Nomes que já possuem tarefas REAIS neste MÊS (para evitar duplicidade mensal)
         const realNamesInMonth = new Set(
-            tasks.filter(t => {
+            filteredTasks.filter(t => {
                 const d = toLocalDate(t.start_date);
                 return d && d.getMonth() === targetMonth && d.getFullYear() === targetYear;
             }).map(t => t.name)
         );
 
         // A. Tarefas REAIS do dia
-        const dayRealTasks = tasks.filter(t => toLocalDateString(t.start_date) === dateString);
+        const dayRealTasks = filteredTasks.filter(t => toLocalDateString(t.start_date) === dateString);
         dayRealTasks.forEach(t => results.push({ task: t, isProjected: false }));
 
         const realNamesToday = new Set(dayRealTasks.map(t => t.name));
@@ -398,7 +461,7 @@ const MonthlyPlanner: React.FC = () => {
     };
 
     const getUnavailForDay = (dateStr: string) => {
-        return unavailabilities.filter(u => {
+        return filteredUnavailabilities.filter(u => {
             const start = u.start_date.split('T')[0];
             const end = u.end_date.split('T')[0];
             return dateStr >= start && dateStr <= end;
@@ -406,7 +469,7 @@ const MonthlyPlanner: React.FC = () => {
     };
 
     const getMissionsForDay = (dateStr: string) => {
-        return missions.filter(m => {
+        return filteredMissions.filter(m => {
             const start = m.data_inicio.split('T')[0];
             const end = m.data_fim.split('T')[0];
             return dateStr >= start && dateStr <= end;
@@ -714,7 +777,7 @@ const MonthlyPlanner: React.FC = () => {
                 {/* Disponibilidade (Apenas Efetivo e Dias Úteis) */}
                 {displayFilter === 'efetivo' && (dateObj.getDay() !== 0 && dateObj.getDay() !== 6) && (
                     <div className="flex flex-col gap-1 mt-1 pt-1 border-t border-slate-100 dark:border-slate-800">
-                        {allMembers.map(member => {
+                        {filteredAllMembers.map(member => {
                             const isInMission = dayMissions.some(m => (m.equipe || []).includes(member.id));
                             const isInUnavail = dayUnavails.some(u => u.member === member.id);
 
@@ -768,6 +831,32 @@ const MonthlyPlanner: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-4">
+                    {currentUser?.sector === 'CH' && (
+                        <div className="flex bg-slate-200 dark:bg-slate-800 p-1 rounded-xl">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedSectorFilter('Todos')}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all uppercase tracking-wider ${selectedSectorFilter === 'Todos' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500'}`}
+                            >
+                                Todos
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedSectorFilter('Capacidade')}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all uppercase tracking-wider ${selectedSectorFilter === 'Capacidade' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500'}`}
+                            >
+                                Capacidade
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedSectorFilter('Espaço Aéreo')}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all uppercase tracking-wider ${selectedSectorFilter === 'Espaço Aéreo' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500'}`}
+                            >
+                                Espaço Aéreo
+                            </button>
+                        </div>
+                    )}
+
                     <div className="flex bg-slate-200 dark:bg-slate-800 p-1 rounded-xl">
                         <button
                             type="button"
@@ -941,7 +1030,7 @@ const MonthlyPlanner: React.FC = () => {
                                     className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-[#0d141b] dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 >
                                     <option value="">Selecione...</option>
-                                    {members
+                                    {filteredMembers
                                         .sort((a, b) => ABREV_ORDER.indexOf(a.abrev || '') - ABREV_ORDER.indexOf(b.abrev || ''))
                                         .map(m => (
                                             <option key={m.id} value={m.id}>{m.abrev} {m.war_name || m.name}</option>
@@ -1057,7 +1146,7 @@ const MonthlyPlanner: React.FC = () => {
                                 className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold text-[#0d141b] dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                                 <option value="">Nenhum</option>
-                                {members
+                                {filteredMembers
                                     .sort((a, b) => ABREV_ORDER.indexOf(a.abrev || '') - ABREV_ORDER.indexOf(b.abrev || ''))
                                     .map(m => (
                                         <option key={m.id} value={m.id}>{m.abrev} {m.war_name || m.name}</option>

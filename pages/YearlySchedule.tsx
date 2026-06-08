@@ -9,6 +9,8 @@ interface Member {
     war_name: string | null;
     rank: string | null;
     abrev: string | null;
+    last_promotion_date?: string;
+    guia_antiguidade?: number;
 }
 
 interface Mission {
@@ -140,7 +142,7 @@ const YearlySchedule: React.FC = () => {
     };
 
     const fetchMembers = async () => {
-        let query = supabase.from('members').select('id, name, war_name, rank, abrev');
+        let query = supabase.from('members').select('id, name, war_name, rank, abrev, last_promotion_date, guia_antiguidade');
         if (activeSector === 'CP' || activeSector === 'EA') {
             query = query.eq('sector', activeSector);
         }
@@ -150,6 +152,15 @@ const YearlySchedule: React.FC = () => {
                 const pA = getRankPriority(a.rank, a.abrev);
                 const pB = getRankPriority(b.rank, b.abrev);
                 if (pA !== pB) return pA - pB;
+
+                const dateA = a.last_promotion_date ? new Date(a.last_promotion_date).getTime() : Infinity;
+                const dateB = b.last_promotion_date ? new Date(b.last_promotion_date).getTime() : Infinity;
+                if (dateA !== dateB) return dateA - dateB;
+
+                const guiaA = a.guia_antiguidade ?? 9999;
+                const guiaB = b.guia_antiguidade ?? 9999;
+                if (guiaA !== guiaB) return guiaA - guiaB;
+
                 const nameA = a.war_name || a.name || '';
                 const nameB = b.war_name || b.name || '';
                 return nameA.localeCompare(nameB);
@@ -166,11 +177,20 @@ const YearlySchedule: React.FC = () => {
             .map(id => members.find(m => m.id === id))
             .filter((m): m is Member => !!m);
 
-        // Ordena por Rank e depois por Nome
+        // Ordena por Rank, Promoção, Antiguidade e Nome
         teamMembers.sort((a, b) => {
             const pA = getRankPriority(a.rank, a.abrev);
             const pB = getRankPriority(b.rank, b.abrev);
             if (pA !== pB) return pA - pB;
+
+            const dateA = a.last_promotion_date ? new Date(a.last_promotion_date).getTime() : Infinity;
+            const dateB = b.last_promotion_date ? new Date(b.last_promotion_date).getTime() : Infinity;
+            if (dateA !== dateB) return dateA - dateB;
+
+            const guiaA = a.guia_antiguidade ?? 9999;
+            const guiaB = b.guia_antiguidade ?? 9999;
+            if (guiaA !== guiaB) return guiaA - guiaB;
+
             const nameA = a.war_name || a.name || '';
             const nameB = b.war_name || b.name || '';
             return nameA.localeCompare(nameB);
