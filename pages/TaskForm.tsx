@@ -1490,7 +1490,7 @@ const TaskForm: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-3 md:gap-6 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
                     {/* Specialties */}
                     <div className="flex items-center gap-2">
-                        {["BCT", "AIS"].map((spec) => (
+                        {["BCT", "AIS", "CTA", "TAAM"].map((spec) => (
                             <button
                                 key={spec}
                                 onClick={() => {
@@ -1524,7 +1524,7 @@ const TaskForm: React.FC = () => {
                             { id: "semanal", label: "Semanal" },
                             { id: "quinzenal", label: "Quinzenal" },
                             { id: "mensal", label: "Mensal" },
-                            //{ id: 'temporada', label: 'Temporada' },
+                            { id: 'temporada', label: 'Temporada' },
                             { id: "pontual", label: "Pontual" },
                         ].map((period) => (
                             <button
