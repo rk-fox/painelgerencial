@@ -2495,7 +2495,10 @@ const TaskForm: React.FC = () => {
             </div>
         </div>
     </div>
-</div>;
 )}
+
+    </div> 
+  );       
+};         
 
 export default TaskForm;
