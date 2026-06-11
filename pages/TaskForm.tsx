@@ -2353,58 +2353,59 @@ const TaskForm: React.FC = () => {
                                     </div>
 
                                     {currentUser?.sector === "CH" && (
-                                        <div className="flex flex-wrap gap-2 mb-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    const cpMembers = members
-                                                        .filter((m) =>
-                                                            m.sector === "CP"
-                                                        ).map((m) => m.id);
-                                                    setMeetingMembers([
-                                                        ...new Set([
-                                                            ...meetingMembers,
-                                                            ...cpMembers,
-                                                        ]),
-                                                    ]);
-                                                }}
-                                                className="px-3 py-1.5 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 text-xs font-bold transition-colors"
-                                            >
-                                                Capacidade
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    const eaMembers = members
-                                                        .filter((m) =>
-                                                            m.sector === "EA"
-                                                        ).map((m) => m.id);
-                                                    setMeetingMembers([
-                                                        ...new Set([
-                                                            ...meetingMembers,
-                                                            ...eaMembers,
-                                                        ]),
-                                                    ]);
-                                                }}
-                                                className="px-3 py-1.5 rounded bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-xs font-bold transition-colors"
-                                            >
-                                                Espaço Aéreo
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setMeetingMembers(
-                                                        members.map((m) =>
-                                                            m.id
-                                                        ),
-                                                    );
-                                                }}
-                                                className="px-3 py-1.5 rounded bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 text-xs font-bold transition-colors"
-                                            >
-                                                Subdivisão Estratégica
-                                            </button>
-                                        </div>
-                                    )}
+    <div className="flex flex-wrap gap-2 mb-2">
+        {/* BOTÃO CAPACIDADE: Filtra CP e CH */}
+        <button
+            type="button"
+            onClick={() => {
+                const cpMembers = members
+                    .filter((m) => m.sector === "CP" || m.sector === "CH") // <-- Alterado aqui
+                    .map((m) => m.id);
+                setMeetingMembers([
+                    ...new Set([
+                        ...meetingMembers,
+                        ...cpMembers,
+                    ]),
+                ]);
+            }}
+            className="px-3 py-1.5 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 text-xs font-bold transition-colors"
+        >
+            Capacidade
+        </button>
+
+        {/* BOTÃO ESPAÇO AÉREO: Filtra EA e CH */}
+        <button
+            type="button"
+            onClick={() => {
+                const eaMembers = members
+                    .filter((m) => m.sector === "EA" || m.sector === "CH") // <-- Alterado aqui
+                    .map((m) => m.id);
+                setMeetingMembers([
+                    ...new Set([
+                        ...meetingMembers,
+                        ...eaMembers,
+                    ]),
+                ]);
+            }}
+            className="px-3 py-1.5 rounded bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-xs font-bold transition-colors"
+        >
+            Espaço Aéreo
+        </button>
+
+        {/* BOTÃO SUBDIVISÃO ESTRATÉGICA: Mantém todos */}
+        <button
+            type="button"
+            onClick={() => {
+                setMeetingMembers(
+                    members.map((m) => m.id)
+                );
+            }}
+            className="px-3 py-1.5 rounded bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 text-xs font-bold transition-colors"
+        >
+            Subdivisão Estratégica
+        </button>
+    </div>
+)}
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border border-[#e7edf3] dark:border-slate-700 rounded-xl p-3 max-h-48 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-800/30">
                                         {members.map((member) => (
