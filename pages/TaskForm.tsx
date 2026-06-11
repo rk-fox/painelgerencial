@@ -2246,265 +2246,255 @@ const TaskForm: React.FC = () => {
             )}
 
             {/* Meeting Modal */}
-            {showMeetingModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-[#e7edf3] dark:border-slate-800 w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-                        <div className="p-6 border-b border-[#e7edf3] dark:border-slate-800 flex justify-between items-center bg-[#f8fafc] dark:bg-slate-800/50">
-                            <h3 className="text-xl font-bold text-[#0d141b] dark:text-white flex items-center gap-2">
-                                <span className="material-symbols-outlined text-primary">
-                                    event
-                                </span>
-                                Agendar Reunião
-                            </h3>
-                            <button
-                                onClick={() => {
-                                    setShowMeetingModal(false);
-                                    setEditingMeetingId(null);
+{showMeetingModal && (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-[#e7edf3] dark:border-slate-800 w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-[#e7edf3] dark:border-slate-800 flex justify-between items-center bg-[#f8fafc] dark:bg-slate-800/50">
+                <h3 className="text-xl font-bold text-[#0d141b] dark:text-white flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary">
+                        event
+                    </span>
+                    Agendar Reunião
+                </h3>
+                <button
+                    onClick={() => {
+                        setShowMeetingModal(false);
+                        setEditingMeetingId(null);
+                        setMeetingData({
+                            assunto: "",
+                            inicio: "",
+                            fim: "",
+                            link: "",
+                        });
+                        setMeetingMembers([]);
+                    }}
+                    className="p-1 text-[#4c739a] hover:text-[#0d141b] dark:hover:text-white transition-colors"
+                >
+                    <span className="material-symbols-outlined">
+                        close
+                    </span>
+                </button>
+            </div>
+            <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+                <form
+                    id="meetingForm"
+                    onSubmit={handleScheduleMeeting}
+                    className="flex flex-col gap-4"
+                >
+                    <div className="flex flex-col gap-2">
+                        <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                            Assunto
+                        </label>
+                        <input
+                            required
+                            type="text"
+                            value={meetingData.assunto}
+                            onChange={(e) =>
+                                setMeetingData({
+                                    ...meetingData,
+                                    assunto: e.target.value,
+                                })
+                            }
+                            className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
+                            placeholder="Ex: Reunião de Alinhamento"
+                        />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-2">
+                            <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                Início
+                            </label>
+                            <input
+                                required
+                                type="datetime-local"
+                                value={meetingData.inicio}
+                                onChange={(e) =>
                                     setMeetingData({
-                                        assunto: "",
-                                        inicio: "",
-                                        fim: "",
-                                        link: "",
-                                    });
-                                    setMeetingMembers([]);
-                                }}
-                                className="p-1 text-[#4c739a] hover:text-[#0d141b] dark:hover:text-white transition-colors"
-                            >
-                                <span className="material-symbols-outlined">
-                                    close
-                                </span>
-                            </button>
+                                        ...meetingData,
+                                        inicio: e.target.value,
+                                    })
+                                }
+                                className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
+                            />
                         </div>
-                        <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
-                            <form
-                                id="meetingForm"
-                                onSubmit={handleScheduleMeeting}
-                                className="flex flex-col gap-4"
-                            >
-                                <div className="flex flex-col gap-2">
-                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
-                                        Assunto
-                                    </label>
-                                    <input
-                                        required
-                                        type="text"
-                                        value={meetingData.assunto}
-                                        onChange={(e) =>
-                                            setMeetingData({
-                                                ...meetingData,
-                                                assunto: e.target.value,
-                                            })}
-                                        className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
-                                        placeholder="Ex: Reunião de Alinhamento"
-                                    />
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div className="flex flex-col gap-2">
-                                        <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
-                                            Início
-                                        </label>
-                                        <input
-                                            required
-                                            type="datetime-local"
-                                            value={meetingData.inicio}
-                                            onChange={(e) =>
-                                                setMeetingData({
-                                                    ...meetingData,
-                                                    inicio: e.target.value,
-                                                })}
-                                            className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
-                                        />
-                                    </div>
-                                    <div className="flex flex-col gap-2">
-                                        <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
-                                            Fim
-                                        </label>
-                                        <input
-                                            required
-                                            type="datetime-local"
-                                            value={meetingData.fim}
-                                            onChange={(e) =>
-                                                setMeetingData({
-                                                    ...meetingData,
-                                                    fim: e.target.value,
-                                                })}
-                                            className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
-                                        Link da Reunião (Opcional)
-                                    </label>
-                                    <input
-                                        type="url"
-                                        value={meetingData.link}
-                                        onChange={(e) =>
-                                            setMeetingData({
-                                                ...meetingData,
-                                                link: e.target.value,
-                                            })}
-                                        className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
-                                        placeholder="Ex: https://meet.google.com/abc-defg-hij"
-                                    />
-                                </div>
-
-                                <div className="flex flex-col gap-2 mt-2">
-                                    <div className="flex items-center justify-between">
-                                        <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
-                                            Membros Convocados
-                                        </label>
-                                        <span className="text-xs text-primary font-bold">
-                                            {meetingMembers.length}{" "}
-                                            selecionado(s)
-                                        </span>
-                                    </div>
-
-                                    {currentUser?.sector === "CH" && (
-    <div className="flex flex-wrap gap-2 mb-2">
-        {/* BOTÃO CAPACIDADE: Filtra CP e CH */}
-        <button
-            type="button"
-            onClick={() => {
-                const cpMembers = members
-                    .filter((m) => m.sector === "CP" || m.sector === "CH") // <-- Alterado aqui
-                    .map((m) => m.id);
-                setMeetingMembers([
-                    ...new Set([
-                        ...meetingMembers,
-                        ...cpMembers,
-                    ]),
-                ]);
-            }}
-            className="px-3 py-1.5 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 text-xs font-bold transition-colors"
-        >
-            Capacidade
-        </button>
-
-        {/* BOTÃO ESPAÇO AÉREO: Filtra EA e CH */}
-        <button
-            type="button"
-            onClick={() => {
-                const eaMembers = members
-                    .filter((m) => m.sector === "EA" || m.sector === "CH") // <-- Alterado aqui
-                    .map((m) => m.id);
-                setMeetingMembers([
-                    ...new Set([
-                        ...meetingMembers,
-                        ...eaMembers,
-                    ]),
-                ]);
-            }}
-            className="px-3 py-1.5 rounded bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-xs font-bold transition-colors"
-        >
-            Espaço Aéreo
-        </button>
-
-        {/* BOTÃO SUBDIVISÃO ESTRATÉGICA: Mantém todos */}
-        <button
-            type="button"
-            onClick={() => {
-                setMeetingMembers(
-                    members.map((m) => m.id)
-                );
-            }}
-            className="px-3 py-1.5 rounded bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 text-xs font-bold transition-colors"
-        >
-            Subdivisão Estratégica
-        </button>
-    </div>
-)}
-
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border border-[#e7edf3] dark:border-slate-700 rounded-xl p-3 max-h-48 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-800/30">
-                                        {members.map((member) => (
-                                            <label
-                                                key={member.id}
-                                                className="flex items-center gap-3 p-2 rounded-lg hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-[#e7edf3] dark:hover:border-slate-700 transition-all cursor-pointer"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={meetingMembers
-                                                        .includes(member.id)}
-                                                    onChange={(e) => {
-                                                        if (e.target.checked) {
-                                                            setMeetingMembers([
-                                                                ...meetingMembers,
-                                                                member.id,
-                                                            ]);
-                                                        } else {
-                                                            setMeetingMembers(
-                                                                meetingMembers
-                                                                    .filter(
-                                                                        (id) =>
-                                                                            id !==
-                                                                                member
-                                                                                    .id,
-                                                                    ),
-                                                            );
-                                                        }
-                                                    }}
-                                                    className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
-                                                />
-                                                <div className="flex items-center gap-2">
-                                                    <img
-                                                        src={member.avatar ||
-                                                            "https://ui-avatars.com/api/?name=" +
-                                                                member.name}
-                                                        alt={member.name}
-                                                        className="w-6 h-6 rounded-full"
-                                                    />
-                                                    <span className="text-xs font-bold text-[#0d141b] dark:text-slate-300 line-clamp-1">
-                                                        {member.abrev ||
-                                                            member.rank}{" "}
-                                                        {member.war_name ||
-                                                            member.name}
-                                                    </span>
-                                                </div>
-                                            </label>
-                                        ))}
-                                    </div>
-                                </div>
-                            </form>
+                        <div className="flex flex-col gap-2">
+                            <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                Fim
+                            </label>
+                            <input
+                                required
+                                type="datetime-local"
+                                value={meetingData.fim}
+                                onChange={(e) =>
+                                    setMeetingData({
+                                        ...meetingData,
+                                        fim: e.target.value,
+                                    })
+                                }
+                                className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
+                            />
                         </div>
-                        <div className="flex p-4 gap-3 bg-[#f8fafc] dark:bg-slate-800/50 border-t border-[#e7edf3] dark:border-slate-800">
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                            Link da Reunião (Opcional)
+                        </label>
+                        <input
+                            type="url"
+                            value={meetingData.link}
+                            onChange={(e) =>
+                                setMeetingData({
+                                    ...meetingData,
+                                    link: e.target.value,
+                                })
+                            }
+                            className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
+                            placeholder="Ex: https://meet.google.com/abc-defg-hij"
+                        />
+                    </div>
+
+                    <div className="flex flex-col gap-2 mt-2">
+                        <div className="flex items-center justify-between">
+                            <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                Membros Convocados
+                            </label>
+                            <span className="text-xs text-primary font-bold">
+                                {meetingMembers.length}{" "}
+                                selecionado(s)
+                            </span>
+                        </div>
+
+                        {/* O filtro do currentUser foi removido daqui, tornando os botões públicos */}
+                        <div className="flex flex-wrap gap-2 mb-2">
+                            {/* BOTÃO CAPACIDADE: Filtra CP e CH */}
                             <button
                                 type="button"
                                 onClick={() => {
-                                    setShowMeetingModal(false);
-                                    setEditingMeetingId(null);
-                                    setMeetingData({
-                                        assunto: "",
-                                        inicio: "",
-                                        fim: "",
-                                        link: "",
-                                    });
-                                    setMeetingMembers([]);
+                                    const cpMembers = members
+                                        .filter((m) => m.sector === "CP" || m.sector === "CH")
+                                        .map((m) => m.id);
+                                    setMeetingMembers([
+                                        ...new Set([
+                                            ...meetingMembers,
+                                            ...cpMembers,
+                                        ]),
+                                    ]);
                                 }}
-                                className="flex-1 px-4 py-3 rounded-xl border border-[#cfdbe7] dark:border-slate-700 text-sm font-bold text-[#4c739a] hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-95"
+                                className="px-3 py-1.5 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 text-xs font-bold transition-colors"
                             >
-                                Cancelar
+                                Capacidade
                             </button>
+
+                            {/* BOTÃO ESPAÇO AÉREO: Filtra EA e CH */}
                             <button
-                                type="submit"
-                                form="meetingForm"
-                                className="flex-1 px-4 py-3 rounded-xl bg-primary hover:bg-primary/90 text-white text-sm font-bold shadow-lg shadow-primary/20 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
-                                disabled={loading}
+                                type="button"
+                                onClick={() => {
+                                    const eaMembers = members
+                                        .filter((m) => m.sector === "EA" || m.sector === "CH")
+                                        .map((m) => m.id);
+                                    setMeetingMembers([
+                                        ...new Set([
+                                            ...meetingMembers,
+                                            ...eaMembers,
+                                        ]),
+                                    ]);
+                                }}
+                                className="px-3 py-1.5 rounded bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-xs font-bold transition-colors"
                             >
-                                {loading
-                                    ? (
-                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white">
-                                        </div>
-                                    )
-                                    : (
-                                        "Agendar"
-                                    )}
+                                Espaço Aéreo
+                            </button>
+
+                            {/* BOTÃO SUBDIVISÃO ESTRATÉGICA: Mantém todos */}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setMeetingMembers(
+                                        members.map((m) => m.id)
+                                    );
+                                }}
+                                className="px-3 py-1.5 rounded bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 text-xs font-bold transition-colors"
+                            >
+                                Subdivisão Estratégica
                             </button>
                         </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border border-[#e7edf3] dark:border-slate-700 rounded-xl p-3 max-h-48 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-800/30">
+                            {members.map((member) => (
+                                <label
+                                    key={member.id}
+                                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-[#e7edf3] dark:hover:border-slate-700 transition-all cursor-pointer"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={meetingMembers.includes(member.id)}
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setMeetingMembers([
+                                                    ...meetingMembers,
+                                                    member.id,
+                                                ]);
+                                            } else {
+                                                setMeetingMembers(
+                                                    meetingMembers.filter(
+                                                        (id) => id !== member.id,
+                                                    ),
+                                                );
+                                            }
+                                        }}
+                                        className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
+                                    />
+                                    <div className="flex items-center gap-2">
+                                        <img
+                                            src={member.avatar ||
+                                                "https://ui-avatars.com/api/?name=" +
+                                                member.name}
+                                            alt={member.name}
+                                            className="w-6 h-6 rounded-full"
+                                        />
+                                        <span className="text-xs font-bold text-[#0d141b] dark:text-slate-300 line-clamp-1">
+                                            {member.abrev || member.rank}{" "}
+                                            {member.war_name || member.name}
+                                        </span>
+                                    </div>
+                                </label>
+                            ))}
+                        </div>
                     </div>
-                </div>
-            )}
+                </form>
+            </div>
+            <div className="flex p-4 gap-3 bg-[#f8fafc] dark:bg-slate-800/50 border-t border-[#e7edf3] dark:border-slate-800">
+                <button
+                    type="button"
+                    onClick={() => {
+                        setShowMeetingModal(false);
+                        setEditingMeetingId(null);
+                        setMeetingData({
+                            assunto: "",
+                            inicio: "",
+                            fim: "",
+                            link: "",
+                        });
+                        setMeetingMembers([]);
+                    }}
+                    className="flex-1 px-4 py-3 rounded-xl border border-[#cfdbe7] dark:border-slate-700 text-sm font-bold text-[#4c739a] hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-95"
+                >
+                    Cancelar
+                </button>
+                <button
+                    type="submit"
+                    form="meetingForm"
+                    className="flex-1 px-4 py-3 rounded-xl bg-primary hover:bg-primary/90 text-white text-sm font-bold shadow-lg shadow-primary/20 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                    disabled={loading}
+                >
+                    {loading ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white"></div>
+                    ) : (
+                        "Agendar"
+                    )}
+                </button>
+            </div>
         </div>
-    );
-};
+    </div>
+)}
 
 export default TaskForm;
