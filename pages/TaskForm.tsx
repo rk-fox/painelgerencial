@@ -75,6 +75,9 @@ const TaskForm: React.FC = () => {
     // Data
     const [tasks, setTasks] = useState<Task[]>([]);
     const [members, setMembers] = useState<Member[]>([]);
+    const [meetingAvailableMembers, setMeetingAvailableMembers] = useState<
+        Member[]
+    >([]);
     const [missions, setMissions] = useState<any[]>([]);
     const [unavailabilities, setUnavailabilities] = useState<any[]>([]);
     const [currentUser, setCurrentUser] = useState<any>(null);
@@ -114,6 +117,8 @@ const TaskForm: React.FC = () => {
 
     // Meeting List State
     const [meetings, setMeetings] = useState<any[]>([]);
+    const [upcomingMeetings, setUpcomingMeetings] = useState<any[]>([]);
+    const [isMeetingsExpanded, setIsMeetingsExpanded] = useState(false);
     const [editingMeetingId, setEditingMeetingId] = useState<string | null>(
         null,
     );
@@ -152,6 +157,7 @@ const TaskForm: React.FC = () => {
             const userObj = userJson ? JSON.parse(userJson) : null;
             if (!userObj) return;
 
+            // 1. Fetch all meetings for admin list
             const { data, error } = await supabase
                 .from("meeting")
                 .select("*")
@@ -159,6 +165,25 @@ const TaskForm: React.FC = () => {
                 .order("inicio", { ascending: false });
             if (error) throw error;
             setMeetings(data || []);
+
+            // 2. Fetch upcoming meetings for floating widget
+            const now = new Date().toISOString();
+            const { data: upcomingData, error: upcomingError } = await supabase
+                .from("meeting")
+                .select("*")
+                .contains("membros", [userObj.id])
+                .gte("fim", now)
+                .order("inicio", { ascending: true });
+            if (upcomingError) throw upcomingError;
+            setUpcomingMeetings(upcomingData || []);
+
+            const todayString = new Date().toLocaleDateString("en-CA");
+            const hasMeetingToday = upcomingData?.some((m: any) =>
+                m.inicio.startsWith(todayString)
+            );
+            if (hasMeetingToday) {
+                setIsMeetingsExpanded(true);
+            }
         } catch (err: any) {
             console.error("Error fetching meetings:", err.message);
         }
@@ -227,6 +252,31 @@ const TaskForm: React.FC = () => {
             });
 
             setMembers(sorted);
+
+            // Filter all members from CP, EA, and CH for meetings
+            let meetingFiltered = (data || []).filter((m) =>
+                m.sector === "CP" || m.sector === "EA" || m.sector === "CH"
+            );
+            const sortedMeeting = [...meetingFiltered].sort((a, b) => {
+                const pA = getRankPriority(a.rank, a.abrev);
+                const pB = getRankPriority(b.rank, b.abrev);
+                if (pA !== pB) return pA - pB;
+
+                const dateA = new Date(a.last_promotion_date || "9999-12-31")
+                    .getTime();
+                const dateB = new Date(b.last_promotion_date || "9999-12-31")
+                    .getTime();
+                if (dateA !== dateB) return dateA - dateB;
+
+                const guiaA = a.guia_antiguidade || 999999;
+                const guiaB = b.guia_antiguidade || 999999;
+                if (guiaA !== guiaB) return guiaA - guiaB;
+
+                const nameA = a.war_name || a.name || "";
+                const nameB = b.war_name || b.name || "";
+                return nameA.localeCompare(nameB);
+            });
+            setMeetingAvailableMembers(sortedMeeting);
         } catch (err) {
             console.error("Error fetching members:", err);
         }
@@ -1249,25 +1299,30 @@ const TaskForm: React.FC = () => {
                     Tarefas atribuídas ao efetivo nesse momento.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-    {members
-        .filter((m) => {
-            // 1. CH vê todos os ranks
-            if (currentUser?.sector === "CH") return true; 
+                    {members
+                        .filter((m) => {
+                            // 1. CH vê todos os ranks
+                            if (currentUser?.sector === "CH") return true;
 
-            const val = getRankPriority(m.rank, m.abrev);
-            
-            // Busca a prioridade do usuário logado atualmente
-            const currentUserVal = getRankPriority(currentUser?.rank, currentUser?.abrev);
+                            const val = getRankPriority(m.rank, m.abrev);
 
-            // 2. Se o usuário logado for nível 3, ele pode ver >= 3 - Tenente pra baixo
-            if (currentUserVal === 3) return val >= 3;
+                            // Busca a prioridade do usuário logado atualmente
+                            const currentUserVal = getRankPriority(
+                                currentUser?.rank,
+                                currentUser?.abrev,
+                            );
 
-            // 3. Os outros veem apenas >= 4 - Suboficial pra baixo
-            return val >= 4; 
-        })
-        .map((member) => {
-            const currentMission = getMemberMission(member.id);
-            const currentUnavail = getMemberUnavailToday(member.id);
+                            // 2. Se o usuário logado for nível <= 3, ele pode ver >= 3 - Tenente pra baixo
+                            if (currentUserVal <= 3) return val >= 2;
+
+                            // 3. Os outros (>= 4) veem apenas >= 4 - Suboficial pra baixo
+                            return val >= 4;
+                        })
+                        .map((member) => {
+                            const currentMission = getMemberMission(member.id);
+                            const currentUnavail = getMemberUnavailToday(
+                                member.id,
+                            );
                             const isUnavailable =
                                 member.status === "Indisponível" ||
                                 !!currentUnavail;
@@ -1411,12 +1466,13 @@ const TaskForm: React.FC = () => {
                                                                 <div
                                                                     key={task
                                                                         .id}
-                                                                    className={`text-xs truncate py-0.5 ${
+                                                                    className={`text-xs truncate py-0.5 cursor-help ${
                                                                         task.status ===
                                                                                 "iniciada"
                                                                             ? "font-bold text-primary"
                                                                             : "text-[#4c739a]"
                                                                     }`}
+                                                                    title={`${task.name}${task.description ? `\nDescrição: ${task.description}` : ""}${task.end_date ? `\nPrazo: ${new Date(task.end_date + "T12:00:00").toLocaleDateString("pt-BR")}` : ""}`}
                                                                 >
                                                                     {task
                                                                                 .status ===
@@ -1532,7 +1588,7 @@ const TaskForm: React.FC = () => {
                             { id: "semanal", label: "Semanal" },
                             { id: "quinzenal", label: "Quinzenal" },
                             { id: "mensal", label: "Mensal" },
-                            { id: 'temporada', label: 'Temporada' },
+                            { id: "temporada", label: "Temporada" },
                             { id: "pontual", label: "Pontual" },
                         ].map((period) => (
                             <button
@@ -1562,6 +1618,24 @@ const TaskForm: React.FC = () => {
 
                     <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden md:block">
                     </div>
+
+                    {/* Reset Button */}
+                    <button
+                        onClick={() => {
+                            setFilterSpecialties([]);
+                            setFilterPeriodicities([]);
+                            setFilterStatuses([]);
+                            setSelectedYear(new Date().getFullYear());
+                            setCurrentPage(1);
+                            setSearchTerm("");
+                        }}
+                        className="px-4 py-1.5 rounded-full text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-colors shadow-md shadow-primary/20 flex items-center gap-1 whitespace-nowrap"
+                    >
+                        Todas
+                        <span className="material-symbols-outlined text-[14px]">
+                            close
+                        </span>
+                    </button>
 
                     {/* Statuses */}
                     <div className="flex items-center gap-2">
@@ -1599,24 +1673,6 @@ const TaskForm: React.FC = () => {
                     <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden md:block">
                     </div>
 
-                    {/* Reset Button */}
-                    <button
-                        onClick={() => {
-                            setFilterSpecialties([]);
-                            setFilterPeriodicities([]);
-                            setFilterStatuses([]);
-                            setSelectedYear(new Date().getFullYear());
-                            setCurrentPage(1);
-                            setSearchTerm("");
-                        }}
-                        className="px-4 py-1.5 rounded-full text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-colors shadow-md shadow-primary/20 flex items-center gap-1 whitespace-nowrap"
-                    >
-                        Todas
-                        <span className="material-symbols-outlined text-[14px]">
-                            close
-                        </span>
-                    </button>
-
                     {/* Year Select */}
                     <div className="flex items-center gap-2">
                         <span className="text-[10px] font-black text-[#4c739a] uppercase tracking-wider">
@@ -1628,7 +1684,7 @@ const TaskForm: React.FC = () => {
                                 setSelectedYear(Number(e.target.value));
                                 setCurrentPage(1);
                             }}
-                            className="bg-white dark:bg-slate-800 border-none rounded-lg px-2 py-1 text-xs font-bold text-[#0d141b] dark:text-white focus:outline-none ring-1 ring-slate-200 dark:ring-slate-700"
+                            className="bg-white dark:bg-slate-800 border-none w-[70px] rounded-lg px-2 py-1 text-xs font-bold text-[#0d141b] dark:text-white focus:outline-none ring-1 ring-slate-200 dark:ring-slate-700"
                         >
                             {[2022, 2023, 2024, 2025, 2026].map((year) => (
                                 <option key={year} value={year}>{year}</option>
@@ -2246,259 +2302,375 @@ const TaskForm: React.FC = () => {
             )}
 
             {/* Meeting Modal */}
-{showMeetingModal && (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-[#e7edf3] dark:border-slate-800 w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-[#e7edf3] dark:border-slate-800 flex justify-between items-center bg-[#f8fafc] dark:bg-slate-800/50">
-                <h3 className="text-xl font-bold text-[#0d141b] dark:text-white flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary">
-                        event
-                    </span>
-                    Agendar Reunião
-                </h3>
-                <button
-                    onClick={() => {
-                        setShowMeetingModal(false);
-                        setEditingMeetingId(null);
-                        setMeetingData({
-                            assunto: "",
-                            inicio: "",
-                            fim: "",
-                            link: "",
-                        });
-                        setMeetingMembers([]);
-                    }}
-                    className="p-1 text-[#4c739a] hover:text-[#0d141b] dark:hover:text-white transition-colors"
-                >
-                    <span className="material-symbols-outlined">
-                        close
-                    </span>
-                </button>
-            </div>
-            <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
-                <form
-                    id="meetingForm"
-                    onSubmit={handleScheduleMeeting}
-                    className="flex flex-col gap-4"
-                >
-                    <div className="flex flex-col gap-2">
-                        <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
-                            Assunto
-                        </label>
-                        <input
-                            required
-                            type="text"
-                            value={meetingData.assunto}
-                            onChange={(e) =>
-                                setMeetingData({
-                                    ...meetingData,
-                                    assunto: e.target.value,
-                                })
-                            }
-                            className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
-                            placeholder="Ex: Reunião de Alinhamento"
-                        />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="flex flex-col gap-2">
-                            <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
-                                Início
-                            </label>
-                            <input
-                                required
-                                type="datetime-local"
-                                value={meetingData.inicio}
-                                onChange={(e) =>
+            {showMeetingModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-[#e7edf3] dark:border-slate-800 w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+                        <div className="p-6 border-b border-[#e7edf3] dark:border-slate-800 flex justify-between items-center bg-[#f8fafc] dark:bg-slate-800/50">
+                            <h3 className="text-xl font-bold text-[#0d141b] dark:text-white flex items-center gap-2">
+                                <span className="material-symbols-outlined text-primary">
+                                    event
+                                </span>
+                                Agendar Reunião
+                            </h3>
+                            <button
+                                onClick={() => {
+                                    setShowMeetingModal(false);
+                                    setEditingMeetingId(null);
                                     setMeetingData({
-                                        ...meetingData,
-                                        inicio: e.target.value,
-                                    })
-                                }
-                                className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
-                            />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                            <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
-                                Fim
-                            </label>
-                            <input
-                                required
-                                type="datetime-local"
-                                value={meetingData.fim}
-                                onChange={(e) =>
-                                    setMeetingData({
-                                        ...meetingData,
-                                        fim: e.target.value,
-                                    })
-                                }
-                                className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
-                            />
-                        </div>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
-                            Link da Reunião (Opcional)
-                        </label>
-                        <input
-                            type="url"
-                            value={meetingData.link}
-                            onChange={(e) =>
-                                setMeetingData({
-                                    ...meetingData,
-                                    link: e.target.value,
-                                })
-                            }
-                            className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
-                            placeholder="Ex: https://meet.google.com/abc-defg-hij"
-                        />
-                    </div>
-
-                    <div className="flex flex-col gap-2 mt-2">
-                        <div className="flex items-center justify-between">
-                            <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
-                                Membros Convocados
-                            </label>
-                            <span className="text-xs text-primary font-bold">
-                                {meetingMembers.length}{" "}
-                                selecionado(s)
-                            </span>
-                        </div>
-
-                        {/* O filtro do currentUser foi removido daqui, tornando os botões públicos */}
-                        <div className="flex flex-wrap gap-2 mb-2">
-                            {/* BOTÃO CAPACIDADE: Filtra CP e CH */}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const cpMembers = members
-                                        .filter((m) => m.sector === "CP" || m.sector === "CH")
-                                        .map((m) => m.id);
-                                    setMeetingMembers([
-                                        ...new Set([
-                                            ...meetingMembers,
-                                            ...cpMembers,
-                                        ]),
-                                    ]);
+                                        assunto: "",
+                                        inicio: "",
+                                        fim: "",
+                                        link: "",
+                                    });
+                                    setMeetingMembers([]);
                                 }}
-                                className="px-3 py-1.5 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 text-xs font-bold transition-colors"
+                                className="p-1 text-[#4c739a] hover:text-[#0d141b] dark:hover:text-white transition-colors"
                             >
-                                Capacidade
-                            </button>
-
-                            {/* BOTÃO ESPAÇO AÉREO: Filtra EA e CH */}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const eaMembers = members
-                                        .filter((m) => m.sector === "EA" || m.sector === "CH")
-                                        .map((m) => m.id);
-                                    setMeetingMembers([
-                                        ...new Set([
-                                            ...meetingMembers,
-                                            ...eaMembers,
-                                        ]),
-                                    ]);
-                                }}
-                                className="px-3 py-1.5 rounded bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-xs font-bold transition-colors"
-                            >
-                                Espaço Aéreo
-                            </button>
-
-                            {/* BOTÃO SUBDIVISÃO ESTRATÉGICA: Mantém todos */}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setMeetingMembers(
-                                        members.map((m) => m.id)
-                                    );
-                                }}
-                                className="px-3 py-1.5 rounded bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 text-xs font-bold transition-colors"
-                            >
-                                Subdivisão Estratégica
+                                <span className="material-symbols-outlined">
+                                    close
+                                </span>
                             </button>
                         </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border border-[#e7edf3] dark:border-slate-700 rounded-xl p-3 max-h-48 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-800/30">
-                            {members.map((member) => (
-                                <label
-                                    key={member.id}
-                                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-[#e7edf3] dark:hover:border-slate-700 transition-all cursor-pointer"
-                                >
+                        <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+                            <form
+                                id="meetingForm"
+                                onSubmit={handleScheduleMeeting}
+                                className="flex flex-col gap-4"
+                            >
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                        Assunto
+                                    </label>
                                     <input
-                                        type="checkbox"
-                                        checked={meetingMembers.includes(member.id)}
-                                        onChange={(e) => {
-                                            if (e.target.checked) {
-                                                setMeetingMembers([
-                                                    ...meetingMembers,
-                                                    member.id,
-                                                ]);
-                                            } else {
-                                                setMeetingMembers(
-                                                    meetingMembers.filter(
-                                                        (id) => id !== member.id,
-                                                    ),
-                                                );
-                                            }
-                                        }}
-                                        className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
+                                        required
+                                        type="text"
+                                        value={meetingData.assunto}
+                                        onChange={(e) =>
+                                            setMeetingData({
+                                                ...meetingData,
+                                                assunto: e.target.value,
+                                            })}
+                                        className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
+                                        placeholder="Ex: Reunião de Alinhamento"
                                     />
-                                    <div className="flex items-center gap-2">
-                                        <img
-                                            src={member.avatar ||
-                                                "https://ui-avatars.com/api/?name=" +
-                                                member.name}
-                                            alt={member.name}
-                                            className="w-6 h-6 rounded-full"
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                            Início
+                                        </label>
+                                        <input
+                                            required
+                                            type="datetime-local"
+                                            value={meetingData.inicio}
+                                            onChange={(e) =>
+                                                setMeetingData({
+                                                    ...meetingData,
+                                                    inicio: e.target.value,
+                                                })}
+                                            className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
                                         />
-                                        <span className="text-xs font-bold text-[#0d141b] dark:text-slate-300 line-clamp-1">
-                                            {member.abrev || member.rank}{" "}
-                                            {member.war_name || member.name}
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                            Fim
+                                        </label>
+                                        <input
+                                            required
+                                            type="datetime-local"
+                                            value={meetingData.fim}
+                                            onChange={(e) =>
+                                                setMeetingData({
+                                                    ...meetingData,
+                                                    fim: e.target.value,
+                                                })}
+                                            className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                        Link da Reunião (Opcional)
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={meetingData.link}
+                                        onChange={(e) =>
+                                            setMeetingData({
+                                                ...meetingData,
+                                                link: e.target.value,
+                                            })}
+                                        className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
+                                        placeholder="Ex: https://meet.google.com/abc-defg-hij"
+                                    />
+                                </div>
+
+                                <div className="flex flex-col gap-2 mt-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                            Membros Convocados
+                                        </label>
+                                        <span className="text-xs text-primary font-bold">
+                                            {meetingMembers.length}{" "}
+                                            selecionado(s)
                                         </span>
                                     </div>
-                                </label>
-                            ))}
+
+                                    {/* O filtro do currentUser foi removido daqui, tornando os botões públicos */}
+                                    <div className="flex flex-wrap gap-2 mb-2">
+                                        {/* BOTÃO CAPACIDADE: Filtra CP e CH */}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const cpMembers =
+                                                    meetingAvailableMembers
+                                                        .filter((m) =>
+                                                            m.sector === "CP" ||
+                                                            m.sector === "CH"
+                                                        )
+                                                        .map((m) => m.id);
+                                                setMeetingMembers([
+                                                    ...new Set([
+                                                        ...meetingMembers,
+                                                        ...cpMembers,
+                                                    ]),
+                                                ]);
+                                            }}
+                                            className="px-3 py-1.5 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 text-xs font-bold transition-colors"
+                                        >
+                                            Capacidade
+                                        </button>
+
+                                        {/* BOTÃO ESPAÇO AÉREO: Filtra EA e CH */}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const eaMembers =
+                                                    meetingAvailableMembers
+                                                        .filter((m) =>
+                                                            m.sector === "EA" ||
+                                                            m.sector === "CH"
+                                                        )
+                                                        .map((m) => m.id);
+                                                setMeetingMembers([
+                                                    ...new Set([
+                                                        ...meetingMembers,
+                                                        ...eaMembers,
+                                                    ]),
+                                                ]);
+                                            }}
+                                            className="px-3 py-1.5 rounded bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-xs font-bold transition-colors"
+                                        >
+                                            Espaço Aéreo
+                                        </button>
+
+                                        {/* BOTÃO SUBDIVISÃO ESTRATÉGICA: Mantém todos */}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setMeetingMembers(
+                                                    meetingAvailableMembers.map(
+                                                        (m) => m.id,
+                                                    ),
+                                                );
+                                            }}
+                                            className="px-3 py-1.5 rounded bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 text-xs font-bold transition-colors"
+                                        >
+                                            Subdivisão Estratégica
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border border-[#e7edf3] dark:border-slate-700 rounded-xl p-3 max-h-48 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-800/30">
+                                        {meetingAvailableMembers.map((
+                                            member,
+                                        ) => (
+                                            <label
+                                                key={member.id}
+                                                className="flex items-center gap-3 p-2 rounded-lg hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-[#e7edf3] dark:hover:border-slate-700 transition-all cursor-pointer"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={meetingMembers
+                                                        .includes(member.id)}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setMeetingMembers([
+                                                                ...meetingMembers,
+                                                                member.id,
+                                                            ]);
+                                                        } else {
+                                                            setMeetingMembers(
+                                                                meetingMembers
+                                                                    .filter(
+                                                                        (id) =>
+                                                                            id !==
+                                                                                member
+                                                                                    .id,
+                                                                    ),
+                                                            );
+                                                        }
+                                                    }}
+                                                    className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
+                                                />
+                                                <div className="flex items-center gap-2">
+                                                    <img
+                                                        src={member.avatar ||
+                                                            "https://ui-avatars.com/api/?name=" +
+                                                                member.name}
+                                                        alt={member.name}
+                                                        className="w-6 h-6 rounded-full"
+                                                    />
+                                                    <span className="text-xs font-bold text-[#0d141b] dark:text-slate-300 line-clamp-1">
+                                                        {member.abrev ||
+                                                            member.rank}{" "}
+                                                        {member.war_name ||
+                                                            member.name}
+                                                    </span>
+                                                </div>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                        <div className="flex p-4 gap-3 bg-[#f8fafc] dark:bg-slate-800/50 border-t border-[#e7edf3] dark:border-slate-800">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowMeetingModal(false);
+                                    setEditingMeetingId(null);
+                                    setMeetingData({
+                                        assunto: "",
+                                        inicio: "",
+                                        fim: "",
+                                        link: "",
+                                    });
+                                    setMeetingMembers([]);
+                                }}
+                                className="flex-1 px-4 py-3 rounded-xl border border-[#cfdbe7] dark:border-slate-700 text-sm font-bold text-[#4c739a] hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-95"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="submit"
+                                form="meetingForm"
+                                className="flex-1 px-4 py-3 rounded-xl bg-primary hover:bg-primary/90 text-white text-sm font-bold shadow-lg shadow-primary/20 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                                disabled={loading}
+                            >
+                                {loading
+                                    ? (
+                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white">
+                                        </div>
+                                    )
+                                    : (
+                                        "Agendar"
+                                    )}
+                            </button>
                         </div>
                     </div>
-                </form>
-            </div>
-            <div className="flex p-4 gap-3 bg-[#f8fafc] dark:bg-slate-800/50 border-t border-[#e7edf3] dark:border-slate-800">
-                <button
-                    type="button"
-                    onClick={() => {
-                        setShowMeetingModal(false);
-                        setEditingMeetingId(null);
-                        setMeetingData({
-                            assunto: "",
-                            inicio: "",
-                            fim: "",
-                            link: "",
-                        });
-                        setMeetingMembers([]);
-                    }}
-                    className="flex-1 px-4 py-3 rounded-xl border border-[#cfdbe7] dark:border-slate-700 text-sm font-bold text-[#4c739a] hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-95"
-                >
-                    Cancelar
-                </button>
-                <button
-                    type="submit"
-                    form="meetingForm"
-                    className="flex-1 px-4 py-3 rounded-xl bg-primary hover:bg-primary/90 text-white text-sm font-bold shadow-lg shadow-primary/20 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
-                    disabled={loading}
-                >
-                    {loading ? (
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white"></div>
-                    ) : (
-                        "Agendar"
-                    )}
-                </button>
-            </div>
-        </div>
-    </div>
-)}
+                </div>
+            )}
 
-    </div> 
-  );       
-};         
+            {/* Floating Meetings Widget for CH Sector */}
+            {currentUser?.sector === "CH" && upcomingMeetings.length > 0 && (
+                <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4 animate-in fade-in slide-in-from-bottom-10 duration-500">
+                    {/* Expanded Panel */}
+                    {isMeetingsExpanded && (
+                        <div className="bg-[#f8fafc] dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 p-4 rounded-2xl shadow-2xl w-80 max-h-[60vh] overflow-y-auto custom-scrollbar flex flex-col gap-3 relative animate-in zoom-in-95 duration-200">
+                            <div className="flex items-center justify-between mb-2">
+                                <h3 className="font-extrabold text-[#0d141b] dark:text-white flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-yellow-500">
+                                        event
+                                    </span>
+                                    Reuniões Agendadas
+                                </h3>
+                                <button
+                                    onClick={() => setIsMeetingsExpanded(false)}
+                                    className="p-1 rounded-full text-[#4c739a] hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                                >
+                                    <span className="material-symbols-outlined text-[18px]">
+                                        close
+                                    </span>
+                                </button>
+                            </div>
+
+                            {upcomingMeetings.map((m) => (
+                                <div
+                                    key={m.id}
+                                    onClick={() =>
+                                        m.link
+                                            ? window.open(m.link, "_blank")
+                                            : undefined}
+                                    className={`bg-yellow-200 dark:bg-yellow-900/60 text-yellow-900 dark:text-yellow-100 p-4 rounded-xl shadow-md transition-transform relative ${
+                                        m.link
+                                            ? "cursor-pointer hover:shadow-lg hover:scale-105"
+                                            : ""
+                                    }`}
+                                >
+                                    <div className="absolute top-2 right-2 w-3 h-3 bg-red-400 dark:bg-red-500 rounded-full shadow-sm opacity-80">
+                                    </div>
+                                    <h4 className="font-bold text-sm leading-tight mb-2 pr-4 break-words">
+                                        {m.assunto}
+                                    </h4>
+                                    <div className="flex flex-col gap-1 text-[11px] font-semibold opacity-80">
+                                        <span className="flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-[14px]">
+                                                event
+                                            </span>{" "}
+                                            Início:
+                                            {new Date(m.inicio).toLocaleString(
+                                                "pt-BR",
+                                                {
+                                                    day: "2-digit",
+                                                    month: "2-digit",
+                                                    hour: "2-digit",
+                                                    minute: "2-digit",
+                                                },
+                                            )}
+                                        </span>
+                                        <span className="flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-[14px]">
+                                                event_busy
+                                            </span>
+                                            Fim:
+                                            {new Date(m.fim).toLocaleString(
+                                                "pt-BR",
+                                                {
+                                                    day: "2-digit",
+                                                    month: "2-digit",
+                                                    hour: "2-digit",
+                                                    minute: "2-digit",
+                                                },
+                                            )}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Floating Action Button */}
+                    <button
+                        onClick={() =>
+                            setIsMeetingsExpanded(!isMeetingsExpanded)}
+                        className="w-14 h-14 bg-primary hover:bg-primary/90 text-white rounded-full shadow-xl flex items-center justify-center transition-transform active:scale-95 hover:scale-105 relative"
+                        title="Ver reuniões"
+                    >
+                        <span className="material-symbols-outlined text-[28px]">
+                            {isMeetingsExpanded
+                                ? "keyboard_arrow_down"
+                                : "calendar_month"}
+                        </span>
+                        {!isMeetingsExpanded && upcomingMeetings.length > 0 && (
+                            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center shadow-md animate-bounce">
+                                {upcomingMeetings.length}
+                            </span>
+                        )}
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
 
 export default TaskForm;

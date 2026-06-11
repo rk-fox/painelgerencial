@@ -107,11 +107,17 @@ const Layout: React.FC = () => {
     const lastLogin = user.last_login || user.last_sign_in_at;
 
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('tasks')
         .select('*')
         .gt('created_at', lastLogin)
         .contains('specialties', [user.specialty]);
+
+      if (user.sector && user.sector !== 'CH') {
+        query = query.eq('sector', user.sector);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       if (data) {

@@ -39,6 +39,15 @@ interface Mission {
     sector?: string;
 }
 
+interface Annotation {
+    id: string;
+    member_id: string;
+    date: string;
+    start_time: string;
+    end_time: string;
+    annotation: string;
+}
+
 // === CONSTANTS ===
 
 const getRankPriority = (
@@ -212,6 +221,155 @@ const LEGEND_ITEMS: LegendItem[] = [
     },
 ];
 
+// === ANNOTATION MODAL ===
+
+const AnnotationModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    cellInfo: { memberId: string; dateStr: string; annotation?: Annotation };
+    onSave: (data: Partial<Annotation>) => Promise<void>;
+    onDelete: (id: string) => Promise<void>;
+}> = ({ isOpen, onClose, cellInfo, onSave, onDelete }) => {
+    const [startTime, setStartTime] = useState(
+        cellInfo.annotation?.start_time || "",
+    );
+    const [endTime, setEndTime] = useState(cellInfo.annotation?.end_time || "");
+    const [text, setText] = useState(cellInfo.annotation?.annotation || "");
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        if (isOpen) {
+            setStartTime(cellInfo.annotation?.start_time || "");
+            setEndTime(cellInfo.annotation?.end_time || "");
+            setText(cellInfo.annotation?.annotation || "");
+        }
+    }, [isOpen, cellInfo]);
+
+    if (!isOpen) return null;
+
+    const handleSave = async () => {
+        setLoading(true);
+        try {
+            await onSave({
+                start_time: startTime,
+                end_time: endTime,
+                annotation: text,
+            });
+            onClose();
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!cellInfo.annotation) return;
+        if (!window.confirm("Deseja realmente excluir esta anotação?")) return;
+        setLoading(true);
+        try {
+            await onDelete(cellInfo.annotation.id);
+            onClose();
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
+                    <h3 className="font-black text-slate-800 dark:text-slate-100 text-lg">
+                        Anotação ({cellInfo.dateStr.split("-").reverse().join(
+                            "/",
+                        )})
+                    </h3>
+                    <button
+                        onClick={onClose}
+                        className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                    >
+                        <span className="material-symbols-outlined text-[20px]">
+                            close
+                        </span>
+                    </button>
+                </div>
+                <div className="p-6 space-y-4">
+                    <div className="flex gap-4">
+                        <div className="flex-1 space-y-1.5">
+                            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                                Início
+                            </label>
+                            <input
+                                type="time"
+                                value={startTime}
+                                onChange={(e) => setStartTime(e.target.value)}
+                                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-primary focus:border-transparent transition-shadow outline-none"
+                            />
+                        </div>
+                        <div className="flex-1 space-y-1.5">
+                            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                                Fim
+                            </label>
+                            <input
+                                type="time"
+                                value={endTime}
+                                onChange={(e) => setEndTime(e.target.value)}
+                                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-primary focus:border-transparent transition-shadow outline-none"
+                            />
+                        </div>
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            Anotação
+                        </label>
+                        <textarea
+                            value={text}
+                            onChange={(e) => setText(e.target.value)}
+                            rows={3}
+                            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-primary focus:border-transparent transition-shadow outline-none resize-none"
+                            placeholder="Digite sua anotação livre..."
+                        />
+                    </div>
+                </div>
+                <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 flex justify-between">
+                    {cellInfo.annotation
+                        ? (
+                            <button
+                                disabled={loading}
+                                onClick={handleDelete}
+                                className="px-4 py-2 text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg transition-colors"
+                            >
+                                Excluir
+                            </button>
+                        )
+                        : <div></div>}
+                    <div className="flex gap-2">
+                        <button
+                            disabled={loading}
+                            onClick={onClose}
+                            className="px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            disabled={loading || !text.trim()}
+                            onClick={handleSave}
+                            className="px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary/90 rounded-lg shadow-sm transition-colors disabled:opacity-50 flex items-center gap-2"
+                        >
+                            {loading && (
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            )}
+                            Salvar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // === COMPONENT ===
 
 const AnnualUnavailability: React.FC = () => {
@@ -225,6 +383,11 @@ const AnnualUnavailability: React.FC = () => {
         [],
     );
     const [missions, setMissions] = useState<Mission[]>([]);
+    const [annotations, setAnnotations] = useState<Annotation[]>([]);
+    const [isAnnotationModalOpen, setIsAnnotationModalOpen] = useState(false);
+    const [selectedCell, setSelectedCell] = useState<
+        { memberId: string; dateStr: string; annotation?: Annotation } | null
+    >(null);
     const [loading, setLoading] = useState(true);
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [selectedSectorFilter, setSelectedSectorFilter] = useState<
@@ -273,21 +436,29 @@ const AnnualUnavailability: React.FC = () => {
                 .lte("data_inicio", endOfYear)
                 .gte("data_fim", startOfYear);
 
+            let annotationsQuery = supabase.from("annotations")
+                .select("*")
+                .lte("date", endOfYear)
+                .gte("date", startOfYear);
+
             if (sector && (sector === "CP" || sector === "EA")) {
                 membersQuery = membersQuery.eq("sector", sector);
                 unavailQuery = unavailQuery.eq("sector", sector);
                 missionsQuery = missionsQuery.eq("sector", sector);
             }
 
-            const [membersRes, unavailRes, missionsRes] = await Promise.all([
-                membersQuery,
-                unavailQuery,
-                missionsQuery,
-            ]);
+            const [membersRes, unavailRes, missionsRes, annotationsRes] =
+                await Promise.all([
+                    membersQuery,
+                    unavailQuery,
+                    missionsQuery,
+                    annotationsQuery,
+                ]);
 
             if (membersRes.error) throw membersRes.error;
             if (unavailRes.error) throw unavailRes.error;
             if (missionsRes.error) throw missionsRes.error;
+            if (annotationsRes.error) throw annotationsRes.error;
 
             // Sort members by seniority (same as Login)
             const sortedMembers = [...(membersRes.data || [])].sort((a, b) => {
@@ -312,6 +483,7 @@ const AnnualUnavailability: React.FC = () => {
             setMembers(sortedMembers);
             setUnavailabilities(unavailRes.data || []);
             setMissions(missionsRes.data || []);
+            setAnnotations(annotationsRes.data || []);
         } catch (err: any) {
             console.error("Error fetching annual data:", err.message);
         } finally {
@@ -353,12 +525,15 @@ const AnnualUnavailability: React.FC = () => {
     }, [missions, currentUser, selectedSectorFilter]);
 
     // === PRE-COMPUTED CELL DATA MAP ===
-    // Structure: memberId -> dateStr -> { type, details }
+    // Structure: memberId -> dateStr -> { type, details, annotation }
 
     const cellDataMap = useMemo(() => {
         const map: Record<
             string,
-            Record<string, { type: string; details?: string }>
+            Record<
+                string,
+                { type?: string; details?: string; annotation?: Annotation }
+            >
         > = {};
         const yearStart = new Date(selectedYear, 0, 1, 12, 0, 0);
         const yearEnd = new Date(selectedYear, 11, 31, 12, 0, 0);
@@ -381,12 +556,9 @@ const AnnualUnavailability: React.FC = () => {
                     String(d.getMonth() + 1).padStart(2, "0")
                 }-${String(d.getDate()).padStart(2, "0")}`;
                 if (!map[u.member]) map[u.member] = {};
-                if (!map[u.member][ds]) {
-                    map[u.member][ds] = {
-                        type: u.type,
-                        details: u.detalhes || undefined,
-                    };
-                }
+                if (!map[u.member][ds]) map[u.member][ds] = {};
+                map[u.member][ds].type = u.type;
+                map[u.member][ds].details = u.detalhes || undefined;
             }
         });
 
@@ -408,13 +580,62 @@ const AnnualUnavailability: React.FC = () => {
                 }-${String(d.getDate()).padStart(2, "0")}`;
                 m.equipe!.forEach((memberId) => {
                     if (!map[memberId]) map[memberId] = {};
-                    map[memberId][ds] = { type: "Missão", details: m.nome };
+                    if (!map[memberId][ds]) map[memberId][ds] = {};
+                    map[memberId][ds].type = "Missão";
+                    map[memberId][ds].details = m.nome;
                 });
             }
         });
 
+        // 3. Annotations
+        annotations.forEach((a) => {
+            if (!map[a.member_id]) map[a.member_id] = {};
+            if (!map[a.member_id][a.date]) map[a.member_id][a.date] = {};
+            map[a.member_id][a.date].annotation = a;
+        });
+
         return map;
-    }, [filteredUnavailabilities, filteredMissions, selectedYear]);
+    }, [filteredUnavailabilities, filteredMissions, annotations, selectedYear]);
+
+    // === CELL CLICK ===
+    const handleCellClick = (
+        memberId: string,
+        dateStr: string,
+        annotation?: Annotation,
+    ) => {
+        setSelectedCell({ memberId, dateStr, annotation });
+        setIsAnnotationModalOpen(true);
+    };
+
+    const handleSaveAnnotation = async (data: Partial<Annotation>) => {
+        if (!selectedCell) return;
+        const payload = {
+            member_id: selectedCell.memberId,
+            date: selectedCell.dateStr,
+            start_time: data.start_time || null,
+            end_time: data.end_time || null,
+            annotation: data.annotation,
+        };
+
+        if (selectedCell.annotation) {
+            const { error } = await supabase.from("annotations").update(payload)
+                .eq("id", selectedCell.annotation.id);
+            if (!error) fetchData();
+        } else {
+            const { error } = await supabase.from("annotations").insert([
+                payload,
+            ]);
+            if (!error) fetchData();
+        }
+    };
+
+    const handleDeleteAnnotation = async (id: string) => {
+        const { error } = await supabase.from("annotations").delete().eq(
+            "id",
+            id,
+        );
+        if (!error) fetchData();
+    };
 
     // === FILTER LOGIC ===
 
@@ -714,16 +935,55 @@ const AnnualUnavailability: React.FC = () => {
                                                             cellDataMap[
                                                                 member.id
                                                             ]?.[d.dateStr];
-                                                        const visible = cell &&
+                                                        const visible =
+                                                            cell?.type &&
                                                             isTypeVisible(
                                                                 cell.type,
                                                             );
+                                                        const hasAnnotation =
+                                                            !!cell?.annotation;
 
-                                                        if (!visible) {
+                                                        let titleParts = [];
+                                                        if (
+                                                            visible &&
+                                                            cell?.type
+                                                        ) {
+                                                            titleParts.push(
+                                                                `${cell.type}${
+                                                                    cell.details
+                                                                        ? ": " +
+                                                                            cell.details
+                                                                        : ""
+                                                                }`,
+                                                            );
+                                                        }
+                                                        if (hasAnnotation) {
+                                                            titleParts.push(
+                                                                `${
+                                                                    cell.annotation!
+                                                                        .start_time
+                                                                } - ${
+                                                                    cell.annotation!
+                                                                        .end_time
+                                                                }\n${
+                                                                    cell.annotation!
+                                                                        .annotation
+                                                                }`,
+                                                            );
+                                                        }
+                                                        const titleStr =
+                                                            titleParts.join(
+                                                                "\n\n",
+                                                            );
+
+                                                        if (
+                                                            !visible &&
+                                                            !hasAnnotation
+                                                        ) {
                                                             return (
                                                                 <td
                                                                     key={d.day}
-                                                                    className={`border border-slate-200 dark:border-slate-700/60 px-0 py-1 text-center ${
+                                                                    className={`border border-slate-200 dark:border-slate-700/60 px-0 py-1 text-center cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors ${
                                                                         d.isWeekend
                                                                             ? "bg-slate-50 dark:bg-slate-800/40"
                                                                             : ""
@@ -734,63 +994,92 @@ const AnnualUnavailability: React.FC = () => {
                                                                         width:
                                                                             "30px",
                                                                     }}
+                                                                    onClick={() =>
+                                                                        handleCellClick(
+                                                                            member
+                                                                                .id,
+                                                                            d.dateStr,
+                                                                        )}
                                                                 />
                                                             );
                                                         }
 
-                                                        const config =
-                                                            TYPE_CONFIG[
-                                                                cell!.type
-                                                            ];
-                                                        if (!config) {
+                                                        if (
+                                                            !visible &&
+                                                            hasAnnotation
+                                                        ) {
                                                             return (
                                                                 <td
                                                                     key={d.day}
-                                                                    className="border border-slate-200 dark:border-slate-700/60 px-0 py-1 text-center"
+                                                                    className={`border border-slate-200 dark:border-slate-700/60 p-0 text-center cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors ${
+                                                                        d.isWeekend
+                                                                            ? "bg-slate-50 dark:bg-slate-800/40"
+                                                                            : ""
+                                                                    }`}
                                                                     style={{
                                                                         minWidth:
                                                                             "30px",
                                                                         width:
                                                                             "30px",
                                                                     }}
-                                                                />
+                                                                    title={titleStr}
+                                                                    onClick={() =>
+                                                                        handleCellClick(
+                                                                            member
+                                                                                .id,
+                                                                            d.dateStr,
+                                                                            cell?.annotation,
+                                                                        )}
+                                                                >
+                                                                    <div className="flex items-center justify-center w-full h-full font-black text-lg text-primary py-1 leading-none">
+                                                                        *
+                                                                    </div>
+                                                                </td>
                                                             );
                                                         }
+
+                                                        const config =
+                                                            TYPE_CONFIG[
+                                                                cell!.type!
+                                                            ];
 
                                                         return (
                                                             <td
                                                                 key={d.day}
-                                                                className="border border-slate-200 dark:border-slate-700/60 p-0 text-center"
+                                                                className="border border-slate-200 dark:border-slate-700/60 p-0 text-center cursor-pointer hover:opacity-80 transition-opacity relative"
                                                                 style={{
                                                                     minWidth:
                                                                         "30px",
                                                                     width:
                                                                         "30px",
                                                                 }}
-                                                                title={`${
-                                                                    cell!.type
-                                                                }${
-                                                                    cell!
-                                                                            .details
-                                                                        ? ": " +
-                                                                            cell!
-                                                                                .details
-                                                                        : ""
-                                                                }`}
+                                                                title={titleStr}
+                                                                onClick={() =>
+                                                                    handleCellClick(
+                                                                        member
+                                                                            .id,
+                                                                        d.dateStr,
+                                                                        cell?.annotation,
+                                                                    )}
                                                             >
+                                                                {hasAnnotation &&
+                                                                    (
+                                                                        <div className="absolute top-0 right-0 w-0 h-0 border-t-[8px] border-l-[8px] border-t-red-500 border-l-transparent z-10">
+                                                                        </div>
+                                                                    )}
                                                                 <div
                                                                     className="flex items-center justify-center w-full h-full font-black text-[10px] py-1 leading-none"
                                                                     style={{
                                                                         backgroundColor:
                                                                             config
-                                                                                .color,
+                                                                                ?.color,
                                                                         color:
                                                                             config
-                                                                                .textColor,
+                                                                                ?.textColor,
                                                                     }}
                                                                 >
                                                                     {config
-                                                                        .abbrev}
+                                                                        ?.abbrev}
                                                                 </div>
                                                             </td>
                                                         );
@@ -855,10 +1144,9 @@ const AnnualUnavailability: React.FC = () => {
                         {/* Quick actions */}
                         <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 flex gap-2">
                             <button
-                                onClick={() =>
-                                    setActiveFilters(
-                                        new Set(LEGEND_ITEMS.map((l) => l.key)),
-                                    )}
+                                onClick={() => setActiveFilters(
+                                    new Set(LEGEND_ITEMS.map((l) => l.key)),
+                                )}
                                 className="flex-1 text-[9px] font-black uppercase tracking-wider text-primary hover:bg-primary/10 rounded-lg py-1.5 transition-colors"
                             >
                                 Mostrar Todos
@@ -879,6 +1167,17 @@ const AnnualUnavailability: React.FC = () => {
                 <MemberProfileModal
                     member={selectedMember}
                     onClose={() => setSelectedMember(null)}
+                />
+            )}
+
+            {/* ===== ANNOTATION MODAL ===== */}
+            {isAnnotationModalOpen && selectedCell && (
+                <AnnotationModal
+                    isOpen={isAnnotationModalOpen}
+                    onClose={() => setIsAnnotationModalOpen(false)}
+                    cellInfo={selectedCell}
+                    onSave={handleSaveAnnotation}
+                    onDelete={handleDeleteAnnotation}
                 />
             )}
 

@@ -45,16 +45,17 @@ const Dashboard: React.FC = () => {
       setCurrentUser(user);
 
       // Initialize filters based on permissions
-      const userRankValue = rankOrder[user.rank] || 99;
-      if (userRankValue <= 5) {
-        // Officer/SO: Can see all, default to showing both? Or empty implies all?
-        // User request: "podendo marcar 1, o outro ou ambos".
-        // Let's start with NO filters (showing all) or BOTH filters enabled.
-        // Usually showing all is better.
-        setFilterSpecialties(["BCT", "AIS"]);
-      } else {
-        // Restricted: Lock to own specialty
+      if (user.specialty === "CTA") {
+        setFilterSpecialties(["CTA"]);
+      } else if (["BCT", "AIS", "TAAM"].includes(user.specialty)) {
         setFilterSpecialties([user.specialty]);
+      } else {
+        const userRankValue = rankOrder[user.rank] || 99;
+        if (userRankValue <= 5) {
+          setFilterSpecialties(["BCT", "AIS", "CTA", "TAAM"]);
+        } else {
+          setFilterSpecialties([user.specialty]);
+        }
       }
     }
     fetchTasks(user);
@@ -260,6 +261,9 @@ const Dashboard: React.FC = () => {
   // Filter Logic Helpers
   const isRestrictedUser = () => {
     if (!currentUser) return true;
+    if (["BCT", "AIS", "TAAM"].includes(currentUser.specialty)) return true;
+    if (currentUser.specialty === "CTA") return false; // CTA starts with CTA but can change it
+
     const rankValue = rankOrder[currentUser.rank] || 99;
     return rankValue > 5; // > 5 means restricted (Sgts, Civ)
   };
@@ -296,25 +300,18 @@ const Dashboard: React.FC = () => {
     if (isRestrictedUser()) {
       setFilterSpecialties([currentUser.specialty]);
     } else {
-      setFilterSpecialties(["BCT", "AIS"]); // Reset to showing both
+      setFilterSpecialties(["BCT", "AIS", "CTA", "TAAM"]); // Reset to showing all
     }
   };
 
   const filterTask = (t: any) => {
     // 1. Filter by Specialty
-    // Task must have at least one specialty that is in the filter list.
-    // If filterSpecialties is empty, should we show none? Or all?
-    // Given the explicit toggles, if BCT is off and AIS is off, likely show nothing or show all.
-    // Let's assume if enabled list has items, match against them.
     if (filterSpecialties.length > 0) {
       const hasMatchingSpecialty = t.specialties?.some((s: string) =>
         filterSpecialties.includes(s)
       );
       if (!hasMatchingSpecialty) return false;
     } else {
-      // If no specialty selected, maybe show none? Or all?
-      // Since buttons are toggles, unselecting all -> Show nothing usually.
-      // Let's return false if no specialty is selected (user deselected everything).
       return false;
     }
 
@@ -555,6 +552,18 @@ const Dashboard: React.FC = () => {
               active={filterSpecialties.includes("AIS")}
               onClick={() => toggleSpecialty("AIS")}
               disabled={isRestrictedUser() && currentUser?.specialty !== "AIS"}
+            />
+            <FilterButton
+              label="CTA"
+              active={filterSpecialties.includes("CTA")}
+              onClick={() => toggleSpecialty("CTA")}
+              disabled={isRestrictedUser() && currentUser?.specialty !== "CTA"}
+            />
+            <FilterButton
+              label="TAAM"
+              active={filterSpecialties.includes("TAAM")}
+              onClick={() => toggleSpecialty("TAAM")}
+              disabled={isRestrictedUser() && currentUser?.specialty !== "TAAM"}
             />
           </div>
           <div className="h-6 w-px bg-[#e7edf3] dark:bg-slate-800 hidden md:block">
