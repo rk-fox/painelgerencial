@@ -1249,17 +1249,25 @@ const TaskForm: React.FC = () => {
                     Tarefas atribuídas ao efetivo nesse momento.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {members
-                        .filter((m) => {
-                            if (currentUser?.sector === "CH") return true; // CH sees all ranks of CP and EA
-                            const val = getRankPriority(m.rank, m.abrev);
-                            return val >= 1; // Suboficial (4) and below (>=4) (CH pode ver geral)
-                        })
-                        .map((member) => {
-                            const currentMission = getMemberMission(member.id);
-                            const currentUnavail = getMemberUnavailToday(
-                                member.id,
-                            );
+    {members
+        .filter((m) => {
+            // 1. CH vê todos os ranks
+            if (currentUser?.sector === "CH") return true; 
+
+            const val = getRankPriority(m.rank, m.abrev);
+            
+            // Busca a prioridade do usuário logado atualmente
+            const currentUserVal = getRankPriority(currentUser?.rank, currentUser?.abrev);
+
+            // 2. Se o usuário logado for nível 3, ele pode ver >= 3 - Tenente pra baixo
+            if (currentUserVal === 3) return val >= 3;
+
+            // 3. Os outros veem apenas >= 4 - Suboficial pra baixo
+            return val >= 4; 
+        })
+        .map((member) => {
+            const currentMission = getMemberMission(member.id);
+            const currentUnavail = getMemberUnavailToday(member.id);
                             const isUnavailable =
                                 member.status === "Indisponível" ||
                                 !!currentUnavail;
