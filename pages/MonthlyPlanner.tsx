@@ -66,7 +66,7 @@ const getRankPriority = (rankStr: string | null, abrevStr: string | null): numbe
     if (s.includes('CIV')) return 8;
     return 99;
 };
-const ABREV_ORDER = ['SO.', 'Sgt.', 'Cv.'];
+const ABREV_ORDER = ['Maj.','Cap.','Ten','SO.', 'Sgt.', 'Cv.'];
 
 const MonthlyPlanner: React.FC = () => {
     const navigate = useNavigate();
@@ -193,14 +193,14 @@ const MonthlyPlanner: React.FC = () => {
             // Fetch Global Data (Missões e Indisponibilidades como eram antes)
             let missionsQuery = supabase.from('missions').select('id, nome, data_inicio, data_fim, equipe, sector');
             let unavailQuery = supabase.from('unavailability').select('*');
-            let membersQuery = supabase.from('members').select('id, name, war_name, rank, abrev, avatar, specialty, sector, last_promotion_date, guia_antiguidade, status'); //.in('abrev', ABREV_ORDER);
+            let membersQuery = supabase.from('members').select('id, name, war_name, rank, abrev, avatar, specialty, sector, last_promotion_date, guia_antiguidade, status').in('abrev', ABREV_ORDER);
             let allMembersQuery = supabase.from('members').select('id, name, war_name, rank, abrev, avatar, specialty, sector, last_promotion_date, guia_antiguidade, status');
 
             if (sector && (sector === 'CP' || sector === 'EA')) {
                 missionsQuery = missionsQuery.eq('sector', sector);
                 unavailQuery = unavailQuery.eq('sector', sector);
                 membersQuery = membersQuery.eq('sector', sector);
-                allMembersQuery = allMembersQuery.eq('sector', sector); //.in('abrev', ABREV_ORDER);
+                allMembersQuery = allMembersQuery.eq('sector', sector).in('abrev', ABREV_ORDER);
             }
 
             const [missionsRes, unavailRes, membersRes, allMembersRes] = await Promise.all([
