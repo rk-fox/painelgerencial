@@ -325,8 +325,8 @@ const AnnualUnavailability: React.FC = () => {
         const active = members.filter((m) => m.status !== "Indisponível");
         if (currentUser?.sector === "CH" && selectedSectorFilter !== "Todos") {
             const sectorKey = selectedSectorFilter === "Capacidade"
-                ? ["CP", "CH"]
-                : ["EA", "CH"];
+                ? "CP"
+                : "EA";
             return active.filter((m) => m.sector === sectorKey);
         }
         return active;
@@ -335,8 +335,8 @@ const AnnualUnavailability: React.FC = () => {
     const filteredUnavailabilities = useMemo(() => {
         if (currentUser?.sector === "CH" && selectedSectorFilter !== "Todos") {
             const sectorKey = selectedSectorFilter === "Capacidade"
-                ? ["CP", "CH"]
-                : ["EA", "CH"];
+                ? "CP"
+                : "EA";
             return unavailabilities.filter((u) => u.sector === sectorKey);
         }
         return unavailabilities;
@@ -345,8 +345,8 @@ const AnnualUnavailability: React.FC = () => {
     const filteredMissions = useMemo(() => {
         if (currentUser?.sector === "CH" && selectedSectorFilter !== "Todos") {
             const sectorKey = selectedSectorFilter === "Capacidade"
-                ? ["CP", "CH"]
-                : ["EA", "CH"];
+                ? "CP"
+                : "EA";
             return missions.filter((m) => m.sector === sectorKey);
         }
         return missions;
