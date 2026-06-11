@@ -9,6 +9,7 @@ import Reports from './pages/Reports';
 import YearlySchedule from './pages/YearlySchedule';
 import ScheduleAdjustment from './pages/ScheduleAdjustment';
 import MonthlyPlanner from './pages/MonthlyPlanner';
+import AnnualUnavailability from './pages/AnnualUnavailability';
 import SdiaPage from './pages/Sdia';
 import ResetPassword from './pages/ResetPassword';
 import Layout from './components/Layout';
@@ -28,6 +29,7 @@ const App: React.FC = () => {
           <Route path="members/edit/:id" element={<MemberForm />} />
           <Route path="tasks/new" element={<TaskForm />} />
           <Route path="tasks/planner" element={<MonthlyPlanner />} />
+          <Route path="tasks/unavailability" element={<AnnualUnavailability />} />
           <Route path="schedule" element={<YearlySchedule />} />
           <Route path="schedule/adjustment" element={<ScheduleAdjustment />} />
           <Route path="sdia" element={<SdiaPage />} />

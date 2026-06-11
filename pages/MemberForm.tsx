@@ -369,6 +369,19 @@ const MemberForm: React.FC = () => {
                   AIS (Informações)
                 </div>
               </label>
+              <label className="flex-1 cursor-pointer group">
+                <input
+                  className="hidden peer"
+                  name="specialty"
+                  type="radio"
+                  value="TAAM"
+                  checked={formData.specialty === 'TAAM'}
+                  onChange={handleInputChange}
+                />
+                <div className="flex items-center justify-center h-12 border-2 border-[#d1d5db] dark:border-slate-700 rounded-lg peer-checked:border-primary peer-checked:bg-primary/5 text-[#4c739a] peer-checked:text-primary font-bold transition-all bg-white dark:bg-slate-800">
+                  TAAM
+                </div>
+              </label>
             </div>
           </div>
 

@@ -52,29 +52,32 @@ const YearlySchedule: React.FC = () => {
     const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
     const [isMonthPopupOpen, setIsMonthPopupOpen] = useState(false);
     const [isReviewPopupOpen, setIsReviewPopupOpen] = useState(false);
-    const [currentUser, setCurrentUser] = useState<any>(null);
-    const [activeSector, setActiveSector] = useState<string>('CP');
-    const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-
-    useEffect(() => {
+    const [currentUser, setCurrentUser] = useState<any>(() => {
+        const userJson = localStorage.getItem('currentUser');
+        return userJson ? JSON.parse(userJson) : null;
+    });
+    
+    const [activeSector, setActiveSector] = useState<string>(() => {
         const userJson = localStorage.getItem('currentUser');
         if (userJson) {
             const user = JSON.parse(userJson);
-            setCurrentUser(user);
-            if (user.sector === 'EA') {
-                setActiveSector('EA');
-            } else {
-                setActiveSector('CP');
-            }
+            // Default to EA if the user is EA, otherwise CP (for CP and CH users)
+            return user.sector === 'EA' ? 'EA' : 'CP';
         }
-        fetchAvailableYears();
-    }, []);
+        return 'CP';
+    });
+    
+    const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+    useEffect(() => {
+        fetchAvailableYears(activeSector);
+    }, [activeSector]);
 
     useEffect(() => {
         if (activeSector) {
-            fetchMembers();
+            fetchMembers(activeSector);
             if (selectedYear) {
-                fetchMissions(selectedYear);
+                fetchMissions(selectedYear, activeSector);
             }
         }
     }, [activeSector, selectedYear]);
@@ -86,7 +89,7 @@ const YearlySchedule: React.FC = () => {
         return { low: 3, medium: 6 }; // Low 1-3, Med 4-6, High 7+
     };
 
-    const fetchAvailableYears = async () => {
+    const fetchAvailableYears = async (currentSector: string) => {
         try {
             const startCheckYear = 2022;
             const endCheckYear = new Date().getFullYear() + 2;
@@ -99,8 +102,8 @@ const YearlySchedule: React.FC = () => {
                     .gte('data_inicio', `${year}-01-01`)
                     .lte('data_inicio', `${year}-12-31`);
                 
-                if (activeSector === 'CP' || activeSector === 'EA') {
-                    query = query.eq('sector', activeSector);
+                if (currentSector === 'CP' || currentSector === 'EA') {
+                    query = query.eq('sector', currentSector);
                 }
 
                 const { count } = await query;
@@ -120,7 +123,7 @@ const YearlySchedule: React.FC = () => {
         }
     };
 
-    const fetchMissions = async (year: number) => {
+    const fetchMissions = async (year: number, currentSector: string) => {
         const startDate = `${year}-01-01`;
         const endDate = `${year}-12-31`;
         
@@ -131,8 +134,8 @@ const YearlySchedule: React.FC = () => {
             .lte('data_inicio', endDate)
             .order('data_inicio');
             
-        if (activeSector === 'CP' || activeSector === 'EA') {
-            query = query.eq('sector', activeSector);
+        if (currentSector === 'CP' || currentSector === 'EA') {
+            query = query.eq('sector', currentSector);
         }
 
         const { data, error } = await query;
@@ -141,10 +144,10 @@ const YearlySchedule: React.FC = () => {
         }
     };
 
-    const fetchMembers = async () => {
+    const fetchMembers = async (currentSector: string) => {
         let query = supabase.from('members').select('id, name, war_name, rank, abrev, last_promotion_date, guia_antiguidade');
-        if (activeSector === 'CP' || activeSector === 'EA') {
-            query = query.eq('sector', activeSector);
+        if (currentSector === 'CP' || currentSector === 'EA') {
+            query = query.eq('sector', currentSector);
         }
         const { data, error } = await query;
         if (!error && data) {
@@ -300,7 +303,7 @@ const YearlySchedule: React.FC = () => {
             .delete()
             .eq('id', missionToDelete.id);
         if (!error) {
-            fetchMissions(selectedYear);
+            fetchMissions(selectedYear, activeSector);
             setMissionToDelete(null);
         }
     };

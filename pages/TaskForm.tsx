@@ -102,6 +102,24 @@ const TaskForm: React.FC = () => {
     const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState("");
 
+    // Meeting Modal State
+    const [showMeetingModal, setShowMeetingModal] = useState(false);
+    const [meetingData, setMeetingData] = useState({
+        assunto: "",
+        inicio: "",
+        fim: "",
+        link: "",
+    });
+    const [meetingMembers, setMeetingMembers] = useState<string[]>([]);
+
+    // Meeting List State
+    const [meetings, setMeetings] = useState<any[]>([]);
+    const [editingMeetingId, setEditingMeetingId] = useState<string | null>(
+        null,
+    );
+    const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+    const [meetingToDelete, setMeetingToDelete] = useState<any>(null);
+
     // Form State
     const [editingTask, setEditingTask] = useState<Partial<Task> | null>(null);
     const [formData, setFormData] = useState({
@@ -125,7 +143,26 @@ const TaskForm: React.FC = () => {
         fetchMissions();
         fetchUnavailabilities();
         fetchCategories();
+        fetchMeetings();
     }, []);
+
+    const fetchMeetings = async () => {
+        try {
+            const userJson = localStorage.getItem("currentUser");
+            const userObj = userJson ? JSON.parse(userJson) : null;
+            if (!userObj) return;
+
+            const { data, error } = await supabase
+                .from("meeting")
+                .select("*")
+                .contains("membros", [userObj.id])
+                .order("inicio", { ascending: false });
+            if (error) throw error;
+            setMeetings(data || []);
+        } catch (err: any) {
+            console.error("Error fetching meetings:", err.message);
+        }
+    };
 
     useEffect(() => {
         fetchTasks();
@@ -432,6 +469,92 @@ const TaskForm: React.FC = () => {
         }
     };
 
+    const handleScheduleMeeting = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        setError(null);
+        try {
+            const payload = {
+                assunto: meetingData.assunto,
+                inicio: new Date(meetingData.inicio).toISOString(),
+                fim: new Date(meetingData.fim).toISOString(),
+                link: meetingData.link || null,
+                membros: meetingMembers,
+            };
+
+            if (editingMeetingId) {
+                const { error: updateError } = await supabase
+                    .from("meeting")
+                    .update(payload)
+                    .eq("id", editingMeetingId);
+                if (updateError) throw updateError;
+            } else {
+                const { error: insertError } = await supabase
+                    .from("meeting")
+                    .insert([payload]);
+                if (insertError) throw insertError;
+            }
+
+            setShowMeetingModal(false);
+            setMeetingData({ assunto: "", inicio: "", fim: "", link: "" });
+            setMeetingMembers([]);
+            setEditingMeetingId(null);
+            fetchMeetings();
+        } catch (err: any) {
+            console.error("Error scheduling meeting:", err.message);
+            alert("Erro ao agendar reunião: " + err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleEditMeeting = (meeting: any) => {
+        setEditingMeetingId(meeting.id);
+        setMeetingData({
+            assunto: meeting.assunto,
+            inicio: meeting.inicio.slice(0, 16),
+            fim: meeting.fim.slice(0, 16),
+            link: meeting.link || "",
+        });
+        setMeetingMembers(meeting.membros || []);
+        setShowMeetingModal(true);
+    };
+
+    const handleCloneMeeting = (meeting: any) => {
+        setEditingMeetingId(null);
+        setMeetingData({
+            assunto: `Cópia: ${meeting.assunto}`,
+            inicio: meeting.inicio.slice(0, 16),
+            fim: meeting.fim.slice(0, 16),
+            link: meeting.link || "",
+        });
+        setMeetingMembers(meeting.membros || []);
+        setShowMeetingModal(true);
+    };
+
+    const handleDeleteMeeting = (meeting: any) => {
+        setMeetingToDelete(meeting);
+    };
+
+    const confirmDeleteMeeting = React.useCallback(async () => {
+        if (!meetingToDelete) return;
+        setLoading(true);
+        try {
+            const { error } = await supabase.from("meeting").delete().eq(
+                "id",
+                meetingToDelete.id,
+            );
+            if (error) throw error;
+            fetchMeetings();
+            setMeetingToDelete(null);
+        } catch (err: any) {
+            console.error("Error deleting meeting:", err.message);
+            alert("Erro ao excluir reunião: " + err.message);
+        } finally {
+            setLoading(false);
+        }
+    }, [meetingToDelete]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -449,7 +572,7 @@ const TaskForm: React.FC = () => {
         // Validation for Specialties
         if (formData.specialties.length === 0) {
             setError(
-                "Você deve selecionar pelo menos uma especialidade (BCT ou AIS).",
+                "Você deve selecionar pelo menos uma especialidade.",
             );
             setLoading(false);
             return;
@@ -518,7 +641,6 @@ const TaskForm: React.FC = () => {
     };
 
     // Modal States
-    const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
     // LIST ACTIONS
     const handleDelete = (task: Task) => {
@@ -550,11 +672,18 @@ const TaskForm: React.FC = () => {
                     setTaskToDelete(null);
                 }
             }
+            if (meetingToDelete) {
+                if (e.key === "Enter") {
+                    confirmDeleteMeeting();
+                } else if (e.key === "Escape") {
+                    setMeetingToDelete(null);
+                }
+            }
         };
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [taskToDelete, confirmDelete]);
+    }, [taskToDelete, confirmDelete, meetingToDelete, confirmDeleteMeeting]);
 
     const handleToggleRecurrence = async (task: Task) => {
         try {
@@ -858,6 +987,32 @@ const TaskForm: React.FC = () => {
                                                 AIS
                                             </div>
                                         </label>
+                                        <label className="flex-1 cursor-pointer">
+                                            <input
+                                                className="hidden peer"
+                                                type="checkbox"
+                                                value="CTA"
+                                                checked={formData.specialties
+                                                    .includes("CTA")}
+                                                onChange={handleSpecialtyChange}
+                                            />
+                                            <div className="text-center p-3 rounded-lg border border-[#cfdbe7] dark:border-slate-700 peer-checked:bg-primary/10 peer-checked:border-primary peer-checked:text-primary transition-all text-sm font-medium active:scale-95">
+                                                CTA
+                                            </div>
+                                        </label>
+                                        <label className="flex-1 cursor-pointer">
+                                            <input
+                                                className="hidden peer"
+                                                type="checkbox"
+                                                value="TAAM"
+                                                checked={formData.specialties
+                                                    .includes("TAAM")}
+                                                onChange={handleSpecialtyChange}
+                                            />
+                                            <div className="text-center p-3 rounded-lg border border-[#cfdbe7] dark:border-slate-700 peer-checked:bg-primary/10 peer-checked:border-primary peer-checked:text-primary transition-all text-sm font-medium active:scale-95">
+                                                TAAM
+                                            </div>
+                                        </label>
                                     </div>
                                 </div>
                             </div>
@@ -969,7 +1124,8 @@ const TaskForm: React.FC = () => {
                         </div>
 
                         <div className="p-6 border-t border-[#e7edf3] dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-end gap-3">
-                            {editingTask && editingTask.status === "concluida" && (
+                            {editingTask &&
+                                editingTask.status === "concluida" && (
                                 <button
                                     className="mr-auto px-6 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-sm font-bold hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400 transition-colors flex items-center gap-2"
                                     type="button"
@@ -1065,9 +1221,30 @@ const TaskForm: React.FC = () => {
         <div className="max-w-6xl mx-auto flex flex-col gap-8 animate-in fade-in duration-500">
             {/* Personnel Control Section */}
             <div className="flex flex-col gap-4">
-                <h1 className="text-[#0d141b] dark:text-white text-3xl font-extrabold leading-tight tracking-tight">
-                    Controle do Efetivo
-                </h1>
+                <div className="flex items-center gap-3">
+                    <h1 className="text-[#0d141b] dark:text-white text-3xl font-extrabold leading-tight tracking-tight">
+                        Controle do Efetivo
+                    </h1>
+                    <button
+                        onClick={() => navigate("/app/tasks/planner")}
+                        className="p-2 rounded-lg bg-white dark:bg-slate-800 border border-[#e7edf3] dark:border-slate-700 text-[#4c739a] hover:text-primary transition-all active:scale-95 shadow-sm"
+                        title="Cronograma Mensal"
+                    >
+                        <span className="material-symbols-outlined text-[24px]">
+                            calendar_month
+                        </span>
+                    </button>
+                    <button
+                        onClick={() => navigate("/app/tasks/unavailability")}
+                        className="p-2 rounded-lg bg-white dark:bg-slate-800 border border-[#e7edf3] dark:border-slate-700 text-[#4c739a] hover:text-primary transition-all active:scale-95 shadow-sm"
+                        title="Gestão Anual"
+                    >
+                        <span className="material-symbols-outlined text-[24px]">
+                            table
+                        </span>
+                    </button>
+                </div>
+
                 <p className="text-[#4c739a] dark:text-slate-400 text-base font-normal">
                     Tarefas atribuídas ao efetivo nesse momento.
                 </p>
@@ -1270,28 +1447,28 @@ const TaskForm: React.FC = () => {
                         <h1 className="text-[#0d141b] dark:text-white text-3xl font-extrabold leading-tight tracking-tight">
                             Gerenciamento de Tarefas
                         </h1>
-                        <button
-                            onClick={() => navigate("/app/tasks/planner")}
-                            className="p-2 rounded-lg bg-white dark:bg-slate-800 border border-[#e7edf3] dark:border-slate-700 text-[#4c739a] hover:text-primary transition-all active:scale-95 shadow-sm"
-                            title="Cronograma Mensal"
-                        >
-                            <span className="material-symbols-outlined text-[24px]">
-                                calendar_month
-                            </span>
-                        </button>
                     </div>
                     <p className="text-[#4c739a] dark:text-slate-400 text-base font-normal">
                         Gerencie todas as atividades, filtre por especialidade e
                         controle recorrências.
                     </p>
                 </div>
-                <button
-                    onClick={handleCreateNew}
-                    className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white font-bold py-2.5 px-6 rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-95"
-                >
-                    <span className="material-symbols-outlined">add</span>
-                    Nova Tarefa
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                    <button
+                        onClick={() => setShowMeetingModal(true)}
+                        className="flex items-center gap-2 bg-white dark:bg-slate-800 text-primary border border-primary/20 hover:border-primary/50 font-bold py-2.5 px-6 rounded-xl shadow-sm transition-all active:scale-95 whitespace-nowrap"
+                    >
+                        <span className="material-symbols-outlined">event</span>
+                        Agendar Reunião
+                    </button>
+                    <button
+                        onClick={handleCreateNew}
+                        className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white font-bold py-2.5 px-6 rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-95 whitespace-nowrap"
+                    >
+                        <span className="material-symbols-outlined">add</span>
+                        Nova Tarefa
+                    </button>
+                </div>
             </div>
 
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm p-4 flex flex-col gap-4">
@@ -1811,6 +1988,161 @@ const TaskForm: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            {/* Meetings List Section */}
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm p-4 mt-8 flex flex-col gap-4">
+                <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 rounded-lg">
+                        <span className="material-symbols-outlined">
+                            event
+                        </span>
+                    </div>
+                    <h2 className="text-xl font-extrabold text-[#0d141b] dark:text-white">
+                        Lista de Reuniões
+                    </h2>
+                </div>
+
+                <div className="overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-left border-collapse min-w-[800px]">
+                        <thead>
+                            <tr className="border-b-2 border-[#e7edf3] dark:border-slate-800 text-[#4c739a] dark:text-slate-400 text-[10px] uppercase font-black tracking-widest">
+                                <th className="py-4 px-4">Assunto</th>
+                                <th className="py-4 px-4">Início</th>
+                                <th className="py-4 px-4">Fim</th>
+                                <th className="py-4 px-4 text-center">
+                                    Convocados
+                                </th>
+                                <th className="py-4 px-4 text-center">
+                                    Ações
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#e7edf3] dark:divide-slate-800/50">
+                            {meetings.length > 0
+                                ? (
+                                    meetings.map((meeting) => (
+                                        <tr
+                                            key={meeting.id}
+                                            className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
+                                        >
+                                            <td className="py-4 px-4">
+                                                <div className="flex flex-col gap-1">
+                                                    <span className="font-bold text-[#0d141b] dark:text-white text-sm">
+                                                        {meeting.assunto}
+                                                    </span>
+                                                    {meeting.link && (
+                                                        <a
+                                                            href={meeting
+                                                                .link}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="text-primary text-[11px] font-bold hover:underline flex items-center gap-1"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[12px]">
+                                                                link
+                                                            </span>{" "}
+                                                            Abrir Link
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="py-4 px-4">
+                                                <span className="text-sm text-[#4c739a] dark:text-slate-300 font-medium">
+                                                    {new Date(
+                                                        meeting.inicio,
+                                                    ).toLocaleString(
+                                                        "pt-BR",
+                                                        {
+                                                            day: "2-digit",
+                                                            month: "2-digit",
+                                                            year: "numeric",
+                                                            hour: "2-digit",
+                                                            minute: "2-digit",
+                                                        },
+                                                    )}
+                                                </span>
+                                            </td>
+                                            <td className="py-4 px-4">
+                                                <span className="text-sm text-[#4c739a] dark:text-slate-300 font-medium">
+                                                    {new Date(meeting.fim)
+                                                        .toLocaleString(
+                                                            "pt-BR",
+                                                            {
+                                                                day: "2-digit",
+                                                                month:
+                                                                    "2-digit",
+                                                                year: "numeric",
+                                                                hour: "2-digit",
+                                                                minute:
+                                                                    "2-digit",
+                                                            },
+                                                        )}
+                                                </span>
+                                            </td>
+                                            <td className="py-4 px-4 text-center">
+                                                <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-[#4c739a] dark:text-slate-300 text-[11px] font-bold rounded-full">
+                                                    {meeting.membros
+                                                        ?.length || 0} Membros
+                                                </span>
+                                            </td>
+                                            <td className="py-4 px-4">
+                                                <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button
+                                                        onClick={() =>
+                                                            handleEditMeeting(
+                                                                meeting,
+                                                            )}
+                                                        className="p-1.5 rounded-lg text-[#4c739a] hover:bg-primary/10 hover:text-primary transition-colors"
+                                                        title="Editar Reunião"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[20px]">
+                                                            edit
+                                                        </span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() =>
+                                                            handleCloneMeeting(
+                                                                meeting,
+                                                            )}
+                                                        className="p-1.5 rounded-lg text-[#4c739a] hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                                        title="Clonar Reunião"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[20px]">
+                                                            content_copy
+                                                        </span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() =>
+                                                            handleDeleteMeeting(
+                                                                meeting,
+                                                            )}
+                                                        className="p-1.5 rounded-lg text-[#4c739a] hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/30 transition-colors"
+                                                        title="Apagar Reunião"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[20px]">
+                                                            delete
+                                                        </span>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )
+                                : (
+                                    <tr>
+                                        <td
+                                            colSpan={5}
+                                            className="py-12 text-center text-[#4c739a] dark:text-slate-500 text-sm"
+                                        >
+                                            Nenhuma reunião encontrada.
+                                        </td>
+                                    </tr>
+                                )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             {/* Delete Confirmation Modal */}
             {taskToDelete && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -1851,6 +2183,311 @@ const TaskForm: React.FC = () => {
                                     )
                                     : (
                                         "Excluir Registro"
+                                    )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Meeting Confirmation Modal */}
+            {meetingToDelete && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-[#e7edf3] dark:border-slate-800 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="p-6 text-center">
+                            <div className="size-16 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mx-auto mb-4">
+                                <span className="material-symbols-outlined text-red-500 text-[32px]">
+                                    delete_forever
+                                </span>
+                            </div>
+                            <h3 className="text-xl font-bold text-[#0d141b] dark:text-white mb-2">
+                                Confirmar Exclusão
+                            </h3>
+                            <p className="text-[#4c739a] dark:text-slate-400">
+                                Tem certeza que deseja deletar a reunião{" "}
+                                <span className="font-bold text-[#0d141b] dark:text-white">
+                                    "{meetingToDelete.assunto}"
+                                </span>?
+                                <br />Esta ação não pode ser desfeita.
+                            </p>
+                        </div>
+                        <div className="flex p-4 gap-3 bg-[#f8fafc] dark:bg-slate-800/50">
+                            <button
+                                onClick={() => setMeetingToDelete(null)}
+                                className="flex-1 px-4 py-3 rounded-xl border border-[#cfdbe7] dark:border-slate-700 text-sm font-bold text-[#4c739a] hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-95"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={confirmDeleteMeeting}
+                                className="flex-1 px-4 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold shadow-lg shadow-red-500/20 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                                disabled={loading}
+                            >
+                                {loading
+                                    ? (
+                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white">
+                                        </div>
+                                    )
+                                    : (
+                                        "Excluir Registro"
+                                    )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Meeting Modal */}
+            {showMeetingModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-[#e7edf3] dark:border-slate-800 w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+                        <div className="p-6 border-b border-[#e7edf3] dark:border-slate-800 flex justify-between items-center bg-[#f8fafc] dark:bg-slate-800/50">
+                            <h3 className="text-xl font-bold text-[#0d141b] dark:text-white flex items-center gap-2">
+                                <span className="material-symbols-outlined text-primary">
+                                    event
+                                </span>
+                                Agendar Reunião
+                            </h3>
+                            <button
+                                onClick={() => {
+                                    setShowMeetingModal(false);
+                                    setEditingMeetingId(null);
+                                    setMeetingData({
+                                        assunto: "",
+                                        inicio: "",
+                                        fim: "",
+                                        link: "",
+                                    });
+                                    setMeetingMembers([]);
+                                }}
+                                className="p-1 text-[#4c739a] hover:text-[#0d141b] dark:hover:text-white transition-colors"
+                            >
+                                <span className="material-symbols-outlined">
+                                    close
+                                </span>
+                            </button>
+                        </div>
+                        <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+                            <form
+                                id="meetingForm"
+                                onSubmit={handleScheduleMeeting}
+                                className="flex flex-col gap-4"
+                            >
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                        Assunto
+                                    </label>
+                                    <input
+                                        required
+                                        type="text"
+                                        value={meetingData.assunto}
+                                        onChange={(e) =>
+                                            setMeetingData({
+                                                ...meetingData,
+                                                assunto: e.target.value,
+                                            })}
+                                        className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
+                                        placeholder="Ex: Reunião de Alinhamento"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                            Início
+                                        </label>
+                                        <input
+                                            required
+                                            type="datetime-local"
+                                            value={meetingData.inicio}
+                                            onChange={(e) =>
+                                                setMeetingData({
+                                                    ...meetingData,
+                                                    inicio: e.target.value,
+                                                })}
+                                            className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                            Fim
+                                        </label>
+                                        <input
+                                            required
+                                            type="datetime-local"
+                                            value={meetingData.fim}
+                                            onChange={(e) =>
+                                                setMeetingData({
+                                                    ...meetingData,
+                                                    fim: e.target.value,
+                                                })}
+                                            className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                        Link da Reunião (Opcional)
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={meetingData.link}
+                                        onChange={(e) =>
+                                            setMeetingData({
+                                                ...meetingData,
+                                                link: e.target.value,
+                                            })}
+                                        className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
+                                        placeholder="Ex: https://meet.google.com/abc-defg-hij"
+                                    />
+                                </div>
+
+                                <div className="flex flex-col gap-2 mt-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                            Membros Convocados
+                                        </label>
+                                        <span className="text-xs text-primary font-bold">
+                                            {meetingMembers.length}{" "}
+                                            selecionado(s)
+                                        </span>
+                                    </div>
+
+                                    {currentUser?.sector === "CH" && (
+                                        <div className="flex flex-wrap gap-2 mb-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const cpMembers = members
+                                                        .filter((m) =>
+                                                            m.sector === "CP"
+                                                        ).map((m) => m.id);
+                                                    setMeetingMembers([
+                                                        ...new Set([
+                                                            ...meetingMembers,
+                                                            ...cpMembers,
+                                                        ]),
+                                                    ]);
+                                                }}
+                                                className="px-3 py-1.5 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 text-xs font-bold transition-colors"
+                                            >
+                                                Capacidade
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const eaMembers = members
+                                                        .filter((m) =>
+                                                            m.sector === "EA"
+                                                        ).map((m) => m.id);
+                                                    setMeetingMembers([
+                                                        ...new Set([
+                                                            ...meetingMembers,
+                                                            ...eaMembers,
+                                                        ]),
+                                                    ]);
+                                                }}
+                                                className="px-3 py-1.5 rounded bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-xs font-bold transition-colors"
+                                            >
+                                                Espaço Aéreo
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setMeetingMembers(
+                                                        members.map((m) =>
+                                                            m.id
+                                                        ),
+                                                    );
+                                                }}
+                                                className="px-3 py-1.5 rounded bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 text-xs font-bold transition-colors"
+                                            >
+                                                Subdivisão Estratégica
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border border-[#e7edf3] dark:border-slate-700 rounded-xl p-3 max-h-48 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-800/30">
+                                        {members.map((member) => (
+                                            <label
+                                                key={member.id}
+                                                className="flex items-center gap-3 p-2 rounded-lg hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-[#e7edf3] dark:hover:border-slate-700 transition-all cursor-pointer"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={meetingMembers
+                                                        .includes(member.id)}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setMeetingMembers([
+                                                                ...meetingMembers,
+                                                                member.id,
+                                                            ]);
+                                                        } else {
+                                                            setMeetingMembers(
+                                                                meetingMembers
+                                                                    .filter(
+                                                                        (id) =>
+                                                                            id !==
+                                                                                member
+                                                                                    .id,
+                                                                    ),
+                                                            );
+                                                        }
+                                                    }}
+                                                    className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
+                                                />
+                                                <div className="flex items-center gap-2">
+                                                    <img
+                                                        src={member.avatar ||
+                                                            "https://ui-avatars.com/api/?name=" +
+                                                                member.name}
+                                                        alt={member.name}
+                                                        className="w-6 h-6 rounded-full"
+                                                    />
+                                                    <span className="text-xs font-bold text-[#0d141b] dark:text-slate-300 line-clamp-1">
+                                                        {member.abrev ||
+                                                            member.rank}{" "}
+                                                        {member.war_name ||
+                                                            member.name}
+                                                    </span>
+                                                </div>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                        <div className="flex p-4 gap-3 bg-[#f8fafc] dark:bg-slate-800/50 border-t border-[#e7edf3] dark:border-slate-800">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowMeetingModal(false);
+                                    setEditingMeetingId(null);
+                                    setMeetingData({
+                                        assunto: "",
+                                        inicio: "",
+                                        fim: "",
+                                        link: "",
+                                    });
+                                    setMeetingMembers([]);
+                                }}
+                                className="flex-1 px-4 py-3 rounded-xl border border-[#cfdbe7] dark:border-slate-700 text-sm font-bold text-[#4c739a] hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-95"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="submit"
+                                form="meetingForm"
+                                className="flex-1 px-4 py-3 rounded-xl bg-primary hover:bg-primary/90 text-white text-sm font-bold shadow-lg shadow-primary/20 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                                disabled={loading}
+                            >
+                                {loading
+                                    ? (
+                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white">
+                                        </div>
+                                    )
+                                    : (
+                                        "Agendar"
                                     )}
                             </button>
                         </div>
