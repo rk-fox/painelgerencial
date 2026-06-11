@@ -66,7 +66,7 @@ const getRankPriority = (rankStr: string | null, abrevStr: string | null): numbe
     if (s.includes('CIV')) return 8;
     return 99;
 };
-const ABREV_ORDER = ['Maj.','Cap.','Ten','SO.', 'Sgt.', 'Cv.'];
+const ABREV_ORDER = ['Maj.','Cap.','Ten.','SO.', 'Sgt.', 'Cv.'];
 
 const MonthlyPlanner: React.FC = () => {
     const navigate = useNavigate();
