@@ -2492,9 +2492,9 @@ const TaskForm: React.FC = () => {
                         "Agendar"
                     )}
                 </button>
-            </div> {/* Fecha o rodapé */}
-        </div> {/* Fecha a div interna do modal */}
-    </div> {/* FECHAVA A DIV EXTERNA, MAS FALTAVA OUTRA PARA FECHAR O CONTAINER PRINCIPAL DO MODAL */}
+            </div>
+        </div>
+    </div>
 </div> 
 )}
 
