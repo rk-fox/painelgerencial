@@ -197,7 +197,7 @@ const TaskForm: React.FC = () => {
                 filtered = filtered.filter((m) => m.sector === userSector);
             } else if (userSector === "CH") {
                 filtered = filtered.filter((m) =>
-                    m.sector === "CP" || m.sector === "EA"
+                    m.sector === "CP" || m.sector === "EA" || m.sector === "CH"
                 );
             }
 
