@@ -1253,7 +1253,7 @@ const TaskForm: React.FC = () => {
                         .filter((m) => {
                             if (currentUser?.sector === "CH") return true; // CH sees all ranks of CP and EA
                             const val = getRankPriority(m.rank, m.abrev);
-                            return val >= 4; // Suboficial (4) and below (>=4)
+                            return val >= 1; // Suboficial (4) and below (>=4) (CH pode ver geral)
                         })
                         .map((member) => {
                             const currentMission = getMemberMission(member.id);
