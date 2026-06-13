@@ -33,3 +33,13 @@ export interface Task {
   status: 'available' | 'in_progress' | 'completed';
   progress?: number;
 }
+
+export interface ShortcutLink {
+  id: string;
+  titulo: string;
+  link: string;
+  descricao?: string;
+  icon?: string;
+  sector: string;
+  created_at?: string;
+}

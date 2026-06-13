@@ -12,6 +12,7 @@ import MonthlyPlanner from './pages/MonthlyPlanner';
 import AnnualUnavailability from './pages/AnnualUnavailability';
 import SdiaPage from './pages/Sdia';
 import ResetPassword from './pages/ResetPassword';
+import Shortcuts from './pages/Shortcuts';
 import Layout from './components/Layout';
 
 const App: React.FC = () => {
@@ -34,6 +35,7 @@ const App: React.FC = () => {
           <Route path="schedule/adjustment" element={<ScheduleAdjustment />} />
           <Route path="sdia" element={<SdiaPage />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="shortcuts" element={<Shortcuts />} />
 
           {/* Default redirect — CH goes to tasks, others go to dashboard */}
           <Route path="" element={<DefaultRedirect />} />
