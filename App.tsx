@@ -6,6 +6,7 @@ import MembersList from './pages/MembersList';
 import MemberForm from './pages/MemberForm';
 import TaskForm from './pages/TaskForm';
 import Reports from './pages/Reports';
+import ReportsComparative from './pages/ReportsComparative';
 import YearlySchedule from './pages/YearlySchedule';
 import ScheduleAdjustment from './pages/ScheduleAdjustment';
 import MonthlyPlanner from './pages/MonthlyPlanner';
@@ -35,6 +36,7 @@ const App: React.FC = () => {
           <Route path="schedule/adjustment" element={<ScheduleAdjustment />} />
           <Route path="sdia" element={<SdiaPage />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="reports/comparative" element={<ReportsComparative />} />
           <Route path="shortcuts" element={<Shortcuts />} />
 
           {/* Default redirect — CH goes to tasks, others go to dashboard */}

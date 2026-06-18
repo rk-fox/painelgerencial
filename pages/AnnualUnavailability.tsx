@@ -27,6 +27,7 @@ interface Unavailability {
     start_date: string;
     end_date: string;
     detalhes?: string | null;
+    atividade?: string | null;
     sector?: string;
 }
 
@@ -532,7 +533,7 @@ const AnnualUnavailability: React.FC = () => {
             string,
             Record<
                 string,
-                { type?: string; details?: string; annotation?: Annotation }
+                { type?: string; details?: string; annotation?: Annotation; atividade?: string }
             >
         > = {};
         const yearStart = new Date(selectedYear, 0, 1, 12, 0, 0);
@@ -559,6 +560,7 @@ const AnnualUnavailability: React.FC = () => {
                 if (!map[u.member][ds]) map[u.member][ds] = {};
                 map[u.member][ds].type = u.type;
                 map[u.member][ds].details = u.detalhes || undefined;
+                map[u.member][ds].atividade = u.atividade || undefined;
             }
         });
 
@@ -935,8 +937,10 @@ const AnnualUnavailability: React.FC = () => {
                                                             cellDataMap[
                                                                 member.id
                                                             ]?.[d.dateStr];
+                                                        const isAtividade = cell?.type === 'Atividade';
                                                         const visible =
                                                             cell?.type &&
+                                                            cell.type !== 'Atividade' &&
                                                             isTypeVisible(
                                                                 cell.type,
                                                             );
@@ -950,6 +954,19 @@ const AnnualUnavailability: React.FC = () => {
                                                         ) {
                                                             titleParts.push(
                                                                 `${cell.type}${
+                                                                    cell.details
+                                                                        ? ": " +
+                                                                            cell.details
+                                                                        : ""
+                                                                }`,
+                                                            );
+                                                        }
+                                                        if (isAtividade && cell?.type) {
+                                                            const periodLabel = cell.atividade === 'M' ? 'Indisponível pela Manhã'
+                                                                : cell.atividade === 'T' ? 'Indisponível pela Tarde'
+                                                                : 'Indisponível Manhã e Tarde';
+                                                            titleParts.push(
+                                                                `${periodLabel}${
                                                                     cell.details
                                                                         ? ": " +
                                                                             cell.details
@@ -978,7 +995,8 @@ const AnnualUnavailability: React.FC = () => {
 
                                                         if (
                                                             !visible &&
-                                                            !hasAnnotation
+                                                            !hasAnnotation &&
+                                                            !isAtividade
                                                         ) {
                                                             return (
                                                                 <td
@@ -1006,7 +1024,7 @@ const AnnualUnavailability: React.FC = () => {
 
                                                         if (
                                                             !visible &&
-                                                            hasAnnotation
+                                                            (hasAnnotation || isAtividade)
                                                         ) {
                                                             return (
                                                                 <td
@@ -1062,7 +1080,7 @@ const AnnualUnavailability: React.FC = () => {
                                                                         cell?.annotation,
                                                                     )}
                                                             >
-                                                                {hasAnnotation &&
+                                                                {(hasAnnotation || isAtividade) &&
                                                                     (
                                                                         <div className="absolute top-0 right-0 w-0 h-0 border-t-[8px] border-l-[8px] border-t-red-500 border-l-transparent z-10">
                                                                         </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { Member } from '../types';
 import { parseLocalDate, formatLocalDate } from '../utils/dateUtils';
@@ -51,6 +52,7 @@ interface MissionStats {
 }
 
 const Reports: React.FC = () => {
+    const navigate = useNavigate();
     const [memberRankings, setMemberRankings] = useState<MemberRanking[]>([]);
     const [categoryRankings, setCategoryRankings] = useState<CategoryRanking[]>([]);
     const [statusCounts, setStatusCounts] = useState<StatusCounts>({ pendente: 0, iniciada: 0, concluida: 0 });
@@ -347,8 +349,11 @@ const Reports: React.FC = () => {
 
             if (!unavailData) return;
 
+            // Filter out 'Atividade' type
+            const filteredUnavailData = unavailData.filter(u => u.type !== 'Atividade');
+
             // Extract unique types for filter
-            const types = [...new Set(unavailData.map(u => u.type))].sort();
+            const types = [...new Set(filteredUnavailData.map(u => u.type))].sort();
             setAvailableUnavailTypes(types);
             
             // If current selected type is not in the new types list and list isn't empty, pick first one
@@ -373,7 +378,7 @@ const Reports: React.FC = () => {
             const memberMap = new Map<string, number>();
             eligibleMembers.forEach(m => memberMap.set(m.id, 0));
 
-            unavailData.forEach(u => {
+            filteredUnavailData.forEach(u => {
                 if (u.type === selectedUnavailType && memberMap.has(u.member)) {
                     const start = parseLocalDate(u.start_date);
                     const end = parseLocalDate(u.end_date);
@@ -425,11 +430,11 @@ const Reports: React.FC = () => {
                     return {
                         id: m.id,
                         name: m.name,
-                        war_name: m.war_name,
-                        abrev: m.abrev,
-                        avatar: m.avatar,
+                        war_name: m.war_name || undefined,
+                        abrev: m.abrev || undefined,
+                        avatar: m.avatar || undefined,
                         years: Math.max(years, 0),
-                    };
+                    } as SectionTimeEntry;
                 })
                 .filter((item): item is SectionTimeEntry => item !== null)
                 .sort((a, b) => b.years - a.years);
@@ -645,7 +650,15 @@ const Reports: React.FC = () => {
                             <h4 className="text-base font-bold text-slate-800 dark:text-white">Ranking de Atividades</h4>
                             <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Categorias por Quantidade Concluída</p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={() => navigate('/app/reports/comparative')}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold text-white bg-blue-600 hover:bg-blue-700 transition-all shadow-sm shadow-blue-200 dark:shadow-none active:scale-95 cursor-pointer"
+                            >
+                                <span className="material-symbols-outlined text-[14px]">bar_chart</span>
+                                Comparativo
+                            </button>
                             <select 
                                 value={rankingTimeRange}
                                 onChange={(e) => setRankingTimeRange(e.target.value)}

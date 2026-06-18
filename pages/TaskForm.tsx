@@ -80,6 +80,7 @@ const TaskForm: React.FC = () => {
     >([]);
     const [missions, setMissions] = useState<any[]>([]);
     const [unavailabilities, setUnavailabilities] = useState<any[]>([]);
+    const [annotations, setAnnotations] = useState<any[]>([]);
     const [currentUser, setCurrentUser] = useState<any>(null);
 
     // Filters
@@ -147,6 +148,7 @@ const TaskForm: React.FC = () => {
         fetchMembers();
         fetchMissions();
         fetchUnavailabilities();
+        fetchAnnotations();
         fetchCategories();
         fetchMeetings();
     }, []);
@@ -365,6 +367,20 @@ const TaskForm: React.FC = () => {
             setUnavailabilities(data || []);
         } catch (err: any) {
             console.error("Error fetching unavailabilities:", err.message);
+        }
+    };
+
+    const fetchAnnotations = async () => {
+        try {
+            const today = new Date().toLocaleDateString("en-CA");
+            const { data, error } = await supabase
+                .from("annotations")
+                .select("*")
+                .eq("date", today);
+            if (error) throw error;
+            setAnnotations(data || []);
+        } catch (err: any) {
+            console.error("Error fetching annotations:", err.message);
         }
     };
 
@@ -1332,6 +1348,12 @@ const TaskForm: React.FC = () => {
                                 t.assigned_to === member.id &&
                                 t.status !== "concluida"
                             );
+
+                            // Get member annotations for today
+                            const memberAnnotations = annotations.filter((a) =>
+                                a.member_id === member.id
+                            );
+
                             // Sort: In Progress first
                             memberTasks.sort((a, b) => {
                                 if (
@@ -1353,6 +1375,10 @@ const TaskForm: React.FC = () => {
                                         ${
                                         currentMission
                                             ? "bg-amber-50/50 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800"
+                                            : isUnavailable &&
+                                                    currentUnavail?.type ===
+                                                        "Atividade"
+                                            ? "bg-green-50/50 border-green-200 dark:bg-green-900/10 dark:border-green-800"
                                             : isUnavailable
                                             ? "bg-red-50/50 border-red-200 dark:bg-red-900/10 dark:border-red-800"
                                             : "bg-white border-[#e7edf3] dark:bg-slate-900 dark:border-slate-800"
@@ -1366,6 +1392,11 @@ const TaskForm: React.FC = () => {
                                             ${
                                                 currentMission
                                                     ? "border-amber-400"
+                                                    : isUnavailable &&
+                                                            currentUnavail
+                                                                    ?.type ===
+                                                                "Atividade"
+                                                    ? "border-green-400"
                                                     : isUnavailable
                                                     ? "border-red-400"
                                                     : "border-white dark:border-slate-800 bg-slate-200 dark:bg-slate-700 text-[#4c739a]"
@@ -1400,6 +1431,27 @@ const TaskForm: React.FC = () => {
                                                         </span>
                                                     </div>
                                                 )
+                                                : isUnavailable &&
+                                                        currentUnavail?.type ===
+                                                            "Atividade"
+                                                ? (
+                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                        <span className="material-symbols-outlined text-[14px] text-green-600 dark:text-green-500">
+                                                            event_note
+                                                        </span>
+                                                        <span className="text-[10px] text-green-600 dark:text-green-500 font-bold uppercase tracking-wider">
+                                                            {currentUnavail
+                                                                    ?.atividade ===
+                                                                    "M"
+                                                                ? "Indisponível pela Manhã"
+                                                                : currentUnavail
+                                                                        ?.atividade ===
+                                                                        "T"
+                                                                ? "Indisponível pela Tarde"
+                                                                : "Indisponível Manhã e Tarde"}
+                                                        </span>
+                                                    </div>
+                                                )
                                                 : isUnavailable
                                                 ? (
                                                     <div className="flex items-center gap-1.5 mt-0.5">
@@ -1428,6 +1480,10 @@ const TaskForm: React.FC = () => {
                                         className={`h-px w-full ${
                                             currentMission
                                                 ? "bg-amber-200 dark:bg-amber-800/50"
+                                                : isUnavailable &&
+                                                        currentUnavail?.type ===
+                                                            "Atividade"
+                                                ? "bg-green-200 dark:bg-green-800/50"
                                                 : isUnavailable
                                                 ? "bg-red-200 dark:bg-red-800/50"
                                                 : "bg-[#e7edf3] dark:bg-slate-800"
@@ -1455,6 +1511,72 @@ const TaskForm: React.FC = () => {
                                                     </div>
                                                 </div>
                                             )
+                                            : currentUnavail &&
+                                                    [
+                                                        "Atividade",
+                                                        "Home Office",
+                                                        "Dispensa",
+                                                        "Outros",
+                                                    ].includes(
+                                                        currentUnavail.type,
+                                                    )
+                                            ? (
+                                                <div className="flex items-start gap-2 py-1">
+                                                    <div
+                                                        className={`mt-0.5 p-1 rounded ${
+                                                            currentUnavail
+                                                                    .type ===
+                                                                    "Atividade"
+                                                                ? "bg-green-100 dark:bg-green-900/30"
+                                                                : "bg-red-100 dark:bg-red-900/30"
+                                                        }`}
+                                                    >
+                                                        <span
+                                                            className={`material-symbols-outlined text-[14px] ${
+                                                                currentUnavail
+                                                                        .type ===
+                                                                        "Atividade"
+                                                                    ? "text-green-600 dark:text-green-500"
+                                                                    : "text-red-600 dark:text-red-500"
+                                                            }`}
+                                                        >
+                                                            {currentUnavail
+                                                                    .type ===
+                                                                    "Atividade"
+                                                                ? "event_note"
+                                                                : currentUnavail
+                                                                        .type ===
+                                                                        "Home Office"
+                                                                ? "home"
+                                                                : "info"}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span
+                                                            className={`text-[11px] font-black uppercase leading-tight line-clamp-2 ${
+                                                                currentUnavail
+                                                                        .type ===
+                                                                        "Atividade"
+                                                                    ? "text-green-700 dark:text-green-400"
+                                                                    : "text-red-700 dark:text-red-400"
+                                                            }`}
+                                                        >
+                                                            {currentUnavail
+                                                                .detalhes ||
+                                                                "Sem detalhes informados"}
+                                                        </span>
+                                                        {
+                                                            /* <span className={`text-[9px] font-bold uppercase ${  //Tipo de dispensa
+                                                            currentUnavail.type === 'Atividade'
+                                                                ? 'text-green-600/70 dark:text-green-500/70'
+                                                                : 'text-red-600/70 dark:text-red-500/70'
+                                                        }`}>
+                                                            {currentUnavail.type}
+                                                        </span> */
+                                                        }
+                                                    </div>
+                                                </div>
+                                            )
                                             : (
                                                 <>
                                                     {memberTasks.length > 0
@@ -1472,7 +1594,22 @@ const TaskForm: React.FC = () => {
                                                                             ? "font-bold text-primary"
                                                                             : "text-[#4c739a]"
                                                                     }`}
-                                                                    title={`${task.name}${task.description ? `\nDescrição: ${task.description}` : ""}${task.end_date ? `\nPrazo: ${new Date(task.end_date + "T12:00:00").toLocaleDateString("pt-BR")}` : ""}`}
+                                                                    title={`${task.name}${
+                                                                        task.description
+                                                                            ? `\nDescrição: ${task.description}`
+                                                                            : ""
+                                                                    }${
+                                                                        task.end_date
+                                                                            ? `\nPrazo: ${
+                                                                                new Date(
+                                                                                    task.end_date +
+                                                                                        "T12:00:00",
+                                                                                ).toLocaleDateString(
+                                                                                    "pt-BR",
+                                                                                )
+                                                                            }`
+                                                                            : ""
+                                                                    }`}
                                                                 >
                                                                     {task
                                                                                 .status ===
@@ -1498,6 +1635,28 @@ const TaskForm: React.FC = () => {
                                                     )}
                                                 </>
                                             )}
+
+                                        {memberAnnotations && memberAnnotations.length > 0 && (
+                                            <div className="flex flex-col gap-1.5 mt-2 border-t border-slate-100 dark:border-slate-800/40 pt-2">
+                                                {memberAnnotations.map((anno) => (
+                                                    <div key={anno.id} className="flex items-start gap-1.5 py-0.5">
+                                                        <div className="mt-0.5 p-0.5 bg-amber-50 dark:bg-amber-950/20 rounded shrink-0">
+                                                            <span className="material-symbols-outlined text-[12px] text-amber-600 dark:text-amber-500 leading-none">
+                                                                sticky_note_2
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex flex-col min-w-0">
+                                                            <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 leading-tight break-words" title={anno.annotation}>
+                                                                {anno.annotation}
+                                                            </span>
+                                                            <span className="text-[8px] font-medium text-slate-400 dark:text-slate-500 uppercase">
+                                                                Anotação: {anno.start_time} - {anno.end_time}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             );
