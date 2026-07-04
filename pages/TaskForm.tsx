@@ -74,6 +74,7 @@ const TaskForm: React.FC = () => {
 
     // Data
     const [tasks, setTasks] = useState<Task[]>([]);
+    const [activeAssignedTasks, setActiveAssignedTasks] = useState<Task[]>([]);
     const [members, setMembers] = useState<Member[]>([]);
     const [meetingAvailableMembers, setMeetingAvailableMembers] = useState<
         Member[]
@@ -133,7 +134,7 @@ const TaskForm: React.FC = () => {
         category: "",
         specialties: ["BCT", "AIS"] as string[],
         description: "",
-        periodicity: "diaria",
+        periodicity: "",
         start_date: "",
         end_date: "",
         assigned_to: "",
@@ -332,6 +333,35 @@ const TaskForm: React.FC = () => {
                 setTasks(data || []);
                 setTotalTasks(count || 0);
             }
+
+            // --- FETCH ALL ACTIVE ASSIGNED TASKS FOR "CONTROLE DO EFETIVO" ---
+            let activeQuery = supabase
+                .from("tasks")
+                .select("*")
+                .not("assigned_to", "is", null)
+                .neq("status", "concluida");
+
+            if (sector && (sector === "CP" || sector === "EA")) {
+                activeQuery = activeQuery.eq("sector", sector);
+            }
+
+            const { data: activeData, error: activeError } = await activeQuery;
+            if (activeError) throw activeError;
+            
+            // Apply Dashboard's "start_date" logic to accurately reflect active assignments
+            const validActiveTasks = (activeData || []).filter((task: any) => {
+                if (!task.start_date) return true;
+                const startDate = parseLocalDate(task.start_date);
+                if (!startDate) return true;
+                startDate.setHours(0, 0, 0, 0);
+                const now = new Date();
+                now.setHours(0, 0, 0, 0);
+                return startDate <= now;
+            });
+            
+            setActiveAssignedTasks(validActiveTasks);
+            // -----------------------------------------------------------------
+
         } catch (err: any) {
             console.error("Error fetching tasks:", err.message);
         } finally {
@@ -438,7 +468,7 @@ const TaskForm: React.FC = () => {
             category: "",
             specialties: ["BCT", "AIS"],
             description: "",
-            periodicity: "diaria",
+            periodicity: "",
             start_date: new Date().toLocaleDateString("en-CA"),
             end_date: "",
             assigned_to: "",
@@ -488,11 +518,17 @@ const TaskForm: React.FC = () => {
         if (!editingTask || !editingTask.id) return;
         setLoading(true);
         try {
-            const { error: updateError } = await supabase
+            const { error: updateError, data: revertedTask } = await supabase
                 .from("tasks")
                 .update({ status: "pendente" })
-                .eq("id", editingTask.id);
+                .eq("id", editingTask.id)
+                .select('mission_id')
+                .single();
             if (updateError) throw updateError;
+            
+            if (revertedTask && revertedTask.mission_id) {
+                await supabase.from("missions").update({ fav: false }).eq("id", revertedTask.mission_id);
+            }
 
             await fetchTasks();
             setView("list");
@@ -625,6 +661,13 @@ const TaskForm: React.FC = () => {
         e.preventDefault();
         setLoading(true);
         setError(null);
+
+        // Validation for Periodicity
+        if (!formData.periodicity || formData.periodicity === "") {
+            setError("Por favor, selecione a periodicidade da tarefa.");
+            setLoading(false);
+            return;
+        }
 
         // Validation for Pontual
         if (formData.periodicity === "pontual" && !formData.end_date) {
@@ -1112,6 +1155,7 @@ const TaskForm: React.FC = () => {
                                         onChange={handleInputChange}
                                         className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
                                     >
+                                        <option value="" disabled hidden>Selecione a Periodicidade...</option>
                                         <option value="diaria">Diária</option>
                                         <option value="semanal">Semanal</option>
                                         <option value="quinzenal">
@@ -1344,9 +1388,8 @@ const TaskForm: React.FC = () => {
                                 !!currentUnavail;
 
                             // Get member tasks
-                            const memberTasks = tasks.filter((t) =>
-                                t.assigned_to === member.id &&
-                                t.status !== "concluida"
+                            const memberTasks = activeAssignedTasks.filter((t) =>
+                                t.assigned_to === member.id
                             );
 
                             // Get member annotations for today

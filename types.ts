@@ -32,6 +32,7 @@ export interface Task {
   location: string;
   status: 'available' | 'in_progress' | 'completed';
   progress?: number;
+  mission_id?: string;
 }
 
 export interface ShortcutLink {

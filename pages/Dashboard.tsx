@@ -205,12 +205,19 @@ const Dashboard: React.FC = () => {
 
   const handleCompleteTask = async (taskId: string) => {
     try {
-      const { error } = await supabase
+      const { error, data: updatedTask } = await supabase
         .from("tasks")
         .update({ status: "concluida", completed_at: new Date().toISOString() })
-        .eq("id", taskId);
+        .eq("id", taskId)
+        .select('mission_id')
+        .single();
 
       if (error) throw error;
+      
+      // Update mission fav to true if linked
+      if (updatedTask && updatedTask.mission_id) {
+          await supabase.from("missions").update({ fav: true }).eq("id", updatedTask.mission_id);
+      }
       // Update status in local state instead of removing, so it counts towards completed stats immediately
       setTasks((prev) =>
         prev.map((t) =>
@@ -479,16 +486,23 @@ const Dashboard: React.FC = () => {
 
   const executeCompletion = async (taskId: string, qty: number) => {
     try {
-      const { error } = await supabase
+      const { error, data: updatedTask } = await supabase
         .from("tasks")
         .update({
           status: "concluida",
           completed_at: new Date().toISOString(),
           quantidade: qty,
         })
-        .eq("id", taskId);
+        .eq("id", taskId)
+        .select('mission_id')
+        .single();
 
       if (error) throw error;
+      
+      // Update mission fav to true if linked
+      if (updatedTask && updatedTask.mission_id) {
+          await supabase.from("missions").update({ fav: true }).eq("id", updatedTask.mission_id);
+      }
       // Update status in local state
       setTasks((prev) =>
         prev.map((t) =>

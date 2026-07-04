@@ -25,6 +25,7 @@ interface Mission {
     qtd_equipe: number;
     equipe: string[] | null;
     sector?: string;
+    task_id?: string;
 }
 
 // Rank Priority Logic
@@ -298,6 +299,12 @@ const YearlySchedule: React.FC = () => {
 
     const confirmDelete = async () => {
         if (!missionToDelete) return;
+        
+        // Delete related task if exists
+        if (missionToDelete.task_id) {
+            await supabase.from('tasks').delete().eq('id', missionToDelete.task_id);
+        }
+
         const { error } = await supabase
             .from('missions')
             .delete()
