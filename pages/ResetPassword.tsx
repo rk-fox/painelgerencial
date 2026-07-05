@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabase';
 
 const ResetPassword: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,6 +26,19 @@ const ResetPassword: React.FC = () => {
     setError(null);
 
     try {
+      // Pega os parâmetros do link enviado pelo Supabase (PKCE flow)
+      // Tenta pegar do HashRouter (searchParams) ou da URL principal (window.location.search)
+      const token_hash = searchParams.get('token_hash') || new URLSearchParams(window.location.search).get('token_hash');
+      const type = searchParams.get('type') || new URLSearchParams(window.location.search).get('type');
+
+      if (token_hash && type === 'recovery') {
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash,
+          type: 'recovery'
+        });
+        if (verifyError) throw verifyError;
+      }
+
       const { error } = await supabase.auth.updateUser({
         password: password
       });
