@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 
 const ResetPassword: React.FC = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,19 +25,28 @@ const ResetPassword: React.FC = () => {
     setError(null);
 
     try {
-      // Pega os parâmetros do link enviado pelo Supabase (PKCE flow)
-      // Tenta pegar do HashRouter (searchParams) ou da URL principal (window.location.search)
-      const token_hash = searchParams.get('token_hash') || new URLSearchParams(window.location.search).get('token_hash');
-      const type = searchParams.get('type') || new URLSearchParams(window.location.search).get('type');
+      // Como você está usando HashRouter, a URL fica com dois '#' (ex: #/reset-password#access_token=...)
+      // O Supabase às vezes não consegue ler isso sozinho, então pegamos manualmente:
+      const hash = window.location.hash;
+      
+      // Checa se a URL possui o access_token (Fluxo Implícito)
+      if (hash.includes('access_token=')) {
+        const paramsStr = hash.substring(hash.indexOf('access_token='));
+        const params = new URLSearchParams(paramsStr);
+        const access_token = params.get('access_token');
+        const refresh_token = params.get('refresh_token');
 
-      if (token_hash && type === 'recovery') {
-        const { error: verifyError } = await supabase.auth.verifyOtp({
-          token_hash,
-          type: 'recovery'
-        });
-        if (verifyError) throw verifyError;
+        if (access_token && refresh_token) {
+          // Estabelece a sessão manualmente com os tokens da URL
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token,
+            refresh_token
+          });
+          if (sessionError) throw sessionError;
+        }
       }
 
+      // Agora que garantimos que há uma sessão ativa, atualizamos a senha
       const { error } = await supabase.auth.updateUser({
         password: password
       });
