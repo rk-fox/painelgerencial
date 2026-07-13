@@ -342,15 +342,91 @@ const SdiaPage: React.FC = () => {
                     .eq("id", editingSdia.id);
                 if (error) throw error;
             } else {
-                const { error } = await supabase
+                const { data: createdSdia, error } = await supabase
                     .from("sdia")
                     .insert([{
                         ...dataToSave,
                         sector: currentUser?.sector === "CH"
                             ? dataToSave.sector
                             : currentUser?.sector,
-                    }]);
+                    }])
+                    .select()
+                    .single();
                 if (error) throw error;
+
+                // Criar task automaticamente para a nova SDIA
+                if (createdSdia) {
+                    try {
+                        // Buscar sector do analista
+                        let analystSector = currentUser?.sector;
+                        if (createdSdia.analista) {
+                            const { data: analystData } = await supabase
+                                .from("members")
+                                .select("sector")
+                                .eq("id", createdSdia.analista)
+                                .single();
+                            if (analystData?.sector) {
+                                analystSector = analystData.sector;
+                            }
+                        }
+
+                        const formatDateBr = (dateStr: string) => {
+                            if (!dateStr) return "";
+                            const [y, m, d] = dateStr.split("T")[0].split("-");
+                            return `${d}/${m}/${y}`;
+                        };
+
+                        const taskDescription = `Solicitação ${
+                            createdSdia.nr_solicitacao || ""
+                        }, ${createdSdia.indicativo || ""}, ${
+                            createdSdia.titulo_sdia || ""
+                        }, de ${formatDateBr(createdSdia.data_inicio)} a ${
+                            formatDateBr(createdSdia.data_fim)
+                        }. ${
+                            createdSdia.cap
+                                ? "Apresenta redução de capacidade"
+                                : "Não apresenta redução de capacidade"
+                        } e ${
+                            createdSdia.impacto
+                                ? "tem previsão de impacto na demanda"
+                                : "não tem previsão de impacto na demanda"
+                        }. ${
+                            createdSdia.clsd
+                                ? "O aeródromo vai estar fechado no período"
+                                : ""
+                        }`;
+
+                        const newTask = {
+                            name: `SDIA ${createdSdia.nr_sdia} respondida`,
+                            assigned_to: createdSdia.analista || null,
+                            category: "Resposta de SDIA",
+                            quantidade: 1,
+                            specialties: ["BCT", "AIS"],
+                            periodicity: "pontual",
+                            start_date: createdSdia.created_at,
+                            end_date: createdSdia.created_at,
+                            completed_at: createdSdia.created_at,
+                            status: "concluida",
+                            sector: analystSector,
+                            description: taskDescription,
+                            recurrence_active: false,
+                            created_at: createdSdia.created_at,
+                        };
+
+                        const { error: taskError } = await supabase
+                            .from("tasks")
+                            .insert([newTask]);
+
+                        if (taskError) {
+                            console.error(
+                                "Error creating linked task:",
+                                taskError,
+                            );
+                        }
+                    } catch (taskErr) {
+                        console.error("Error creating task for SDIA:", taskErr);
+                    }
+                }
             }
             setIsFormOpen(false);
             setEditingSdia(null);
@@ -843,8 +919,8 @@ const SdiaPage: React.FC = () => {
             {/* Form Modal */}
             {isFormOpen && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 overflow-y-auto">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full my-8">
-                        <div className="px-8 py-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full my-8 max-h-[95vh] overflow-y-auto">
+                        <div className="px-8 py-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10">
                             <h2 className="text-xl font-black text-slate-900 dark:text-white">
                                 {editingSdia ? "Editar SDIA" : "Nova SDIA"}
                             </h2>

@@ -625,8 +625,8 @@ const MonthlyPlanner: React.FC = () => {
         if (viewMode === "month") newDate.setMonth(newDate.getMonth() + 1);
         else newDate.setDate(newDate.getDate() + 7);
 
-        // Bloquear navegação para depois de 2026
-        if (newDate.getFullYear() > 2026) return;
+        // Bloquear navegação para depois do ano seguinte ao atual
+        if (newDate.getFullYear() > today.getFullYear() + 1) return;
 
         setAnchorDate(newDate);
     };
