@@ -17,9 +17,7 @@ interface Member {
 interface Category {
     id: string;
     nome_cat: string;
-}
-
-interface Task {
+}interface Task {
     id: string;
     name: string;
     specialties: string[];
@@ -34,8 +32,11 @@ interface Task {
     sector?: string;
     quantidade?: number;
     category?: string;
+    qb?: boolean;
+    despacho?: string | null;
+    obs?: string | null;
+    prazo_final?: string | null;
 }
-
 // Rank Priority Logic
 const getRankPriority = (
     rankStr: string | null,
@@ -139,6 +140,8 @@ const TaskForm: React.FC = () => {
         end_date: "",
         assigned_to: "",
         sector: "",
+        qb: false,
+        prazo_final: "",
     });
 
     useEffect(() => {
@@ -473,6 +476,8 @@ const TaskForm: React.FC = () => {
             end_date: "",
             assigned_to: "",
             sector: "",
+            qb: false,
+            prazo_final: "",
         });
         setView("form");
         setError(null);
@@ -490,14 +495,14 @@ const TaskForm: React.FC = () => {
             end_date: task.end_date ? task.end_date.split("T")[0] : "",
             assigned_to: task.assigned_to || "",
             sector: task.sector || "",
+            qb: task.qb || false,
+            prazo_final: task.prazo_final ? task.prazo_final.split("T")[0] : "",
         });
         setView("form");
         setError(null);
     };
 
     const handleClone = (task: Task) => {
-        // Clone is like create but with prepopulated data (except ID and dates usually reset or kept? User said "Allows editing dates")
-        // We set editingTask to null so it inserts as new
         setEditingTask(null);
         setFormData({
             name: `${task.name}`,
@@ -505,10 +510,12 @@ const TaskForm: React.FC = () => {
             specialties: task.specialties || [],
             description: task.description || "",
             periodicity: task.periodicity,
-            start_date: new Date().toLocaleDateString("en-CA"), // Reset start date to today
+            start_date: new Date().toLocaleDateString("en-CA"),
             end_date: "",
-            assigned_to: "", // Clear assignment for new clone? Usually safer.
+            assigned_to: "",
             sector: task.sector || "",
+            qb: task.qb || false,
+            prazo_final: task.prazo_final ? task.prazo_final.split("T")[0] : "",
         });
         setView("form");
         setError(null);
@@ -705,13 +712,16 @@ const TaskForm: React.FC = () => {
                     : null,
                 assigned_to: formData.assigned_to || null,
                 recurrence_active: recurrenceActive,
-                // If creating new, default status to 'pendente'. If editing, keep status unless logic dictates otherwise.
                 status: editingTask ? undefined : "pendente",
                 sector: editingTask
                     ? undefined
                     : (currentUser?.sector === "CH"
                         ? formData.sector
                         : currentUser?.sector),
+                qb: formData.periodicity === "pontual" ? formData.qb : false,
+                prazo_final: formData.periodicity === "pontual" && formData.qb && formData.prazo_final
+                    ? formData.prazo_final
+                    : null,
             };
 
             if (
@@ -1212,61 +1222,100 @@ const TaskForm: React.FC = () => {
                                 </div>
 
                                 {formData.periodicity === "pontual" && (
-                                    <div className="flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                                        <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
-                                            Prazo de Conclusão
-                                        </label>
-                                        <div className="relative">
-                                            <input
-                                                name="end_date"
-                                                value={formData.end_date}
-                                                onChange={handleInputChange}
-                                                className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3 pl-10"
-                                                type="date"
-                                            />
-                                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#4c739a] pointer-events-none text-xl">
-                                                event_available
-                                            </span>
+                                    <>
+                                        <div className="flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                            <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                                Prazo de Conclusão
+                                            </label>
+                                            <div className="relative">
+                                                <input
+                                                    name="end_date"
+                                                    value={formData.end_date}
+                                                    onChange={handleInputChange}
+                                                    className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3 pl-10"
+                                                    type="date"
+                                                />
+                                                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#4c739a] pointer-events-none text-xl">
+                                                    event_available
+                                                </span>
+                                            </div>
                                         </div>
-                                    </div>
+
+                                        {formData.qb && (
+                                            <div className="flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                                <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                                    Prazo Final (Quadro Branco)
+                                                </label>
+                                                <div className="relative">
+                                                    <input
+                                                        name="prazo_final"
+                                                        value={formData.prazo_final}
+                                                        onChange={handleInputChange}
+                                                        className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3 pl-10"
+                                                        type="date"
+                                                    />
+                                                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#4c739a] pointer-events-none text-xl">
+                                                        event_available
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         </div>
 
-                        <div className="p-6 border-t border-[#e7edf3] dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-end gap-3">
-                            {editingTask &&
-                                editingTask.status === "concluida" && (
+                        <div className="p-6 border-t border-[#e7edf3] dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-4 mr-auto">
+                                {editingTask &&
+                                    editingTask.status === "concluida" && (
+                                    <button
+                                        className="px-6 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-sm font-bold hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400 transition-colors flex items-center gap-2"
+                                        type="button"
+                                        onClick={handleRevertStatus}
+                                        disabled={loading}
+                                    >
+                                        <span className="material-symbols-outlined text-[20px]">
+                                            history
+                                        </span>
+                                        Reverter Status
+                                    </button>
+                                )}
+                                {formData.periodicity === "pontual" && (
+                                    <label className="flex items-center gap-2 text-sm font-semibold text-[#0d141b] dark:text-white cursor-pointer select-none">
+                                        <input
+                                            type="checkbox"
+                                            name="qb"
+                                            checked={formData.qb}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, qb: e.target.checked }))}
+                                            className="rounded border-[#cfdbe7] dark:border-slate-700 text-primary focus:ring-primary h-4 w-4"
+                                        />
+                                        Inserir no Quadro Branco?
+                                    </label>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-3">
                                 <button
-                                    className="mr-auto px-6 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-sm font-bold hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400 transition-colors flex items-center gap-2"
+                                    className="px-6 py-2.5 rounded-lg border border-[#cfdbe7] dark:border-slate-700 text-[#0d141b] dark:text-white text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                                     type="button"
-                                    onClick={handleRevertStatus}
+                                    onClick={() => setView("list")}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    className="px-6 py-2.5 rounded-lg bg-primary text-white text-sm font-bold shadow-md hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+                                    type="submit"
                                     disabled={loading}
                                 >
-                                    <span className="material-symbols-outlined text-[20px]">
-                                        history
-                                    </span>
-                                    Reverter Status
+                                    {loading && (
+                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white">
+                                        </div>
+                                    )}
+                                    {loading ? "Salvando..." : "Salvar Tarefa"}
                                 </button>
-                            )}
-                            <button
-                                className="px-6 py-2.5 rounded-lg border border-[#cfdbe7] dark:border-slate-700 text-[#0d141b] dark:text-white text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                                type="button"
-                                onClick={() => setView("list")}
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                className="px-6 py-2.5 rounded-lg bg-primary text-white text-sm font-bold shadow-md hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
-                                type="submit"
-                                disabled={loading}
-                            >
-                                {loading && (
-                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white">
-                                    </div>
-                                )}
-                                {loading ? "Salvando..." : "Salvar Tarefa"}
-                            </button>
+                            </div>
                         </div>
+
                     </form>
                 </div>
                 {/* New Category Modal (Form View) */}

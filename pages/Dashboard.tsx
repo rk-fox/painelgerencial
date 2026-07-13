@@ -10,9 +10,11 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [meetings, setMeetings] = useState<any[]>([]);
   const [isMeetingsExpanded, setIsMeetingsExpanded] = useState(false);
-
   const [filterSpecialties, setFilterSpecialties] = useState<string[]>([]);
   const [filterPeriodicities, setFilterPeriodicities] = useState<string[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
+  const [selectedDispatchMemberId, setSelectedDispatchMemberId] = useState<string>("");
+  const [isUltimoDespacho, setIsUltimoDespacho] = useState<boolean>(false);
 
   const getUserSector = () => {
     const userJson = localStorage.getItem("currentUser");
@@ -60,7 +62,25 @@ const Dashboard: React.FC = () => {
     }
     fetchTasks(user);
     fetchMeetings(user);
+    fetchMembers(user);
   }, []);
+
+  const fetchMembers = async (userObj = currentUser) => {
+    const sector = userObj?.sector || getUserSector();
+    if (!sector) return;
+    try {
+      const { data, error } = await supabase
+        .from("members")
+        .select("id, name, war_name, rank, abrev")
+        .eq("sector", sector)
+        .order("name", { ascending: true });
+
+      if (error) throw error;
+      setMembers(data || []);
+    } catch (err: any) {
+      console.error("Error fetching members:", err.message);
+    }
+  };
 
   const fetchMeetings = async (userObj = currentUser) => {
     if (!userObj) return;
@@ -465,6 +485,8 @@ const Dashboard: React.FC = () => {
   const handleRequestCompletion = (task: any) => {
     setTaskToComplete(task);
     setCompletionQuantity(task.quantidade || 1);
+    setSelectedDispatchMemberId("");
+    setIsUltimoDespacho(false);
     setShowCompletionModal(true);
   };
 
@@ -477,8 +499,6 @@ const Dashboard: React.FC = () => {
 
   const cancelCompletion = async () => {
     if (!taskToComplete) return;
-    // "Caso cancele, deve manter a conclusão da tarefa com a quantidade inalterada."
-    // So we complete with ORIGINAL quantity.
     await executeCompletion(taskToComplete.id, taskToComplete.quantidade || 1);
     setShowCompletionModal(false);
     setTaskToComplete(null);
@@ -494,15 +514,69 @@ const Dashboard: React.FC = () => {
           quantidade: qty,
         })
         .eq("id", taskId)
-        .select('mission_id')
+        .select('*')
         .single();
 
       if (error) throw error;
-      
+
       // Update mission fav to true if linked
       if (updatedTask && updatedTask.mission_id) {
-          await supabase.from("missions").update({ fav: true }).eq("id", updatedTask.mission_id);
+        await supabase.from("missions").update({ fav: true }).eq("id", updatedTask.mission_id);
       }
+
+      // Quadro Branco dispatch logic
+      if (updatedTask?.qb && selectedDispatchMemberId && !isUltimoDespacho) {
+        const rankMap: Record<string, string> = {
+          'Major': 'Maj.', 'Capitão': 'Cap.', '1º Tenente': 'Ten.', '2º Tenente': 'Ten.',
+          'Suboficial': 'SO.', '1º Sargento': 'Sgt.', '2º Sargento': 'Sgt.', '3º Sargento': 'Sgt.', 'Civil': 'Cv.'
+        };
+        // Find the original task's assignee name for the description
+        const originalAssignee = members.find((m: any) => m.id === updatedTask.assigned_to);
+        
+        let assigneeName = "N/D";
+        if (originalAssignee) {
+           const abbr = originalAssignee.abrev || rankMap[originalAssignee.rank] || originalAssignee.rank || "";
+           assigneeName = `${abbr} ${originalAssignee.war_name || originalAssignee.name}`.trim();
+        }
+
+        // Build description: always reference the original task's assignee
+        const dispatchDescription = `Analisar entregável realizado por ${assigneeName}. ${updatedTask.description || ""}`;
+
+        // Create the dispatch (child) task
+        const { data: newTask, error: insertError } = await supabase
+          .from("tasks")
+          .insert({
+            name: updatedTask.name,
+            description: dispatchDescription,
+            assigned_to: selectedDispatchMemberId,
+            sector: updatedTask.sector,
+            specialty: updatedTask.specialty,
+            specialties: updatedTask.specialties,
+            category: updatedTask.category,
+            periodicity: updatedTask.periodicity,
+            start_date: updatedTask.start_date,
+            end_date: updatedTask.prazo_final || updatedTask.end_date,
+            quantidade: updatedTask.quantidade,
+            mission_id: updatedTask.mission_id,
+            qb: true,
+            prazo_final: updatedTask.prazo_final,
+            despacho: null,
+            status: "pendente",
+          })
+          .select("id")
+          .single();
+
+        if (insertError) {
+          console.error("Error creating dispatch task:", insertError.message);
+        } else {
+          // Update the original task's despacho to point to the new task
+          await supabase
+            .from("tasks")
+            .update({ despacho: newTask.id })
+            .eq("id", updatedTask.id);
+        }
+      }
+
       // Update status in local state
       setTasks((prev) =>
         prev.map((t) =>
@@ -517,12 +591,15 @@ const Dashboard: React.FC = () => {
         )
       );
 
-      // Also refetch
+      // Refetch to sync
       await fetchTasks();
     } catch (err: any) {
       console.error("Error completing task:", err.message);
     }
   };
+
+  // Filter members for dispatch dropdown (exclude current user)
+  const dispatchableMembers = members.filter((m: any) => m.id !== currentUser?.id);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 relative">
@@ -721,7 +798,7 @@ const Dashboard: React.FC = () => {
       {/* Completion Modal */}
       {showCompletionModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl p-6 w-full max-w-sm border border-[#e7edf3] dark:border-slate-800 flex flex-col gap-4 animate-in zoom-in-95 duration-300">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl p-6 w-full max-w-md border border-[#e7edf3] dark:border-slate-800 flex flex-col gap-4 animate-in zoom-in-95 duration-300">
             <div className="flex flex-col items-center gap-2 text-center">
               <div className="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center mb-2">
                 <span className="material-symbols-outlined text-2xl">
@@ -752,6 +829,48 @@ const Dashboard: React.FC = () => {
                 autoFocus
               />
             </div>
+
+            {/* Quadro Branco Dispatch Section */}
+            {taskToComplete?.qb && (
+              <div className="border-t border-[#e7edf3] dark:border-slate-800 pt-4 flex flex-col gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="material-symbols-outlined text-primary text-lg">
+                    forward_to_inbox
+                  </span>
+                  <h4 className="text-sm font-bold text-[#0d141b] dark:text-white">
+                    Despacho — Quadro Branco
+                  </h4>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-[#4c739a] dark:text-slate-400">
+                    Para quem despachar?
+                  </label>
+                  <select
+                    value={selectedDispatchMemberId}
+                    onChange={(e) => setSelectedDispatchMemberId(e.target.value)}
+                    className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-2.5"
+                  >
+                    <option value="">— Selecione um militar —</option>
+                    {dispatchableMembers.map((m: any) => (
+                      <option key={m.id} value={m.id}>
+                        {m.rank ? `${m.rank} ` : ""}{m.war_name || m.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <label className="flex items-center gap-2 text-sm font-semibold text-[#0d141b] dark:text-white cursor-pointer select-none mt-1">
+                  <input
+                    type="checkbox"
+                    checked={isUltimoDespacho}
+                    onChange={(e) => setIsUltimoDespacho(e.target.checked)}
+                    className="rounded border-[#cfdbe7] dark:border-slate-700 text-primary focus:ring-primary h-4 w-4"
+                  />
+                  Último despacho (não criar nova tarefa)
+                </label>
+              </div>
+            )}
 
             <div className="flex items-center gap-3 pt-2">
               <button

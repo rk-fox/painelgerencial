@@ -392,7 +392,7 @@ const SdiaPage: React.FC = () => {
                                 : "não tem previsão de impacto na demanda"
                         }. ${
                             createdSdia.clsd
-                                ? "O aeródromo vai estar fechado no período"
+                                ? "O aeródromo vai estar fechado no período."
                                 : ""
                         }`;
 

@@ -33,6 +33,10 @@ export interface Task {
   status: 'available' | 'in_progress' | 'completed';
   progress?: number;
   mission_id?: string;
+  qb?: boolean;
+  despacho?: string | null;
+  obs?: string | null;
+  prazo_final?: string | null;
 }
 
 export interface ShortcutLink {

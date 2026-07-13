@@ -184,6 +184,7 @@ const Layout: React.FC = () => {
               collapsed={isSidebarCollapsed}
             />
           )}
+
           <SidebarItem
             to="/app/tasks/new"
             icon="assignment"
@@ -220,6 +221,14 @@ const Layout: React.FC = () => {
             label="Atalhos"
             collapsed={isSidebarCollapsed}
           />
+          {(currentUser?.sector === 'CP' || currentUser?.sector === 'EA') && (
+            <SidebarItem
+              to="/app/quadro-branco"
+              icon="view_kanban"
+              label="Quadro Branco"
+              collapsed={isSidebarCollapsed}
+            />
+          )}
         </nav>
 
         <div className="p-4 border-t border-[#e7edf3] dark:border-slate-800 space-y-4">
