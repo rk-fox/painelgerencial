@@ -5,6 +5,28 @@ const QuadroBranco: React.FC = () => {
     const [tasks, setTasks] = useState<any[]>([]);
     const [members, setMembers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [selectedDate, setSelectedDate] = useState(new Date());
+
+    const selectedMonth = selectedDate.getMonth();
+    const selectedYear = selectedDate.getFullYear();
+    const now = new Date();
+    const isCurrentMonth = selectedMonth === now.getMonth() && selectedYear === now.getFullYear();
+
+    const goToPreviousMonth = () => {
+        setSelectedDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+    };
+
+    const goToNextMonth = () => {
+        if (!isCurrentMonth) {
+            setSelectedDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+        }
+    };
+
+    const formatDate = (dateString: string | null) => {
+        if (!dateString) return "-";
+        const safeDate = dateString.length === 10 ? `${dateString}T12:00:00` : dateString;
+        return new Date(safeDate).toLocaleDateString("pt-BR");
+    };
 
     useEffect(() => {
         const fetchData = async () => {
@@ -81,19 +103,13 @@ const QuadroBranco: React.FC = () => {
 
     const calculateDaysRemaining = (dateString: string | null) => {
         if (!dateString) return null;
-        const target = new Date(dateString);
+        const safeDate = dateString.length === 10 ? `${dateString}T12:00:00` : dateString;
+        const target = new Date(safeDate);
         target.setHours(23, 59, 59, 999);
         const now = new Date();
         const diff = target.getTime() - now.getTime();
         return Math.ceil(diff / (1000 * 3600 * 24));
     };
-
-    // Find head tasks (tasks that have qb=true and no other task points to them via despacho)
-    const headTasks = tasks.filter((t) => {
-        if (!t.qb) return false;
-        const isChild = tasks.some((other) => other.despacho === t.id);
-        return !isChild;
-    });
 
     const getLatestTask = (head: any) => {
         let current = head;
@@ -104,6 +120,28 @@ const QuadroBranco: React.FC = () => {
         }
         return current;
     };
+
+    // Find head tasks (tasks that have qb=true and no other task points to them via despacho)
+    const headTasks = tasks.filter((t) => {
+        if (!t.qb) return false;
+        const isChild = tasks.some((other) => other.despacho === t.id);
+        if (isChild) return false;
+
+        const latest = getLatestTask(t);
+        const taskDateStr = t.start_date || t.created_at;
+        const taskDate = taskDateStr ? new Date(taskDateStr.length === 10 ? `${taskDateStr}T12:00:00` : taskDateStr) : new Date();
+        
+        const taskMonth = taskDate.getMonth();
+        const taskYear = taskDate.getFullYear();
+        
+        const createdInSelectedMonth = taskMonth === selectedMonth && taskYear === selectedYear;
+        const createdBeforeSelectedMonth = taskYear < selectedYear || (taskYear === selectedYear && taskMonth < selectedMonth);
+        
+        if (createdInSelectedMonth) return true;
+        if (createdBeforeSelectedMonth && latest.status !== 'concluida') return true;
+        
+        return false;
+    });
 
     if (loading) {
         return (
@@ -116,16 +154,30 @@ const QuadroBranco: React.FC = () => {
 
     return (
         <div className="p-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
-            <div className="mb-8">
-                <h1 className="text-3xl font-extrabold text-[#0d141b] dark:text-white flex items-center gap-3">
-                    <span className="material-symbols-outlined text-4xl text-primary">
-                        view_kanban
+            <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-extrabold text-[#0d141b] dark:text-white flex items-center gap-3">
+                        <span className="material-symbols-outlined text-4xl text-primary">
+                            view_kanban
+                        </span>
+                        Quadro Branco
+                    </h1>
+                    <p className="text-[#4c739a] dark:text-slate-400 mt-2 font-medium">
+                        Acompanhamento de tarefas e despachos
+                    </p>
+                </div>
+
+                <div className="flex items-center justify-between border border-[#e7edf3] dark:border-slate-700 rounded-full px-4 py-2 bg-white dark:bg-slate-800 shadow-sm w-64">
+                    <button onClick={goToPreviousMonth} className="text-primary hover:bg-slate-100 dark:hover:bg-slate-700 p-1 rounded-full flex items-center justify-center transition-colors">
+                        <span className="material-symbols-outlined">chevron_left</span>
+                    </button>
+                    <span className="font-bold text-[#0d141b] dark:text-white capitalize">
+                        {selectedDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
                     </span>
-                    Quadro Branco
-                </h1>
-                <p className="text-[#4c739a] dark:text-slate-400 mt-2 font-medium">
-                    Acompanhamento de tarefas e despachos
-                </p>
+                    <button onClick={goToNextMonth} disabled={isCurrentMonth} className={`p-1 rounded-full flex items-center justify-center transition-colors ${isCurrentMonth ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed' : 'text-primary hover:bg-slate-100 dark:hover:bg-slate-700'}`}>
+                        <span className="material-symbols-outlined">chevron_right</span>
+                    </button>
+                </div>
             </div>
 
             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-[#e7edf3] dark:border-slate-800 overflow-hidden">
@@ -195,10 +247,7 @@ const QuadroBranco: React.FC = () => {
                                             {idx + 1}
                                         </td>
                                         <td className="px-6 py-4 text-[#4c739a] dark:text-slate-400">
-                                            {head.start_date
-                                                ? new Date(head.start_date)
-                                                    .toLocaleDateString("pt-BR")
-                                                : "-"}
+                                            {formatDate(head.start_date)}
                                         </td>
                                         <td className="px-6 py-4 font-semibold">
                                             {head.name || head.title}
@@ -212,10 +261,7 @@ const QuadroBranco: React.FC = () => {
                                         <td
                                             className={`px-6 py-4 rounded-md whitespace-nowrap ${deadlineColor}`}
                                         >
-                                            {head.prazo_final
-                                                ? new Date(head.prazo_final)
-                                                    .toLocaleDateString("pt-BR")
-                                                : "-"}
+                                            {formatDate(head.prazo_final)}
                                         </td>
                                         <td className="px-6 py-4">
                                             <span
