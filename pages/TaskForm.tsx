@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../supabase";
 import { parseLocalDate } from "../utils/dateUtils";
 
@@ -69,9 +69,51 @@ const getRankPriority = (
 
 const TaskForm: React.FC = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [view, setView] = useState<"list" | "form">("list");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // Form State
+    const [editingTask, setEditingTask] = useState<Partial<Task> | null>(null);
+    const [formData, setFormData] = useState({
+        name: "",
+        category: "",
+        specialties: ["BCT", "AIS"] as string[],
+        description: "",
+        periodicity: "",
+        start_date: "",
+        end_date: "",
+        assigned_to: "",
+        sector: "",
+        qb: false,
+        prazo_final: "",
+    });
+
+    useEffect(() => {
+        if (location.state?.editTask) {
+            const task = location.state.editTask;
+            setEditingTask(task);
+            setFormData({
+                name: task.name,
+                category: task.category || "",
+                specialties: task.specialties || [],
+                description: task.description || "",
+                periodicity: task.periodicity,
+                start_date: task.start_date ? task.start_date.split("T")[0] : "",
+                end_date: task.end_date ? task.end_date.split("T")[0] : "",
+                assigned_to: task.assigned_to || "",
+                sector: task.sector || "",
+                qb: task.qb || false,
+                prazo_final: task.prazo_final ? task.prazo_final.split("T")[0] : "",
+            });
+            setView("form");
+            setError(null);
+            
+            // Clear the location state to prevent repeating on refresh
+            navigate(location.pathname, { replace: true, state: {} });
+        }
+    }, [location.state, location.pathname, navigate]);
 
     // Data
     const [tasks, setTasks] = useState<Task[]>([]);
@@ -129,20 +171,6 @@ const TaskForm: React.FC = () => {
     const [meetingToDelete, setMeetingToDelete] = useState<any>(null);
 
     // Form State
-    const [editingTask, setEditingTask] = useState<Partial<Task> | null>(null);
-    const [formData, setFormData] = useState({
-        name: "",
-        category: "",
-        specialties: ["BCT", "AIS"] as string[],
-        description: "",
-        periodicity: "",
-        start_date: "",
-        end_date: "",
-        assigned_to: "",
-        sector: "",
-        qb: false,
-        prazo_final: "",
-    });
 
     useEffect(() => {
         const userJson = localStorage.getItem("currentUser");
