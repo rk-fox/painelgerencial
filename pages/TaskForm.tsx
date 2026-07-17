@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../supabase";
 import { parseLocalDate } from "../utils/dateUtils";
 
@@ -17,7 +17,8 @@ interface Member {
 interface Category {
     id: string;
     nome_cat: string;
-}interface Task {
+}
+interface Task {
     id: string;
     name: string;
     specialties: string[];
@@ -100,16 +101,20 @@ const TaskForm: React.FC = () => {
                 specialties: task.specialties || [],
                 description: task.description || "",
                 periodicity: task.periodicity,
-                start_date: task.start_date ? task.start_date.split("T")[0] : "",
+                start_date: task.start_date
+                    ? task.start_date.split("T")[0]
+                    : "",
                 end_date: task.end_date ? task.end_date.split("T")[0] : "",
                 assigned_to: task.assigned_to || "",
                 sector: task.sector || "",
                 qb: task.qb || false,
-                prazo_final: task.prazo_final ? task.prazo_final.split("T")[0] : "",
+                prazo_final: task.prazo_final
+                    ? task.prazo_final.split("T")[0]
+                    : "",
             });
             setView("form");
             setError(null);
-            
+
             // Clear the location state to prevent repeating on refresh
             navigate(location.pathname, { replace: true, state: {} });
         }
@@ -171,6 +176,172 @@ const TaskForm: React.FC = () => {
     const [meetingToDelete, setMeetingToDelete] = useState<any>(null);
 
     // Form State
+
+    // Strategic Summary state
+    const [isStrategicSummaryOpen, setIsStrategicSummaryOpen] = useState(false);
+    const [currentSlide, setCurrentSlide] = useState(0);
+    const [isSlidePaused, setIsSlidePaused] = useState(false);
+    const [currentTime, setCurrentTime] = useState(new Date());
+    const [sdiaEvents, setSdiaEvents] = useState<any[]>([]);
+    const [popupPendingTasks, setPopupPendingTasks] = useState<Task[]>([]);
+    const [popupMeetings, setPopupMeetings] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (isStrategicSummaryOpen) {
+            const loadPopupData = async () => {
+                try {
+                    const today = new Date().toLocaleDateString("en-CA");
+                    const tenDaysLater = new Date();
+                    tenDaysLater.setDate(tenDaysLater.getDate() + 10);
+                    const tenDaysLaterStr = tenDaysLater.toLocaleDateString(
+                        "en-CA",
+                    );
+
+                    const userJson = localStorage.getItem("currentUser");
+                    const userObj = userJson ? JSON.parse(userJson) : null;
+                    const userSector = userObj?.sector;
+
+                    // 1. Fetch SDIA events for the next 10 days (filtered by sector, unless CH)
+                    let sdiaQuery = supabase
+                        .from("sdia")
+                        .select("*")
+                        .gte("data_inicio", today)
+                        .lte("data_inicio", tenDaysLaterStr)
+                        .order("data_inicio", { ascending: true });
+
+                    if (userSector && userSector !== "CH") {
+                        sdiaQuery = sdiaQuery.eq("sector", userSector);
+                    }
+                    const { data: sdiaData } = await sdiaQuery;
+                    if (sdiaData) setSdiaEvents(sdiaData);
+
+                    // 2. Fetch Pending Tasks of current month with qb === true (filtered by sector, unless CH)
+                    const now = new Date();
+                    const startOfMonth = new Date(
+                        now.getFullYear(),
+                        now.getMonth(),
+                        1,
+                    ).toLocaleDateString("en-CA");
+                    const endOfMonth = new Date(
+                        now.getFullYear(),
+                        now.getMonth() + 1,
+                        0,
+                    ).toLocaleDateString("en-CA");
+
+                    let tasksQuery = supabase
+                        .from("tasks")
+                        .select("*")
+                        .eq("qb", true)
+                        .neq("status", "concluida")
+                        .gte("start_date", startOfMonth)
+                        .lte("start_date", endOfMonth)
+                        .order("start_date", { ascending: true });
+
+                    if (userSector && userSector !== "CH") {
+                        tasksQuery = tasksQuery.eq("sector", userSector);
+                    }
+                    const { data: tasksData } = await tasksQuery;
+                    if (tasksData) setPopupPendingTasks(tasksData);
+
+                    // 3. Fetch Meetings and filter by sector involvement (unless CH)
+                    const { data: meetingsData } = await supabase
+                        .from("meeting")
+                        .select("*")
+                        .order("inicio", { ascending: true });
+
+                    const { data: allMembersData } = await supabase
+                        .from("members")
+                        .select("id, sector");
+
+                    if (meetingsData && allMembersData && userSector) {
+                        const memberSectorMap = new Map<string, string>();
+                        allMembersData.forEach((m: any) => {
+                            if (m.sector) memberSectorMap.set(m.id, m.sector);
+                        });
+
+                        const filteredMeetings = meetingsData.filter(
+                            (m: any) => {
+                                const isUpcoming = m.inicio >= today;
+                                if (!isUpcoming) return false;
+                                if (userSector === "CH") return true; // CH sees all meetings
+                                return m.membros?.some((memberId: string) => {
+                                    return memberSectorMap.get(memberId) ===
+                                        userSector;
+                                });
+                            },
+                        );
+                        setPopupMeetings(filteredMeetings);
+                    } else if (meetingsData) {
+                        const filteredMeetings = meetingsData.filter((m: any) =>
+                            m.inicio >= today
+                        );
+                        setPopupMeetings(filteredMeetings);
+                    }
+                } catch (err) {
+                    console.error("Error loading strategic popup data:", err);
+                }
+            };
+            loadPopupData();
+        }
+    }, [isStrategicSummaryOpen]);
+
+    useEffect(() => {
+        let clockInterval: any;
+        let slideInterval: any;
+
+        if (isStrategicSummaryOpen) {
+            // Clock interval (UTC-3 formatted via client America/Sao_Paulo timezone)
+            clockInterval = setInterval(() => {
+                setCurrentTime(new Date());
+            }, 1000);
+
+            // Slideshow rotation (10s interval, looping infinitely)
+            if (!isSlidePaused) {
+                slideInterval = setInterval(() => {
+                    setCurrentSlide((prev) => (prev + 1) % 4);
+                }, 10000);
+            }
+        } else {
+            setCurrentSlide(0);
+        }
+
+        return () => {
+            clearInterval(clockInterval);
+            clearInterval(slideInterval);
+        };
+    }, [isStrategicSummaryOpen, isSlidePaused]);
+
+    // Format UTC-3 timezone date/time details
+    const getUTC3DateTime = (date: Date) => {
+        const timeFormatter = new Intl.DateTimeFormat("pt-BR", {
+            timeZone: "America/Sao_Paulo",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+        });
+        const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
+            timeZone: "America/Sao_Paulo",
+            weekday: "long",
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+        });
+
+        const timeStr = timeFormatter.format(date);
+        const dateStr = dateFormatter.format(date);
+        const capitalizedDateStr = dateStr.charAt(0).toUpperCase() +
+            dateStr.slice(1);
+
+        return { timeStr, dateStr: capitalizedDateStr };
+    };
+
+    const slideTitles = [
+        "Controle do Efetivo",
+        "Projetos em Andamento",
+        "D-10 - Próximos Eventos",
+        "Reuniões Agendadas",
+    ];
 
     useEffect(() => {
         const userJson = localStorage.getItem("currentUser");
@@ -378,7 +549,7 @@ const TaskForm: React.FC = () => {
 
             const { data: activeData, error: activeError } = await activeQuery;
             if (activeError) throw activeError;
-            
+
             // Apply Dashboard's "start_date" logic to accurately reflect active assignments
             const validActiveTasks = (activeData || []).filter((task: any) => {
                 if (!task.start_date) return true;
@@ -389,10 +560,9 @@ const TaskForm: React.FC = () => {
                 now.setHours(0, 0, 0, 0);
                 return startDate <= now;
             });
-            
+
             setActiveAssignedTasks(validActiveTasks);
             // -----------------------------------------------------------------
-
         } catch (err: any) {
             console.error("Error fetching tasks:", err.message);
         } finally {
@@ -557,12 +727,15 @@ const TaskForm: React.FC = () => {
                 .from("tasks")
                 .update({ status: "pendente" })
                 .eq("id", editingTask.id)
-                .select('mission_id')
+                .select("mission_id")
                 .single();
             if (updateError) throw updateError;
-            
+
             if (revertedTask && revertedTask.mission_id) {
-                await supabase.from("missions").update({ fav: false }).eq("id", revertedTask.mission_id);
+                await supabase.from("missions").update({ fav: false }).eq(
+                    "id",
+                    revertedTask.mission_id,
+                );
             }
 
             await fetchTasks();
@@ -747,9 +920,11 @@ const TaskForm: React.FC = () => {
                         ? formData.sector
                         : currentUser?.sector),
                 qb: formData.periodicity === "pontual" ? formData.qb : false,
-                prazo_final: formData.periodicity === "pontual" && formData.qb && formData.prazo_final
-                    ? formData.prazo_final
-                    : null,
+                prazo_final:
+                    formData.periodicity === "pontual" && formData.qb &&
+                        formData.prazo_final
+                        ? formData.prazo_final
+                        : null,
             };
 
             if (
@@ -1193,7 +1368,9 @@ const TaskForm: React.FC = () => {
                                         onChange={handleInputChange}
                                         className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
                                     >
-                                        <option value="" disabled hidden>Selecione a Periodicidade...</option>
+                                        <option value="" disabled hidden>
+                                            Selecione a Periodicidade...
+                                        </option>
                                         <option value="diaria">Diária</option>
                                         <option value="semanal">Semanal</option>
                                         <option value="quinzenal">
@@ -1277,7 +1454,8 @@ const TaskForm: React.FC = () => {
                                                 <div className="relative">
                                                     <input
                                                         name="prazo_final"
-                                                        value={formData.prazo_final}
+                                                        value={formData
+                                                            .prazo_final}
                                                         onChange={handleInputChange}
                                                         className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3 pl-10"
                                                         type="date"
@@ -1315,7 +1493,11 @@ const TaskForm: React.FC = () => {
                                             type="checkbox"
                                             name="qb"
                                             checked={formData.qb}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, qb: e.target.checked }))}
+                                            onChange={(e) =>
+                                                setFormData((prev) => ({
+                                                    ...prev,
+                                                    qb: e.target.checked,
+                                                }))}
                                             className="rounded border-[#cfdbe7] dark:border-slate-700 text-primary focus:ring-primary h-4 w-4"
                                         />
                                         Inserir no Quadro Branco?
@@ -1343,7 +1525,6 @@ const TaskForm: React.FC = () => {
                                 </button>
                             </div>
                         </div>
-
                     </form>
                 </div>
                 {/* New Category Modal (Form View) */}
@@ -1430,6 +1611,15 @@ const TaskForm: React.FC = () => {
                             table
                         </span>
                     </button>
+                    <button
+                        onClick={() => setIsStrategicSummaryOpen(true)}
+                        className="p-2 rounded-lg bg-white dark:bg-slate-800 border border-[#e7edf3] dark:border-slate-700 text-[#4c739a] hover:text-primary transition-all active:scale-95 shadow-sm"
+                        title="Resumo Estratégico"
+                    >
+                        <span className="material-symbols-outlined text-[24px]">
+                            play_arrow
+                        </span>
+                    </button>
                 </div>
 
                 <p className="text-[#4c739a] dark:text-slate-400 text-base font-normal">
@@ -1465,9 +1655,9 @@ const TaskForm: React.FC = () => {
                                 !!currentUnavail;
 
                             // Get member tasks
-                            const memberTasks = activeAssignedTasks.filter((t) =>
-                                t.assigned_to === member.id
-                            );
+                            const memberTasks = activeAssignedTasks.filter((
+                                t,
+                            ) => t.assigned_to === member.id);
 
                             // Get member annotations for today
                             const memberAnnotations = annotations.filter((a) =>
@@ -1756,21 +1946,36 @@ const TaskForm: React.FC = () => {
                                                 </>
                                             )}
 
-                                        {memberAnnotations && memberAnnotations.length > 0 && (
+                                        {memberAnnotations &&
+                                            memberAnnotations.length > 0 && (
                                             <div className="flex flex-col gap-1.5 mt-2 border-t border-slate-100 dark:border-slate-800/40 pt-2">
-                                                {memberAnnotations.map((anno) => (
-                                                    <div key={anno.id} className="flex items-start gap-1.5 py-0.5">
+                                                {memberAnnotations.map((
+                                                    anno,
+                                                ) => (
+                                                    <div
+                                                        key={anno.id}
+                                                        className="flex items-start gap-1.5 py-0.5"
+                                                    >
                                                         <div className="mt-0.5 p-0.5 bg-amber-50 dark:bg-amber-950/20 rounded shrink-0">
                                                             <span className="material-symbols-outlined text-[12px] text-amber-600 dark:text-amber-500 leading-none">
                                                                 sticky_note_2
                                                             </span>
                                                         </div>
                                                         <div className="flex flex-col min-w-0">
-                                                            <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 leading-tight break-words" title={anno.annotation}>
-                                                                {anno.annotation}
+                                                            <span
+                                                                className="text-[10px] font-bold text-slate-700 dark:text-slate-300 leading-tight break-words"
+                                                                title={anno
+                                                                    .annotation}
+                                                            >
+                                                                {anno
+                                                                    .annotation}
                                                             </span>
                                                             <span className="text-[8px] font-medium text-slate-400 dark:text-slate-500 uppercase">
-                                                                Anotação: {anno.start_time} - {anno.end_time}
+                                                                Anotação: {anno
+                                                                    .start_time}
+                                                                {" "}
+                                                                -{" "}
+                                                                {anno.end_time}
                                                             </span>
                                                         </div>
                                                     </div>
@@ -2948,6 +3153,688 @@ const TaskForm: React.FC = () => {
                     </button>
                 </div>
             )}
+
+            {/* Strategic Summary Fullscreen Popup Overlay */}
+            {isStrategicSummaryOpen && (() => {
+                const { timeStr, dateStr } = getUTC3DateTime(currentTime);
+                const userSector = currentUser?.sector || "SE";
+                const sectorFullName = userSector === "CP"
+                    ? "SEÇÃO DE CAPACIDADE ATC"
+                    : userSector === "EA"
+                    ? "SEÇÃO DE ESPAÇO AÉREO"
+                    : userSector === "CH"
+                    ? "CHEFIA"
+                    : "SUBDIVISÃO ESTRATÉGICA";
+
+                const loggedUserLabel = currentUser
+                    ? `${currentUser.rank || ""} ${currentUser.war_name || ""}`
+                        .trim()
+                    : "OPERADOR";
+
+                // Tab items for slideshow progress / navigation
+                const tabs = [
+                    { num: "01", label: "Controle Efetivo" },
+                    { num: "02", label: "Projetos em Andamento" },
+                    { num: "03", label: "D-10 • Próximos Eventos" },
+                    { num: "04", label: "Reuniões da Seção" },
+                ];
+
+                return (
+                    <div className="fixed inset-0 z-[999] bg-[#0c1322] text-white flex flex-col font-sans overflow-hidden animate-in fade-in duration-300">
+                        {/* Kiosk Background Decorative Glows */}
+                        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#cda250]/5 rounded-full blur-[140px] pointer-events-none" />
+                        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-primary/5 rounded-full blur-[140px] pointer-events-none" />
+
+                        {/* Top Header - Kiosk Style */}
+                        <div className="bg-[#0f192b] border-b border-[#1d2d44] px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4 relative z-10 shadow-lg">
+                            <div className="flex items-center gap-3">
+                                {/* Gold Circular Avatar sector label */}
+                                <div className="w-12 h-12 rounded-full border-2 border-[#cda250] flex items-center justify-center font-bold text-base text-[#cda250] bg-[#132039] shadow-inner">
+                                    {userSector}
+                                </div>
+                                <div>
+                                    <h1 className="text-xl md:text-2xl font-serif font-bold text-white tracking-wide leading-tight">
+                                        Painel Gerencial
+                                    </h1>
+                                    <p className="text-[10px] md:text-xs text-[#cda250] font-bold uppercase tracking-wider">
+                                        {sectorFullName} • {loggedUserLabel}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Clock in real time */}
+                            <div className="flex flex-col items-center">
+                                <span className="text-3xl md:text-4xl font-black font-mono tracking-widest text-white leading-none">
+                                    {timeStr}
+                                </span>
+                                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">
+                                    {dateStr}
+                                </span>
+                            </div>
+
+                            {/* Slide Controls and Close Button */}
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center bg-[#132039] border border-[#1d2d44] rounded-lg p-1">
+                                    <button
+                                        onClick={() =>
+                                            setCurrentSlide((prev) =>
+                                                (prev - 1 + 4) % 4
+                                            )}
+                                        className="p-1.5 rounded hover:bg-slate-800 transition-colors text-slate-300"
+                                        title="Slide Anterior"
+                                    >
+                                        <span className="material-symbols-outlined text-[20px] block">
+                                            navigate_before
+                                        </span>
+                                    </button>
+                                    <button
+                                        onClick={() =>
+                                            setIsSlidePaused(!isSlidePaused)}
+                                        className="p-1.5 rounded hover:bg-slate-800 transition-colors text-[#cda250]"
+                                        title={isSlidePaused
+                                            ? "Retomar Slideshow"
+                                            : "Pausar Slideshow"}
+                                    >
+                                        <span className="material-symbols-outlined text-[20px] block">
+                                            {isSlidePaused
+                                                ? "play_arrow"
+                                                : "pause"}
+                                        </span>
+                                    </button>
+                                    <button
+                                        onClick={() =>
+                                            setCurrentSlide((prev) =>
+                                                (prev + 1) % 4
+                                            )}
+                                        className="p-1.5 rounded hover:bg-slate-800 transition-colors text-slate-300"
+                                        title="Próximo Slide"
+                                    >
+                                        <span className="material-symbols-outlined text-[20px] block">
+                                            navigate_next
+                                        </span>
+                                    </button>
+                                </div>
+
+                                <button
+                                    onClick={() =>
+                                        setIsStrategicSummaryOpen(false)}
+                                    className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/25 text-red-400 border border-red-500/30 transition-colors"
+                                    title="Fechar Painel"
+                                >
+                                    <span className="material-symbols-outlined text-[20px] block">
+                                        close
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Custom Tab Progress Navigation Bar */}
+                        <div className="bg-[#0c1424] border-b border-[#17243c] px-6 py-2.5 flex items-center justify-around md:justify-start gap-6 md:gap-12 relative z-10">
+                            {tabs.map((tab, idx) => {
+                                const isActive = currentSlide === idx;
+                                return (
+                                    <button
+                                        key={idx}
+                                        onClick={() => setCurrentSlide(idx)}
+                                        className="flex items-center gap-2 text-left relative py-1 focus:outline-none group transition-all"
+                                    >
+                                        <span
+                                            className={`text-[10px] font-bold font-mono tracking-wider ${
+                                                isActive
+                                                    ? "text-[#cda250]"
+                                                    : "text-slate-500"
+                                            }`}
+                                        >
+                                            {tab.num}
+                                        </span>
+                                        <span
+                                            className={`text-xs md:text-sm font-semibold tracking-tight transition-colors ${
+                                                isActive
+                                                    ? "text-white font-bold"
+                                                    : "text-slate-400 group-hover:text-slate-200"
+                                            }`}
+                                        >
+                                            {tab.label}
+                                        </span>
+                                        {isActive && (
+                                            <div className="absolute bottom-[-11px] left-0 right-0 h-0.5 bg-[#cda250] rounded-full shadow-lg" />
+                                        )}
+                                    </button>
+                                );
+                            })}
+
+                            {/* Autoplay Slide Progress indicator inside active tab */}
+                            {!isSlidePaused && (
+                                <div className="ml-auto hidden md:block w-32 h-1 bg-slate-800 rounded-full overflow-hidden">
+                                    <div
+                                        key={currentSlide}
+                                        className="h-full bg-[#cda250] rounded-full animate-progress duration-10000"
+                                        style={{
+                                            animation:
+                                                "progress 10s linear forwards",
+                                        }}
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Title and Subtitle Block */}
+                        <div className="px-8 pt-8 pb-4 relative z-10 flex flex-col gap-1">
+                            <h2 className="text-3xl md:text-4xl font-serif font-bold text-white tracking-wide">
+                                {currentSlide === 0 && "Controle do Efetivo"}
+                                {currentSlide === 1 && "Projetos em Andamento"}
+                                {currentSlide === 2 &&
+                                    "D-10 — Eventos dos Próximos 10 Dias"}
+                                {currentSlide === 3 && "Reuniões da Seção"}
+                            </h2>
+                            <p className="text-xs md:text-sm text-[#cda250] font-medium tracking-wide">
+                                {currentSlide === 0 &&
+                                    "Status operacional e disponibilidade dos militares no momento"}
+                                {currentSlide === 1 &&
+                                    "Atividades e projetos sob responsabilidade da seção neste mês"}
+                                {currentSlide === 2 &&
+                                    `Janela: ${
+                                        new Date().toLocaleDateString("pt-BR")
+                                    } a ${
+                                        new Date(
+                                            new Date().setDate(
+                                                new Date().getDate() + 10,
+                                            ),
+                                        ).toLocaleDateString("pt-BR")
+                                    }`}
+                                {currentSlide === 3 &&
+                                    "Próximos compromissos agendados"}
+                            </p>
+                        </div>
+
+                        {/* Slide Content Area */}
+                        <div className="flex-1 overflow-y-auto relative z-10 px-8 pb-8 custom-scrollbar">
+                            {currentSlide === 0 && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 animate-in fade-in duration-300">
+                                    {members.map((member) => {
+                                        const currentMission = getMemberMission(
+                                            member.id,
+                                        );
+                                        const currentUnavail =
+                                            getMemberUnavailToday(member.id);
+                                        const isUnavailable =
+                                            member.status === "Indisponível" ||
+                                            !!currentUnavail;
+                                        const memberTasks = activeAssignedTasks
+                                            .filter((t) =>
+                                                t.assigned_to === member.id
+                                            );
+
+                                        let cardBg =
+                                            "bg-[#131f37] border-[#1d2d44]";
+                                        let borderAccent =
+                                            "border-l-4 border-l-[#38bdf8]";
+                                        let statusBadge = (
+                                            <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                                Disponível
+                                            </span>
+                                        );
+
+                                        if (currentMission) {
+                                            cardBg =
+                                                "bg-[#1a2035] border-[#252f4c]";
+                                            borderAccent =
+                                                "border-l-4 border-l-[#cda250]";
+                                            statusBadge = (
+                                                <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-[#cda250]/15 text-[#cda250] border border-[#cda250]/20">
+                                                    Em Viagem
+                                                </span>
+                                            );
+                                        } else if (
+                                            isUnavailable &&
+                                            currentUnavail?.type === "Atividade"
+                                        ) {
+                                            cardBg =
+                                                "bg-[#142337] border-[#1f3552]";
+                                            borderAccent =
+                                                "border-l-4 border-l-[#10b981]";
+                                            statusBadge = (
+                                                <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-green-500/15 text-green-400 border border-green-500/25">
+                                                    Atividade Interna
+                                                </span>
+                                            );
+                                        } else if (isUnavailable) {
+                                            cardBg =
+                                                "bg-[#221c29] border-[#382b43]";
+                                            borderAccent =
+                                                "border-l-4 border-l-red-500";
+                                            statusBadge = (
+                                                <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-red-500/15 text-red-400 border border-red-500/25">
+                                                    {currentUnavail
+                                                        ? currentUnavail.type
+                                                        : "Indisponível"}
+                                                </span>
+                                            );
+                                        }
+
+                                        return (
+                                            <div
+                                                key={member.id}
+                                                className={`p-4 rounded-xl border ${cardBg} ${borderAccent} flex flex-col justify-between gap-3 shadow-md backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-700 bg-[#0f192b] flex items-center justify-center font-bold text-xs uppercase text-slate-300">
+                                                        {member.avatar
+                                                            ? (
+                                                                <img
+                                                                    src={member
+                                                                        .avatar}
+                                                                    alt={member
+                                                                        .name}
+                                                                    className="w-full h-full object-cover"
+                                                                />
+                                                            )
+                                                            : (
+                                                                member.name
+                                                                    .substring(
+                                                                        0,
+                                                                        2,
+                                                                    )
+                                                            )}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <h4 className="text-sm font-extrabold text-white truncate">
+                                                            {member.abrev}{" "}
+                                                            {member.war_name}
+                                                        </h4>
+                                                        <span className="text-[10px] text-slate-400 block truncate">
+                                                            {member.name}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center justify-between border-t border-[#1d2d44]/50 pt-2 mt-1">
+                                                    {statusBadge}
+                                                    <span className="text-[10px] text-slate-400 font-semibold">
+                                                        {memberTasks.length}
+                                                        {" "}
+                                                        {memberTasks.length ===
+                                                                1
+                                                            ? "Atividade"
+                                                            : "Atividades"}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {currentSlide === 1 && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in duration-300">
+                                    {popupPendingTasks.length > 0
+                                        ? (
+                                            popupPendingTasks.map(
+                                                (task, idx) => {
+                                                    const respMember = members
+                                                        .find((m) =>
+                                                            m.id ===
+                                                                task.assigned_to
+                                                        );
+                                                    const isEven =
+                                                        idx % 2 === 0;
+                                                    return (
+                                                        <div
+                                                            key={task.id}
+                                                            className={`p-5 rounded-xl border border-[#1d2d44] bg-[#131f37] flex flex-col justify-between gap-4 shadow-md ${
+                                                                isEven
+                                                                    ? "border-l-4 border-l-[#cda250]"
+                                                                    : "border-l-4 border-l-[#3b82f6]"
+                                                            }`}
+                                                        >
+                                                            <div>
+                                                                <div className="flex items-center justify-between gap-2 mb-2">
+                                                                    <span className="text-[10px] font-bold text-[#cda250] uppercase tracking-wider">
+                                                                        {task
+                                                                            .periodicity ||
+                                                                            "Tarefa"}
+                                                                    </span>
+                                                                    <span className="text-[10px] text-slate-400 font-medium">
+                                                                        Prazo:
+                                                                        {" "}
+                                                                        {task
+                                                                                .prazo_final
+                                                                            ? new Date(
+                                                                                task.prazo_final,
+                                                                            ).toLocaleDateString(
+                                                                                "pt-BR",
+                                                                            )
+                                                                            : "S/P"}
+                                                                    </span>
+                                                                </div>
+                                                                <h4 className="text-base font-extrabold text-white leading-tight">
+                                                                    {task.name}
+                                                                </h4>
+                                                                <div className="mt-3 p-3 rounded bg-[#0c1424]/60 border border-[#1c2a3f]">
+                                                                    <span className="text-[9px] text-[#cda250] font-black uppercase tracking-wider block mb-1">
+                                                                        Despacho
+                                                                    </span>
+                                                                    <p className="text-xs text-slate-300 leading-relaxed">
+                                                                        {task
+                                                                            .despacho ||
+                                                                            (
+                                                                                <span className="text-slate-500 italic">
+                                                                                    Nenhum
+                                                                                    despacho
+                                                                                    lançado
+                                                                                </span>
+                                                                            )}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="border-t border-[#1d2d44]/50 pt-3 flex items-center justify-between">
+                                                                <span className="text-[10px] text-slate-400 font-semibold uppercase">
+                                                                    Responsável:
+                                                                </span>
+                                                                <span className="text-xs font-bold text-white">
+                                                                    {respMember
+                                                                        ? `${respMember.abrev} ${respMember.war_name}`
+                                                                        : "Não designado"}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                },
+                                            )
+                                        )
+                                        : (
+                                            <div className="col-span-3 py-12 text-center text-slate-500 text-sm">
+                                                Nenhuma atividade pendente
+                                                encontrada para este mês.
+                                            </div>
+                                        )}
+                                </div>
+                            )}
+
+                            {currentSlide === 2 && (() => {
+                                const next10Days = Array.from(
+                                    { length: 10 },
+                                    (_, i) => {
+                                        const d = new Date();
+                                        d.setDate(d.getDate() + i);
+                                        return d;
+                                    },
+                                );
+
+                                return (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 animate-in fade-in duration-300">
+                                        {next10Days.map((date, index) => {
+                                            const dateStr = date
+                                                .toLocaleDateString("en-CA");
+                                            const dayEvents = sdiaEvents.filter(
+                                                (sdia) => {
+                                                    return sdia.data_inicio <=
+                                                            dateStr &&
+                                                        sdia.data_fim >=
+                                                            dateStr;
+                                                },
+                                            );
+
+                                            const isToday = index === 0;
+                                            const weekday = date
+                                                .toLocaleDateString("pt-BR", {
+                                                    weekday: "short",
+                                                }).replace(".", "")
+                                                .toUpperCase();
+                                            const formattedDate = date
+                                                .toLocaleDateString("pt-BR", {
+                                                    day: "2-digit",
+                                                    month: "2-digit",
+                                                });
+                                            const isEven = index % 2 === 0;
+
+                                            return (
+                                                <div
+                                                    key={index}
+                                                    className={`p-4 rounded-xl border flex flex-col gap-3 min-h-[160px] shadow-md transition-all duration-300 hover:border-slate-500 bg-[#131f37] border-[#1d2d44] ${
+                                                        isToday
+                                                            ? "border-l-4 border-l-[#cda250]"
+                                                            : isEven
+                                                            ? "border-l-4 border-l-[#3b82f6]"
+                                                            : "border-l-4 border-l-[#cda250]/70"
+                                                    }`}
+                                                >
+                                                    <div className="border-b border-[#1d2d44]/50 pb-2 flex items-center justify-between">
+                                                        <span
+                                                            className={`text-[10px] font-black tracking-wider ${
+                                                                isToday
+                                                                    ? "text-[#cda250]"
+                                                                    : "text-slate-400"
+                                                            }`}
+                                                        >
+                                                            {isToday
+                                                                ? "HOJE"
+                                                                : weekday}
+                                                        </span>
+                                                        <span className="text-sm font-bold text-white">
+                                                            {formattedDate}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex-1 overflow-y-auto flex flex-col gap-2 max-h-[160px] custom-scrollbar">
+                                                        {dayEvents.length > 0
+                                                            ? (
+                                                                dayEvents.map((
+                                                                    sdia,
+                                                                ) => (
+                                                                    <div
+                                                                        key={sdia
+                                                                            .id}
+                                                                        className="p-2 rounded bg-[#0c1424]/60 border border-[#1a283e] flex flex-col gap-1"
+                                                                    >
+                                                                        <div className="text-[9px] font-mono font-bold text-[#cda250] leading-none">
+                                                                            [{sdia
+                                                                                .indicativo}]
+                                                                        </div>
+                                                                        <div className="text-xs font-semibold text-white leading-tight">
+                                                                            {sdia
+                                                                                .titulo_sdia}
+                                                                        </div>
+                                                                        {(sdia
+                                                                            .impacto ||
+                                                                            sdia.cap ||
+                                                                            sdia.clsd) &&
+                                                                            (
+                                                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                                                    {sdia
+                                                                                        .impacto &&
+                                                                                        (
+                                                                                            <span className="px-1 py-0.2 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-[7px] font-bold uppercase tracking-wide">
+                                                                                                IMP
+                                                                                            </span>
+                                                                                        )}
+                                                                                    {sdia
+                                                                                        .cap &&
+                                                                                        (
+                                                                                            <span className="px-1 py-0.2 rounded bg-[#cda250]/10 border border-[#cda250]/20 text-[#cda250] text-[7px] font-bold uppercase tracking-wide">
+                                                                                                CAP
+                                                                                            </span>
+                                                                                        )}
+                                                                                    {sdia
+                                                                                        .clsd &&
+                                                                                        (
+                                                                                            <span className="px-1 py-0.2 rounded bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[7px] font-bold uppercase tracking-wide">
+                                                                                                CLSD
+                                                                                            </span>
+                                                                                        )}
+                                                                                </div>
+                                                                            )}
+                                                                    </div>
+                                                                ))
+                                                            )
+                                                            : (
+                                                                <span className="text-[10px] text-slate-500 italic">
+                                                                    Sem eventos
+                                                                </span>
+                                                            )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
+
+                            {currentSlide === 3 && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in duration-300">
+                                    {popupMeetings.length > 0
+                                        ? (
+                                            popupMeetings.map(
+                                                (meeting, idx) => {
+                                                    const startDate = new Date(
+                                                        meeting.inicio,
+                                                    );
+                                                    const startTime = startDate
+                                                        .toLocaleTimeString(
+                                                            "pt-BR",
+                                                            {
+                                                                hour: "2-digit",
+                                                                minute:
+                                                                    "2-digit",
+                                                            },
+                                                        );
+                                                    const dayMonthStr =
+                                                        startDate
+                                                            .toLocaleDateString(
+                                                                "pt-BR",
+                                                                {
+                                                                    day: "2-digit",
+                                                                    month:
+                                                                        "2-digit",
+                                                                },
+                                                            );
+                                                    const rawWeekday = startDate
+                                                        .toLocaleDateString(
+                                                            "pt-BR",
+                                                            {
+                                                                weekday:
+                                                                    "short",
+                                                            },
+                                                        );
+                                                    const weekdayStr =
+                                                        rawWeekday.charAt(0)
+                                                            .toUpperCase() +
+                                                        rawWeekday.slice(1)
+                                                            .replace(".", "");
+                                                    const formattedDate =
+                                                        `${dayMonthStr} - ${weekdayStr}`;
+
+                                                    // Map members convocados
+                                                    const summonedMembers =
+                                                        meeting.membros || [];
+                                                    const summonedDetails =
+                                                        members.filter((m) =>
+                                                            summonedMembers
+                                                                .includes(m.id)
+                                                        );
+                                                    const isEven =
+                                                        idx % 2 === 0;
+
+                                                    return (
+                                                        <div
+                                                            key={meeting.id}
+                                                            className={`p-5 rounded-xl border border-[#1d2d44] bg-[#131f37] flex flex-col justify-between gap-4 shadow-md transition-all duration-300 hover:border-slate-650 ${
+                                                                isEven
+                                                                    ? "border-l-4 border-l-[#cda250]"
+                                                                    : "border-l-4 border-l-[#3b82f6]"
+                                                            }`}
+                                                        >
+                                                            <div>
+                                                                <div className="flex items-center justify-between gap-2 mb-2">
+                                                                    <span className="text-sm font-bold text-[#cda250] font-mono leading-none">
+                                                                        {startTime}
+                                                                    </span>
+                                                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                                                        {formattedDate}
+                                                                    </span>
+                                                                </div>
+                                                                <h4 className="text-base font-extrabold text-white leading-tight font-serif">
+                                                                    {meeting
+                                                                        .assunto}
+                                                                </h4>
+                                                                {meeting.link &&
+                                                                    (
+                                                                        <div className="mt-2.5 p-2 rounded bg-[#0c1424]/40 border border-[#1a283e] flex items-center gap-1.5">
+                                                                            <span className="material-symbols-outlined text-[14px] text-[#cda250]">
+                                                                                link
+                                                                            </span>
+                                                                            <span className="text-xs text-primary truncate hover:underline cursor-pointer">
+                                                                                {meeting
+                                                                                    .link}
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                            </div>
+
+                                                            <div className="border-t border-[#1d2d44]/50 pt-3">
+                                                                <span className="text-[9px] text-[#cda250] font-bold uppercase tracking-wider block mb-2">
+                                                                    Convocados
+                                                                </span>
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {summonedDetails
+                                                                            .length >
+                                                                            0
+                                                                        ? (
+                                                                            summonedDetails
+                                                                                .map(
+                                                                                    (
+                                                                                        m,
+                                                                                    ) => (
+                                                                                        <span
+                                                                                            key={m
+                                                                                                .id}
+                                                                                            className="px-2 py-0.5 rounded bg-[#0c1424] text-slate-300 text-[10px] font-semibold border border-[#1a283e]"
+                                                                                        >
+                                                                                            {m.abrev}
+                                                                                            {" "}
+                                                                                            {m.war_name}
+                                                                                        </span>
+                                                                                    )
+                                                                                )
+                                                                        )
+                                                                        : (
+                                                                            <span className="text-xs text-slate-600 italic">
+                                                                                Nenhum
+                                                                                membro
+                                                                                listado
+                                                                            </span>
+                                                                        )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                },
+                                            )
+                                        )
+                                        : (
+                                            <div className="col-span-2 py-12 text-center text-slate-500 text-sm">
+                                                Nenhuma reunião agendada a
+                                                partir de hoje.
+                                            </div>
+                                        )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* CSS Injection for custom animation keyframes */}
+                        <style>
+                            {`
+                            @keyframes progress {
+                                from { width: 0%; }
+                                to { width: 100%; }
+                            }
+                            .animate-progress {
+                                animation-name: progress;
+                            }
+                        `}
+                        </style>
+                    </div>
+                );
+            })()}
         </div>
     );
 };

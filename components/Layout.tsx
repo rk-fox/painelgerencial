@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { supabase } from '../supabase';
+import React, { useEffect, useRef, useState } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { supabase } from "../supabase";
 
 const Layout: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
@@ -15,57 +15,57 @@ const Layout: React.FC = () => {
   useEffect(() => {
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (session) {
         // Fetch full profile from members using user_id
         const { data: profile, error } = await supabase
-          .from('members')
-          .select('*')
-          .eq('user_id', session.user.id)
+          .from("members")
+          .select("*")
+          .eq("user_id", session.user.id)
           .single();
 
         if (profile) {
           // Check for active CH delegations
           let effectiveSector = profile.sector;
-          const today = new Date().toISOString().split('T')[0];
-          
+          const today = new Date().toISOString().split("T")[0];
+
           const { data: delegation } = await supabase
-            .from('ch_delegations')
-            .select('*')
-            .eq('beneficiary_id', profile.id)
-            .eq('is_active', true)
-            .lte('start_date', today)
+            .from("ch_delegations")
+            .select("*")
+            .eq("beneficiary_id", profile.id)
+            .eq("is_active", true)
+            .lte("start_date", today)
             .or(`end_date.is.null,end_date.gte.${today}`)
             .maybeSingle();
 
           if (delegation) {
-            effectiveSector = 'CH';
+            effectiveSector = "CH";
           }
 
-          const userWithSession = { 
-            ...profile, 
+          const userWithSession = {
+            ...profile,
             sector: effectiveSector,
-            last_login: session.user.last_sign_in_at 
+            last_login: session.user.last_sign_in_at,
           };
           setCurrentUser(userWithSession);
           checkNotifications(userWithSession);
-          localStorage.setItem('currentUser', JSON.stringify(userWithSession));
+          localStorage.setItem("currentUser", JSON.stringify(userWithSession));
         }
       } else {
-        // Fallback to localStorage if no auth session but user was already logged in 
+        // Fallback to localStorage if no auth session but user was already logged in
         // (Wait, if RLS is on, the above will fail without a session anyway)
-        const localUser = localStorage.getItem('currentUser');
+        const localUser = localStorage.getItem("currentUser");
         if (localUser) {
           const parsedUser = JSON.parse(localUser);
           if (parsedUser.user_id) {
-             // If we have a user_id but no session, we should probably re-auth or redirect
-             navigate('/');
+            // If we have a user_id but no session, we should probably re-auth or redirect
+            navigate("/");
           } else {
-             setCurrentUser(parsedUser);
-             checkNotifications(parsedUser);
+            setCurrentUser(parsedUser);
+            checkNotifications(parsedUser);
           }
         } else {
-          navigate('/');
+          navigate("/");
         }
       }
     };
@@ -73,12 +73,14 @@ const Layout: React.FC = () => {
     getSession();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        localStorage.removeItem('currentUser');
-        navigate('/');
-      }
-    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (!session) {
+          localStorage.removeItem("currentUser");
+          navigate("/");
+        }
+      },
+    );
 
     return () => subscription.unsubscribe();
   }, [navigate]);
@@ -96,9 +98,9 @@ const Layout: React.FC = () => {
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [isNotificationsOpen]);
 
@@ -108,13 +110,13 @@ const Layout: React.FC = () => {
 
     try {
       let query = supabase
-        .from('tasks')
-        .select('*')
-        .gt('created_at', lastLogin)
-        .contains('specialties', [user.specialty]);
+        .from("tasks")
+        .select("*")
+        .gt("created_at", lastLogin)
+        .contains("specialties", [user.specialty]);
 
-      if (user.sector && user.sector !== 'CH') {
-        query = query.eq('sector', user.sector);
+      if (user.sector && user.sector !== "CH") {
+        query = query.eq("sector", user.sector);
       }
 
       const { data, error } = await query;
@@ -124,21 +126,42 @@ const Layout: React.FC = () => {
         setNewTasks(data);
       }
     } catch (err: any) {
-      console.error('Error fetching notifications:', err.message);
+      console.error("Error fetching notifications:", err.message);
     }
   };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    localStorage.removeItem('currentUser');
-    navigate('/');
+    localStorage.removeItem("currentUser");
+    navigate("/");
   };
 
   // Format current date in Portuguese
   const formatDate = () => {
     const date = new Date();
-    const days = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
-    const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+    const days = [
+      "domingo",
+      "segunda-feira",
+      "terça-feira",
+      "quarta-feira",
+      "quinta-feira",
+      "sexta-feira",
+      "sábado",
+    ];
+    const months = [
+      "janeiro",
+      "fevereiro",
+      "março",
+      "abril",
+      "maio",
+      "junho",
+      "julho",
+      "agosto",
+      "setembro",
+      "outubro",
+      "novembro",
+      "dezembro",
+    ];
     const dayName = days[date.getDay()];
     const day = date.getDate();
     const month = months[date.getMonth()];
@@ -147,12 +170,16 @@ const Layout: React.FC = () => {
   };
 
   const getSectorLabel = () => {
-    if (!currentUser?.sector) return 'Painel Gerencial';
+    if (!currentUser?.sector) return "Painel Gerencial";
     switch (currentUser.sector) {
-      case 'CP': return 'Capacidade ATC';
-      case 'EA': return 'Espaço Aéreo';
-      case 'CH': return 'Subdivisão Estratégica';
-      default: return 'Painel Gerencial';
+      case "CP":
+        return "Capacidade ATC";
+      case "EA":
+        return "Espaço Aéreo";
+      case "CH":
+        return "Subdivisão Estratégica";
+      default:
+        return "Painel Gerencial";
     }
   };
 
@@ -162,21 +189,33 @@ const Layout: React.FC = () => {
       <aside
         onMouseEnter={() => setIsSidebarCollapsed(false)}
         onMouseLeave={() => setIsSidebarCollapsed(true)}
-        className={`${isSidebarCollapsed ? 'w-20' : 'w-64'} bg-white dark:bg-slate-900 border-r border-[#e7edf3] dark:border-slate-800 flex flex-col h-screen sticky top-0 z-50 shrink-0 transition-all duration-300`}
+        className={`${
+          isSidebarCollapsed ? "w-20" : "w-64"
+        } bg-white dark:bg-slate-900 border-r border-[#e7edf3] dark:border-slate-800 flex flex-col h-screen sticky top-0 z-50 shrink-0 transition-all duration-300`}
       >
-        <div className={`p-6 flex items-center gap-3 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
+        <div
+          className={`p-6 flex items-center gap-3 ${
+            isSidebarCollapsed ? "justify-center" : ""
+          }`}
+        >
           <img
             src="https://raw.githubusercontent.com/rk-fox/painelgerencial/refs/heads/main/cgna-logo.png"
             alt="CGNA"
             className="size-8 min-w-[32px] shadow-lg object-contain"
           />
           {!isSidebarCollapsed && (
-            <h2 className="text-[#0d141b] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] truncate uppercase">CGNA</h2>
+            <h2 className="text-[#0d141b] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] truncate uppercase">
+              CGNA
+            </h2>
           )}
         </div>
 
-        <nav className={`flex-1 px-4 space-y-1 mt-4 ${isSidebarCollapsed ? 'overflow-hidden' : 'overflow-y-auto'}`}>
-          {currentUser?.sector !== 'CH' && (
+        <nav
+          className={`flex-1 px-4 space-y-1 mt-4 ${
+            isSidebarCollapsed ? "overflow-hidden" : "overflow-y-auto"
+          }`}
+        >
+          {currentUser?.sector !== "CH" && (
             <SidebarItem
               to="/app/dashboard"
               icon="dashboard"
@@ -221,7 +260,7 @@ const Layout: React.FC = () => {
             label="Atalhos"
             collapsed={isSidebarCollapsed}
           />
-          {(currentUser?.sector === 'CP' || currentUser?.sector === 'EA') && (
+          {(currentUser?.sector === "CP" || currentUser?.sector === "EA") && (
             <SidebarItem
               to="/app/quadro-branco"
               icon="view_kanban"
@@ -232,28 +271,45 @@ const Layout: React.FC = () => {
         </nav>
 
         <div className="p-4 border-t border-[#e7edf3] dark:border-slate-800 space-y-4">
-          <div className={`flex items-center gap-3 px-2 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
-            {currentUser ? (
-              <>
-                <div
-                  className="min-w-[40px] h-10 w-10 bg-center bg-no-repeat bg-cover rounded-full border border-[#e7edf3] dark:border-slate-700 shadow-sm"
-                  style={{ backgroundImage: `url("${currentUser.avatar || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y'}")` }}
-                />
-                {!isSidebarCollapsed && (
-                  <div className="overflow-hidden">
-                    <p className="text-xs font-bold truncate text-[#0d141b] dark:text-white">
-                      {currentUser.abrev} {currentUser.war_name}
-                    </p>
-                    <p className="text-[10px] text-[#4c739a] dark:text-slate-400 font-bold truncate uppercase">{currentUser.specialty}</p>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="min-w-[40px] h-10 w-10 rounded-full bg-slate-100 animate-pulse" />
-            )}
+          <div
+            className={`flex items-center gap-3 px-2 ${
+              isSidebarCollapsed ? "justify-center" : ""
+            }`}
+          >
+            {currentUser
+              ? (
+                <>
+                  <div
+                    className="min-w-[40px] h-10 w-10 bg-center bg-no-repeat bg-cover rounded-full border border-[#e7edf3] dark:border-slate-700 shadow-sm"
+                    style={{
+                      backgroundImage: `url("${
+                        currentUser.avatar ||
+                        "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y"
+                      }")`,
+                    }}
+                  />
+                  {!isSidebarCollapsed && (
+                    <div className="overflow-hidden">
+                      <p className="text-xs font-bold truncate text-[#0d141b] dark:text-white">
+                        {currentUser.abrev} {currentUser.war_name}
+                      </p>
+                      <p className="text-[10px] text-[#4c739a] dark:text-slate-400 font-bold truncate uppercase">
+                        {currentUser.specialty}
+                      </p>
+                    </div>
+                  )}
+                </>
+              )
+              : (
+                <div className="min-w-[40px] h-10 w-10 rounded-full bg-slate-100 animate-pulse" />
+              )}
           </div>
 
-          <div className={`flex items-center ${isSidebarCollapsed ? 'flex-col gap-4' : 'justify-between px-2'}`}>
+          <div
+            className={`flex items-center ${
+              isSidebarCollapsed ? "flex-col gap-4" : "justify-between px-2"
+            }`}
+          >
             <div className="relative">
               <button
                 ref={bellButtonRef}
@@ -261,57 +317,101 @@ const Layout: React.FC = () => {
                 title="Notificações"
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
               >
-                <span className="material-symbols-outlined text-[20px]">notifications</span>
+                <span className="material-symbols-outlined text-[20px]">
+                  notifications
+                </span>
                 {newTasks.length > 0 && (
-                  <span className="absolute top-0 right-0 size-2 bg-red-500 rounded-full border border-white dark:border-slate-900"></span>
+                  <span className="absolute top-0 right-0 size-2 bg-red-500 rounded-full border border-white dark:border-slate-900">
+                  </span>
                 )}
               </button>
 
               {/* Notifications Popup */}
               {isNotificationsOpen && (
-                <div ref={notificationRef} className="absolute bottom-full left-0 mb-2 w-72 bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                <div
+                  ref={notificationRef}
+                  className="absolute bottom-full left-0 mb-2 w-72 bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                >
                   <div className="p-3 border-b border-[#e7edf3] dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
-                    <h3 className="font-bold text-xs text-[#0d141b] dark:text-white uppercase tracking-wider">Novas Tarefas</h3>
-                    <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">{newTasks.length}</span>
+                    <h3 className="font-bold text-xs text-[#0d141b] dark:text-white uppercase tracking-wider">
+                      Novas Tarefas
+                    </h3>
+                    <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      {newTasks.length}
+                    </span>
                   </div>
                   <div className="max-h-60 overflow-y-auto">
-                    {newTasks.length === 0 ? (
-                      <div className="p-4 text-center text-[#4c739a] text-xs italic">
-                        Nenhuma nova notificação.
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-[#e7edf3] dark:divide-slate-800">
-                        {newTasks.map(task => (
-                          <div key={task.id} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer" onClick={() => {
-                            navigate(currentUser?.sector === 'CH' ? '/app/tasks/new' : '/app/dashboard');
-                            setIsNotificationsOpen(false);
-                          }}>
-                            <div className="flex items-start gap-2 mb-1">
-                              <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">Nova</span>
-                              <span className="text-[10px] font-bold text-[#4c739a]">{new Date(task.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    {newTasks.length === 0
+                      ? (
+                        <div className="p-4 text-center text-[#4c739a] text-xs italic">
+                          Nenhuma nova notificação.
+                        </div>
+                      )
+                      : (
+                        <div className="divide-y divide-[#e7edf3] dark:divide-slate-800">
+                          {newTasks.map((task) => (
+                            <div
+                              key={task.id}
+                              className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+                              onClick={() => {
+                                navigate(
+                                  currentUser?.sector === "CH"
+                                    ? "/app/tasks/new"
+                                    : "/app/dashboard",
+                                );
+                                setIsNotificationsOpen(false);
+                              }}
+                            >
+                              <div className="flex items-start gap-2 mb-1">
+                                <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                  Nova
+                                </span>
+                                <span className="text-[10px] font-bold text-[#4c739a]">
+                                  {new Date(task.created_at).toLocaleTimeString(
+                                    [],
+                                    { hour: "2-digit", minute: "2-digit" },
+                                  )}
+                                </span>
+                              </div>
+                              <p className="text-sm font-bold text-[#0d141b] dark:text-white line-clamp-2 leading-tight">
+                                {task.name}
+                              </p>
                             </div>
-                            <p className="text-sm font-bold text-[#0d141b] dark:text-white line-clamp-2 leading-tight">{task.name}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      )}
                   </div>
                 </div>
               )}
             </div>
-            <button className="text-[#4c739a] hover:text-primary transition-all active:scale-95" title="Configurações">
-              <span className="material-symbols-outlined text-[20px]">settings</span>
+            <button
+              className="text-[#4c739a] hover:text-primary transition-all active:scale-95"
+              title="Configurações"
+            >
+              <span className="material-symbols-outlined text-[20px]">
+                settings
+              </span>
             </button>
             <button
               className="text-[#4c739a] hover:text-primary transition-all active:scale-95"
-              onClick={() => document.documentElement.classList.toggle('dark')}
+              onClick={() => document.documentElement.classList.toggle("dark")}
               title="Alternar Tema"
             >
-              <span className="material-symbols-outlined text-[20px] dark:hidden">dark_mode</span>
-              <span className="material-symbols-outlined text-[20px] hidden dark:block">light_mode</span>
+              <span className="material-symbols-outlined text-[20px] dark:hidden">
+                dark_mode
+              </span>
+              <span className="material-symbols-outlined text-[20px] hidden dark:block">
+                light_mode
+              </span>
             </button>
-            <button onClick={handleLogout} className="text-[#4c739a] hover:text-red-500 transition-all active:scale-95" title="Sair">
-              <span className="material-symbols-outlined text-[20px]">logout</span>
+            <button
+              onClick={handleLogout}
+              className="text-[#4c739a] hover:text-red-500 transition-all active:scale-95"
+              title="Sair"
+            >
+              <span className="material-symbols-outlined text-[20px]">
+                logout
+              </span>
             </button>
           </div>
         </div>
@@ -322,16 +422,26 @@ const Layout: React.FC = () => {
         {/* Header */}
         <header className="h-16 bg-white dark:bg-slate-900 border-b border-[#e7edf3] dark:border-slate-800 flex items-center justify-between px-6 sticky top-0 z-40 shrink-0">
           <div className="flex items-center gap-8 flex-1">
-            <h1 className="text-[#0d141b] dark:text-white font-bold text-lg whitespace-nowrap hidden md:block">Painel Gerencial</h1>
+            <h1 className="text-[#0d141b] dark:text-white font-bold text-lg whitespace-nowrap hidden md:block">
+              Painel Gerencial
+            </h1>
           </div>
           <div className="flex items-center gap-4 ml-4">
             <div className="text-right hidden sm:block">
-              <p className="text-[11px] font-bold text-[#4c739a] uppercase tracking-wider">{getSectorLabel()}</p>
-              <p className="text-[10px] text-[#4c739a] dark:text-slate-500">Rio de Janeiro, Brasil</p>
-              <p className="text-[10px] text-[#4c739a] dark:text-slate-500 capitalize">{formatDate()}</p>
+              <p className="text-[11px] font-bold text-[#4c739a] uppercase tracking-wider">
+                {getSectorLabel()}
+              </p>
+              <p className="text-[10px] text-[#4c739a] dark:text-slate-500">
+                Rio de Janeiro, Brasil
+              </p>
+              <p className="text-[10px] text-[#4c739a] dark:text-slate-500 capitalize">
+                {formatDate()}
+              </p>
             </div>
             <button className="size-8 flex items-center justify-center bg-[#f8fafc] dark:bg-slate-800 rounded-full text-[#4c739a] hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-              <span className="material-symbols-outlined text-[20px]">help</span>
+              <span className="material-symbols-outlined text-[20px]">
+                help
+              </span>
             </button>
           </div>
         </header>
@@ -354,21 +464,32 @@ interface SidebarItemProps {
   collapsed: boolean;
 }
 
-const SidebarItem: React.FC<SidebarItemProps> = ({ to, icon, label, collapsed }) => {
+const SidebarItem: React.FC<SidebarItemProps> = (
+  { to, icon, label, collapsed },
+) => {
   return (
     <NavLink
       to={to}
       className={({ isActive }) => `
         flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group relative
-        ${isActive
-          ? 'bg-primary/5 text-primary'
-          : 'text-[#4c739a] dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
-        }
-        ${collapsed ? 'justify-center' : ''}
+        ${
+        isActive
+          ? "bg-primary/5 text-primary"
+          : "text-[#4c739a] dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+      }
+        ${collapsed ? "justify-center" : ""}
       `}
     >
-      <span className={`material-symbols-outlined ${collapsed ? 'text-2xl' : ''}`}>{icon}</span>
-      {!collapsed && <span className="nav-text text-sm font-medium whitespace-nowrap">{label}</span>}
+      <span
+        className={`material-symbols-outlined ${collapsed ? "text-2xl" : ""}`}
+      >
+        {icon}
+      </span>
+      {!collapsed && (
+        <span className="nav-text text-sm font-medium whitespace-nowrap">
+          {label}
+        </span>
+      )}
       {collapsed && (
         <div className="absolute left-full ml-2 px-2 py-1 bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
           {label}
