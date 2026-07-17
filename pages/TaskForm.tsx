@@ -177,6 +177,11 @@ const TaskForm: React.FC = () => {
 
     // Form State
 
+    // Collapsible Sections State
+    const [isEfetivoOpen, setIsEfetivoOpen] = useState(true);
+    const [isTarefasOpen, setIsTarefasOpen] = useState(true);
+    const [isReunioesOpen, setIsReunioesOpen] = useState(true);
+
     // Strategic Summary state
     const [isStrategicSummaryOpen, setIsStrategicSummaryOpen] = useState(false);
     const [currentSlide, setCurrentSlide] = useState(0);
@@ -1589,10 +1594,18 @@ const TaskForm: React.FC = () => {
         <div className="max-w-6xl mx-auto flex flex-col gap-8 animate-in fade-in duration-500">
             {/* Personnel Control Section */}
             <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-3">
-                    <h1 className="text-[#0d141b] dark:text-white text-3xl font-extrabold leading-tight tracking-tight">
-                        Controle do Efetivo
-                    </h1>
+                <div className="flex flex-wrap items-center gap-3">
+                    <button 
+                        onClick={() => setIsEfetivoOpen(!isEfetivoOpen)}
+                        className="flex items-center gap-2 hover:opacity-80 transition-opacity text-left"
+                    >
+                        <span className="material-symbols-outlined text-[28px] text-primary">
+                            {isEfetivoOpen ? "expand_less" : "expand_more"}
+                        </span>
+                        <h1 className="text-[#0d141b] dark:text-white text-3xl font-extrabold leading-tight tracking-tight">
+                            Controle do Efetivo
+                        </h1>
+                    </button>
                     <button
                         onClick={() => navigate("/app/tasks/planner")}
                         className="p-2 rounded-lg bg-white dark:bg-slate-800 border border-[#e7edf3] dark:border-slate-700 text-[#4c739a] hover:text-primary transition-all active:scale-95 shadow-sm"
@@ -1622,10 +1635,12 @@ const TaskForm: React.FC = () => {
                     </button>
                 </div>
 
-                <p className="text-[#4c739a] dark:text-slate-400 text-base font-normal">
-                    Tarefas atribuídas ao efetivo nesse momento.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {isEfetivoOpen && (
+                    <>
+                        <p className="text-[#4c739a] dark:text-slate-400 text-base font-normal">
+                            Tarefas atribuídas ao efetivo nesse momento.
+                        </p>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
                     {members
                         .filter((m) => {
                             // 1. CH vê todos os ranks
@@ -1681,7 +1696,7 @@ const TaskForm: React.FC = () => {
                                 <div
                                     key={member.id}
                                     className={`
-                                        p-4 rounded-xl border shadow-sm flex flex-col gap-3 transition-all duration-300
+                                        p-2 md:p-4 rounded-xl border shadow-sm flex flex-col gap-2 md:gap-3 transition-all duration-300
                                         ${
                                         currentMission
                                             ? "bg-amber-50/50 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800"
@@ -1698,7 +1713,7 @@ const TaskForm: React.FC = () => {
                                     <div className="flex flex-col items-center gap-2 mb-1">
                                         <div
                                             className={`
-                                            w-16 h-16 rounded-full flex items-center justify-center font-bold text-sm uppercase overflow-hidden shadow-sm border-2
+                                            w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center font-bold text-xs md:text-sm uppercase overflow-hidden shadow-sm border-2
                                             ${
                                                 currentMission
                                                     ? "border-amber-400"
@@ -1727,7 +1742,7 @@ const TaskForm: React.FC = () => {
                                                 )}
                                         </div>
                                         <div className="flex flex-col items-center text-center">
-                                            <span className="text-lg font-bold text-[#0d141b] dark:text-white leading-tight">
+                                            <span className="text-xs md:text-lg font-bold text-[#0d141b] dark:text-white leading-tight">
                                                 {member.abrev} {member.war_name}
                                             </span>
                                             {currentMission
@@ -1987,19 +2002,28 @@ const TaskForm: React.FC = () => {
                             );
                         })}
                 </div>
+                </>
+                )}
             </div>
 
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-3">
+                    <button 
+                        onClick={() => setIsTarefasOpen(!isTarefasOpen)}
+                        className="flex items-center gap-2 hover:opacity-80 transition-opacity text-left w-fit"
+                    >
+                        <span className="material-symbols-outlined text-[28px] text-primary">
+                            {isTarefasOpen ? "expand_less" : "expand_more"}
+                        </span>
                         <h1 className="text-[#0d141b] dark:text-white text-3xl font-extrabold leading-tight tracking-tight">
                             Gerenciamento de Tarefas
                         </h1>
-                    </div>
-                    <p className="text-[#4c739a] dark:text-slate-400 text-base font-normal">
-                        Gerencie todas as atividades, filtre por especialidade e
-                        controle recorrências.
-                    </p>
+                    </button>
+                    {isTarefasOpen && (
+                        <p className="text-[#4c739a] dark:text-slate-400 text-base font-normal pl-[36px]">
+                            Gerencie todas as atividades, filtre por especialidade e controle recorrências.
+                        </p>
+                    )}
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                     <button
@@ -2019,7 +2043,9 @@ const TaskForm: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm p-4 flex flex-col gap-4">
+            {isTarefasOpen && (
+                <>
+                <div className="bg-white dark:bg-slate-900 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm p-4 flex flex-col gap-4">
                 {/* Search Bar */}
                 <div className="relative">
                     <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]">
@@ -2182,7 +2208,7 @@ const TaskForm: React.FC = () => {
                         <thead>
                             <tr className="border-b border-[#e7edf3] dark:border-slate-800 text-[#4c739a] dark:text-slate-400 text-xs uppercase tracking-wider">
                                 <th
-                                    className="p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th"
+                                    className="p-2 md:p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th"
                                     onClick={() => handleSort("name")}
                                 >
                                     <div className="flex items-center gap-1">
@@ -2204,7 +2230,7 @@ const TaskForm: React.FC = () => {
                                     </div>
                                 </th>
                                 <th
-                                    className="p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th"
+                                    className="p-2 md:p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th hidden md:table-cell"
                                     onClick={() => handleSort("periodicity")}
                                 >
                                     <div className="flex items-center gap-1">
@@ -2226,7 +2252,7 @@ const TaskForm: React.FC = () => {
                                     </div>
                                 </th>
                                 <th
-                                    className="p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th"
+                                    className="p-2 md:p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th"
                                     onClick={() => handleSort("start_date")}
                                 >
                                     <div className="flex items-center gap-1">
@@ -2248,7 +2274,7 @@ const TaskForm: React.FC = () => {
                                     </div>
                                 </th>
                                 <th
-                                    className="p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th"
+                                    className="p-2 md:p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th hidden md:table-cell"
                                     onClick={() => handleSort("assigned_to")}
                                 >
                                     <div className="flex items-center gap-1">
@@ -2270,7 +2296,7 @@ const TaskForm: React.FC = () => {
                                     </div>
                                 </th>
                                 <th
-                                    className="p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th"
+                                    className="p-2 md:p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th"
                                     onClick={() => handleSort("status")}
                                 >
                                     <div className="flex items-center gap-1">
@@ -2291,7 +2317,7 @@ const TaskForm: React.FC = () => {
                                         </span>
                                     </div>
                                 </th>
-                                <th className="p-4 font-bold text-right">
+                                <th className="p-2 md:p-4 font-bold text-right">
                                     Ações
                                 </th>
                             </tr>
@@ -2304,7 +2330,7 @@ const TaskForm: React.FC = () => {
                                             key={task.id}
                                             className="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                                         >
-                                            <td className="p-4">
+                                            <td className="p-2 md:p-4">
                                                 <p
                                                     className={`text-sm font-bold text-[#0d141b] dark:text-white inline-block ${
                                                         getTaskHighlight(task)
@@ -2325,7 +2351,7 @@ const TaskForm: React.FC = () => {
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="p-4 text-sm text-[#4c739a] dark:text-slate-300">
+                                            <td className="p-2 md:p-4 text-sm text-[#4c739a] dark:text-slate-300 hidden md:table-cell">
                                                 {formatPeriodicity(
                                                     task.periodicity,
                                                 )}
@@ -2354,7 +2380,7 @@ const TaskForm: React.FC = () => {
                                                     </span>
                                                 )}
                                             </td>
-                                            <td className="p-4 text-sm text-[#4c739a] dark:text-slate-300">
+                                            <td className="p-2 md:p-4 text-xs md:text-sm text-[#4c739a] dark:text-slate-300">
                                                 {task.start_date
                                                     ? task.start_date.split(
                                                         "T",
@@ -2362,12 +2388,12 @@ const TaskForm: React.FC = () => {
                                                         .join("/")
                                                     : "-"}
                                             </td>
-                                            <td className="p-4 text-sm text-[#4c739a] dark:text-slate-300">
+                                            <td className="p-2 md:p-4 text-sm text-[#4c739a] dark:text-slate-300 hidden md:table-cell">
                                                 {getMemberName(
                                                     task.assigned_to,
                                                 )}
                                             </td>
-                                            <td className="p-4">
+                                            <td className="p-2 md:p-4">
                                                 <span
                                                     className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
                                                         getStatusStyle(
@@ -2380,8 +2406,8 @@ const TaskForm: React.FC = () => {
                                                     )}
                                                 </span>
                                             </td>
-                                            <td className="p-4">
-                                                <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <td className="p-2 md:p-4">
+                                                <div className="flex items-center justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                                     <button
                                                         onClick={() =>
                                                             handleEdit(task)}
@@ -2536,10 +2562,18 @@ const TaskForm: React.FC = () => {
                     </div>
                 )}
             </div>
+            </>
+            )}
 
             {/* Meetings List Section */}
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm p-4 mt-8 flex flex-col gap-4">
-                <div className="flex items-center gap-3 mb-2">
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm p-4 mt-4 md:mt-8 flex flex-col gap-4">
+                <button 
+                    onClick={() => setIsReunioesOpen(!isReunioesOpen)}
+                    className="flex items-center gap-3 mb-2 hover:opacity-80 transition-opacity w-fit text-left"
+                >
+                    <span className="material-symbols-outlined text-[28px] text-primary">
+                        {isReunioesOpen ? "expand_less" : "expand_more"}
+                    </span>
                     <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 rounded-lg">
                         <span className="material-symbols-outlined">
                             event
@@ -2548,8 +2582,9 @@ const TaskForm: React.FC = () => {
                     <h2 className="text-xl font-extrabold text-[#0d141b] dark:text-white">
                         Lista de Reuniões
                     </h2>
-                </div>
+                </button>
 
+                {isReunioesOpen && (
                 <div className="overflow-x-auto custom-scrollbar">
                     <table className="w-full text-left border-collapse min-w-[800px]">
                         <thead>
@@ -2689,6 +2724,7 @@ const TaskForm: React.FC = () => {
                         </tbody>
                     </table>
                 </div>
+                )}
             </div>
 
             {/* Delete Confirmation Modal */}

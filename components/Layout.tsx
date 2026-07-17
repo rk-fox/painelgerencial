@@ -4,10 +4,12 @@ import { supabase } from "../supabase";
 
 const Layout: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [newTasks, setNewTasks] = useState<any[]>([]);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const location = useLocation();
+  const sidebarRef = useRef<HTMLElement>(null);
   const navigate = useNavigate();
   const notificationRef = useRef<HTMLDivElement>(null);
   const bellButtonRef = useRef<HTMLButtonElement>(null);
@@ -104,6 +106,11 @@ const Layout: React.FC = () => {
     };
   }, [isNotificationsOpen]);
 
+  // Close mobile menu on route change
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
+
   const checkNotifications = async (user: any) => {
     if (!user || (!user.last_login && !user.last_sign_in_at)) return;
     const lastLogin = user.last_login || user.last_sign_in_at;
@@ -185,17 +192,29 @@ const Layout: React.FC = () => {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#f6f7f8] dark:bg-background-dark text-[#0d141b] dark:text-slate-200">
+      {/* Mobile Overlay */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-300"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <aside
+        ref={sidebarRef}
         onMouseEnter={() => setIsSidebarCollapsed(false)}
         onMouseLeave={() => setIsSidebarCollapsed(true)}
-        className={`${
-          isSidebarCollapsed ? "w-20" : "w-64"
-        } bg-white dark:bg-slate-900 border-r border-[#e7edf3] dark:border-slate-800 flex flex-col h-screen sticky top-0 z-50 shrink-0 transition-all duration-300`}
+        className={`
+          bg-white dark:bg-slate-900 border-r border-[#e7edf3] dark:border-slate-800 flex flex-col h-screen z-50 shrink-0 transition-all duration-300
+          fixed md:sticky top-0
+          ${isMobileMenuOpen ? "translate-x-0 w-64" : "-translate-x-full w-64"}
+          md:translate-x-0 ${isSidebarCollapsed ? "md:w-20" : "md:w-64"}
+        `}
       >
         <div
           className={`p-6 flex items-center gap-3 ${
-            isSidebarCollapsed ? "justify-center" : ""
+            isSidebarCollapsed ? "md:justify-center" : ""
           }`}
         >
           <img
@@ -203,16 +222,20 @@ const Layout: React.FC = () => {
             alt="CGNA"
             className="size-8 min-w-[32px] shadow-lg object-contain"
           />
+          {/* On mobile drawer is always w-64 so always show. On desktop, hide when collapsed */}
           {!isSidebarCollapsed && (
-            <h2 className="text-[#0d141b] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] truncate uppercase">
+            <h2 className="text-[#0d141b] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] truncate uppercase hidden md:block">
               CGNA
             </h2>
           )}
+          <h2 className="text-[#0d141b] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] truncate uppercase md:hidden">
+            CGNA
+          </h2>
         </div>
 
         <nav
-          className={`flex-1 px-4 space-y-1 mt-4 ${
-            isSidebarCollapsed ? "overflow-hidden" : "overflow-y-auto"
+          className={`flex-1 px-4 space-y-1 mt-4 overflow-y-auto ${
+            isSidebarCollapsed ? "md:overflow-hidden" : ""
           }`}
         >
           {currentUser?.sector !== "CH" && (
@@ -221,6 +244,7 @@ const Layout: React.FC = () => {
               icon="dashboard"
               label="Dashboard"
               collapsed={isSidebarCollapsed}
+              onMobileClick={() => setIsMobileMenuOpen(false)}
             />
           )}
 
@@ -229,36 +253,42 @@ const Layout: React.FC = () => {
             icon="assignment"
             label="Tarefas"
             collapsed={isSidebarCollapsed}
+            onMobileClick={() => setIsMobileMenuOpen(false)}
           />
           <SidebarItem
             to="/app/members"
             icon="group"
             label="Membros"
             collapsed={isSidebarCollapsed}
+            onMobileClick={() => setIsMobileMenuOpen(false)}
           />
           <SidebarItem
             to="/app/schedule"
             icon="calendar_month"
             label="Cronograma"
             collapsed={isSidebarCollapsed}
+            onMobileClick={() => setIsMobileMenuOpen(false)}
           />
           <SidebarItem
             to="/app/reports"
             icon="analytics"
             label="Relatórios"
             collapsed={isSidebarCollapsed}
+            onMobileClick={() => setIsMobileMenuOpen(false)}
           />
           <SidebarItem
             to="/app/sdia"
             icon="report"
             label="SDIA"
             collapsed={isSidebarCollapsed}
+            onMobileClick={() => setIsMobileMenuOpen(false)}
           />
           <SidebarItem
             to="/app/shortcuts"
             icon="link"
             label="Atalhos"
             collapsed={isSidebarCollapsed}
+            onMobileClick={() => setIsMobileMenuOpen(false)}
           />
           {(currentUser?.sector === "CP" || currentUser?.sector === "EA") && (
             <SidebarItem
@@ -266,6 +296,7 @@ const Layout: React.FC = () => {
               icon="view_kanban"
               label="Quadro Branco"
               collapsed={isSidebarCollapsed}
+              onMobileClick={() => setIsMobileMenuOpen(false)}
             />
           )}
         </nav>
@@ -273,7 +304,7 @@ const Layout: React.FC = () => {
         <div className="p-4 border-t border-[#e7edf3] dark:border-slate-800 space-y-4">
           <div
             className={`flex items-center gap-3 px-2 ${
-              isSidebarCollapsed ? "justify-center" : ""
+              isSidebarCollapsed ? "md:justify-center" : ""
             }`}
           >
             {currentUser
@@ -288,8 +319,9 @@ const Layout: React.FC = () => {
                       }")`,
                     }}
                   />
+                  {/* On desktop, show user info only when sidebar expanded. On mobile always show. */}
                   {!isSidebarCollapsed && (
-                    <div className="overflow-hidden">
+                    <div className="overflow-hidden hidden md:block">
                       <p className="text-xs font-bold truncate text-[#0d141b] dark:text-white">
                         {currentUser.abrev} {currentUser.war_name}
                       </p>
@@ -298,6 +330,15 @@ const Layout: React.FC = () => {
                       </p>
                     </div>
                   )}
+                  {/* Mobile: always show */}
+                  <div className="overflow-hidden md:hidden">
+                    <p className="text-xs font-bold truncate text-[#0d141b] dark:text-white">
+                      {currentUser.abrev} {currentUser.war_name}
+                    </p>
+                    <p className="text-[10px] text-[#4c739a] dark:text-slate-400 font-bold truncate uppercase">
+                      {currentUser.specialty}
+                    </p>
+                  </div>
                 </>
               )
               : (
@@ -306,8 +347,8 @@ const Layout: React.FC = () => {
           </div>
 
           <div
-            className={`flex items-center ${
-              isSidebarCollapsed ? "flex-col gap-4" : "justify-between px-2"
+            className={`flex items-center justify-between px-2 ${
+              isSidebarCollapsed ? "md:flex-col md:gap-4 md:justify-center md:px-0" : ""
             }`}
           >
             <div className="relative">
@@ -420,11 +461,30 @@ const Layout: React.FC = () => {
       {/* Main Content Wrapper */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Header */}
-        <header className="h-16 bg-white dark:bg-slate-900 border-b border-[#e7edf3] dark:border-slate-800 flex items-center justify-between px-6 sticky top-0 z-40 shrink-0">
-          <div className="flex items-center gap-8 flex-1">
+        <header className="h-16 bg-white dark:bg-slate-900 border-b border-[#e7edf3] dark:border-slate-800 flex items-center justify-between px-4 md:px-6 sticky top-0 z-30 shrink-0">
+          <div className="flex items-center gap-4 md:gap-8 flex-1">
+            {/* Hamburger button - mobile only */}
+            <button
+              className="md:hidden text-[#4c739a] hover:text-primary transition-colors active:scale-95 p-1"
+              onClick={() => setIsMobileMenuOpen(true)}
+              title="Menu"
+            >
+              <span className="material-symbols-outlined text-[26px]">menu</span>
+            </button>
             <h1 className="text-[#0d141b] dark:text-white font-bold text-lg whitespace-nowrap hidden md:block">
               Painel Gerencial
             </h1>
+            {/* Mobile: show logo + sector */}
+            <div className="flex items-center gap-2 md:hidden">
+              <img
+                src="https://raw.githubusercontent.com/rk-fox/painelgerencial/refs/heads/main/cgna-logo.png"
+                alt="CGNA"
+                className="size-7 object-contain"
+              />
+              <span className="text-[11px] font-bold text-[#4c739a] uppercase tracking-wider">
+                {getSectorLabel()}
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-4 ml-4">
             <div className="text-right hidden sm:block">
@@ -447,7 +507,7 @@ const Layout: React.FC = () => {
         </header>
 
         {/* Scrollable Page Content */}
-        <main className="flex-1 overflow-y-auto p-6 bg-[#f6f7f8] dark:bg-background-dark scroll-smooth">
+        <main className="flex-1 overflow-y-auto p-3 md:p-6 bg-[#f6f7f8] dark:bg-background-dark scroll-smooth">
           <div className="max-w-[1400px] mx-auto min-h-full">
             <Outlet />
           </div>
@@ -462,14 +522,16 @@ interface SidebarItemProps {
   icon: string;
   label: string;
   collapsed: boolean;
+  onMobileClick?: () => void;
 }
 
 const SidebarItem: React.FC<SidebarItemProps> = (
-  { to, icon, label, collapsed },
+  { to, icon, label, collapsed, onMobileClick },
 ) => {
   return (
     <NavLink
       to={to}
+      onClick={onMobileClick}
       className={({ isActive }) => `
         flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group relative
         ${
@@ -477,21 +539,21 @@ const SidebarItem: React.FC<SidebarItemProps> = (
           ? "bg-primary/5 text-primary"
           : "text-[#4c739a] dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
       }
-        ${collapsed ? "justify-center" : ""}
+        ${collapsed ? "md:justify-center" : ""}
       `}
     >
       <span
-        className={`material-symbols-outlined ${collapsed ? "text-2xl" : ""}`}
+        className={`material-symbols-outlined ${collapsed ? "md:text-2xl" : ""}`}
       >
         {icon}
       </span>
-      {!collapsed && (
-        <span className="nav-text text-sm font-medium whitespace-nowrap">
-          {label}
-        </span>
-      )}
+      {/* Desktop: conditionally show label */}
+      <span className={`nav-text text-sm font-medium whitespace-nowrap ${collapsed ? "md:hidden" : ""}`}>
+        {label}
+      </span>
+      {/* Desktop tooltip when collapsed */}
       {collapsed && (
-        <div className="absolute left-full ml-2 px-2 py-1 bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
+        <div className="absolute left-full ml-2 px-2 py-1 bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 hidden md:block">
           {label}
         </div>
       )}

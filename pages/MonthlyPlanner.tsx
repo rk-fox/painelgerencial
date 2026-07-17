@@ -1065,23 +1065,23 @@ const MonthlyPlanner: React.FC = () => {
     return (
         <div className="flex flex-col h-full bg-[#f8fafc] dark:bg-background-dark animate-in fade-in duration-500">
             {/* Action Bar */}
-            <div className="flex items-center justify-between px-6 py-4 bg-[#f8fafc] dark:bg-background-dark">
-                <div className="flex items-center gap-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-4 md:px-6 py-4 bg-[#f8fafc] dark:bg-background-dark">
+                <div className="flex items-center gap-4 md:gap-6">
                     <button
                         type="button"
                         onClick={() => navigate(-1)}
-                        className="flex items-center justify-center p-2 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors"
+                        className="flex items-center justify-center p-2 rounded-lg hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors shrink-0"
                     >
                         <span className="material-symbols-outlined text-[#4c739a] text-[24px]">
                             arrow_back
                         </span>
                     </button>
-                    <h1 className="text-[#0d141b] dark:text-white text-[28px] font-black leading-tight tracking-[-0.033em]">
+                    <h1 className="text-[#0d141b] dark:text-white text-2xl md:text-[28px] font-black leading-tight tracking-[-0.033em]">
                         Cronograma
                     </h1>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 md:gap-4 overflow-x-auto pb-2 md:pb-0 custom-scrollbar w-full md:w-auto">
                     {currentUser?.sector === "CH" && (
                         <div className="flex bg-slate-200 dark:bg-slate-800 p-1 rounded-xl">
                             <button
@@ -1183,7 +1183,7 @@ const MonthlyPlanner: React.FC = () => {
                         </button>
                     </div>
 
-                    <div className="flex items-center bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                    <div className="flex items-center bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 rounded-xl overflow-hidden shadow-sm shrink-0">
                         <button
                             type="button"
                             onClick={handlePrev}
@@ -1193,8 +1193,8 @@ const MonthlyPlanner: React.FC = () => {
                                 chevron_left
                             </span>
                         </button>
-                        <div className="px-8 py-2 min-w-[200px] text-center">
-                            <span className="text-lg font-bold text-[#0d141b] dark:text-white">
+                        <div className="px-4 md:px-8 py-2 min-w-[150px] md:min-w-[200px] text-center">
+                            <span className="text-sm md:text-lg font-bold text-[#0d141b] dark:text-white whitespace-nowrap">
                                 {viewMode === "month"
                                     ? `${
                                         monthNames[currentMonth]
@@ -1224,10 +1224,11 @@ const MonthlyPlanner: React.FC = () => {
             </div>
 
             {/* Calendar Grid */}
-            <div className="flex-1 p-6 pt-0 overflow-hidden">
-                <div className="h-full border border-[#e7edf3] dark:border-slate-800 rounded-[28px] bg-white dark:bg-slate-900 shadow-xl shadow-slate-200/50 dark:shadow-none overflow-hidden flex flex-col">
-                    <div className="grid grid-cols-7 border-b border-[#e7edf3] dark:border-slate-800">
-                        {["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"].map(
+            <div className="flex-1 p-4 md:p-6 pt-0 overflow-hidden">
+                <div className="h-full border border-[#e7edf3] dark:border-slate-800 rounded-2xl md:rounded-[28px] bg-white dark:bg-slate-900 shadow-xl shadow-slate-200/50 dark:shadow-none overflow-x-auto custom-scrollbar flex flex-col">
+                    <div className="min-w-[1000px] h-full flex flex-col">
+                        <div className="grid grid-cols-7 border-b border-[#e7edf3] dark:border-slate-800">
+                            {["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"].map(
                             (day) => (
                                 <div
                                     key={day}
@@ -1365,6 +1366,7 @@ const MonthlyPlanner: React.FC = () => {
                                     );
                                 })
                             )}
+                        </div>
                     </div>
                 </div>
             </div>

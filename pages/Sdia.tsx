@@ -489,12 +489,12 @@ const SdiaPage: React.FC = () => {
                         Informações Aeronáuticas.
                     </p>
                 </div>
-                <div className="flex gap-3 items-center">
+                <div className="flex flex-wrap gap-2 md:gap-3 items-center w-full md:w-auto">
                     <select
                         value={selectedYear}
                         onChange={(e) =>
                             setSelectedYear(Number(e.target.value))}
-                        className="px-4 py-3 w-[100px] rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold focus:ring-2 focus:ring-primary"
+                        className="px-3 md:px-4 py-2 md:py-3 w-20 md:w-[100px] text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold focus:ring-2 focus:ring-primary"
                     >
                         {availableYears.map((year) => (
                             <option key={year} value={year}>{year}</option>
@@ -505,7 +505,7 @@ const SdiaPage: React.FC = () => {
                             fetchCapSdias();
                             setIsReviewReducPopupOpen(true);
                         }}
-                        className="px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95 flex items-center gap-2"
+                        className="px-3 md:px-6 py-2 md:py-3 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs md:text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95 flex items-center gap-1 md:gap-2 flex-1 md:flex-none justify-center whitespace-nowrap"
                     >
                         <span className="material-symbols-outlined text-sm">
                             visibility
@@ -540,10 +540,10 @@ const SdiaPage: React.FC = () => {
                             });
                             setIsFormOpen(true);
                         }}
-                        className="px-6 py-3 rounded-xl bg-primary text-white font-bold shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all active:scale-95 flex items-center justify-center gap-2"
+                        className="px-3 md:px-6 py-2 md:py-3 rounded-xl bg-primary text-white text-xs md:text-sm font-bold shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all active:scale-95 flex items-center justify-center gap-1 md:gap-2 flex-1 md:flex-none whitespace-nowrap"
                     >
-                        <span className="material-symbols-outlined">add</span>
-                        <span>Cadastrar Nova SDIA</span>
+                        <span className="material-symbols-outlined text-sm md:text-base">add</span>
+                        <span>Cadastrar SDIA</span>
                     </button>
                 </div>
             </div>
@@ -1357,9 +1357,6 @@ const SdiaPage: React.FC = () => {
                                             <thead>
                                                 <tr className="border-b border-slate-200 dark:border-slate-700">
                                                     <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">
-                                                        SDIA
-                                                    </th>
-                                                    <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">
                                                         Indicativo
                                                     </th>
                                                     <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">
@@ -1367,12 +1364,6 @@ const SdiaPage: React.FC = () => {
                                                     </th>
                                                     <th className="text-left py-3 px-2 font-bold text-slate-500 uppercase text-xs">
                                                         Fim
-                                                    </th>
-                                                    <th className="text-center py-3 px-2 font-bold text-slate-500 uppercase text-xs">
-                                                        Pousos/60min
-                                                    </th>
-                                                    <th className="text-center py-3 px-2 font-bold text-slate-500 uppercase text-xs">
-                                                        Decolagens/60min
                                                     </th>
                                                     <th className="text-center py-3 px-2 font-bold text-slate-500 uppercase text-xs">
                                                         Capacidade Horária
@@ -1385,9 +1376,6 @@ const SdiaPage: React.FC = () => {
                                                         key={sdia.id}
                                                         className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50"
                                                     >
-                                                        <td className="py-3 px-2 font-bold text-slate-800 dark:text-white">
-                                                            {sdia.nr_sdia}
-                                                        </td>
                                                         <td className="py-3 px-2 text-slate-600 dark:text-slate-400">
                                                             {sdia.indicativo}
                                                         </td>
@@ -1400,18 +1388,6 @@ const SdiaPage: React.FC = () => {
                                                             {formatDateString(
                                                                 sdia.data_fim,
                                                             )}
-                                                        </td>
-                                                        <td className="py-3 px-2 text-center">
-                                                            <span className="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg text-xs font-bold">
-                                                                {sdia.arr ??
-                                                                    "—"}
-                                                            </span>
-                                                        </td>
-                                                        <td className="py-3 px-2 text-center">
-                                                            <span className="bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 px-2 py-1 rounded-lg text-xs font-bold">
-                                                                {sdia.dep ??
-                                                                    "—"}
-                                                            </span>
                                                         </td>
                                                         <td className="py-3 px-2 text-center">
                                                             <span className="bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 px-2 py-1 rounded-lg text-xs font-bold">

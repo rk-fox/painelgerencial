@@ -328,7 +328,7 @@ const MemberForm: React.FC = () => {
           {/* Specialty Row */}
           <div className="flex flex-col gap-2">
             <label className="text-sm font-bold text-[#0d141b] dark:text-white">Especialidade</label>
-            <div className="flex gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <label className="flex-1 cursor-pointer group">
                 <input
                   className="hidden peer"

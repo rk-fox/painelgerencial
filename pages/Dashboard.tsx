@@ -597,16 +597,15 @@ const Dashboard: React.FC = () => {
       console.error("Error completing task:", err.message);
     }
   };
-
-  // Filter members for dispatch dropdown (exclude current user)
   const dispatchableMembers = members.filter((m: any) => m.id !== currentUser?.id);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 relative">
-      {/* Top Section: Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
+    <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 relative">
+      {/* Top Section: Stats - 3 compact cards in a single row */}
+      <div className="grid grid-cols-3 gap-2 md:gap-6 w-full">
         <StatCard
           title="Concluídas Últ. 30 Dias"
+          shortTitle="Concluídas"
           value={stats.completed30.toString()}
           trend={stats.completedTrend > 0
             ? `+${stats.completedTrend}%`
@@ -615,6 +614,7 @@ const Dashboard: React.FC = () => {
         />
         <StatCard
           title="Prazos a Expirar"
+          shortTitle="Expirando"
           value={stats.expiringCount.toString()}
           badge={stats.expiringCount > 0 ? "Alerta" : ""}
           badgeType="custom"
@@ -622,6 +622,7 @@ const Dashboard: React.FC = () => {
         />
         <StatCard
           title="Tarefas Pendentes"
+          shortTitle="Pendentes"
           value={stats.pendingCount.toString()}
           icon="pending_actions"
           iconColor="bg-[#FFEDD5] text-[#F97316]"
@@ -629,7 +630,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Filter Bar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 p-5 rounded-2xl shadow-sm">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 md:gap-6 bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 p-3 md:p-5 rounded-2xl shadow-sm">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
             <FilterButton
@@ -700,11 +701,11 @@ const Dashboard: React.FC = () => {
         </button>
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-        {/* Task Bank */}
+      {/* Main Content Grid - On mobile: My Activities first, Bank second */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-8 items-start">
+        {/* Task Bank - appears second on mobile */}
         <section
-          className="flex flex-col gap-6"
+          className="flex flex-col gap-4 md:gap-6 order-2 lg:order-1"
           onDrop={handleDropToBank}
           onDragOver={handleDragOver}
         >
@@ -747,9 +748,9 @@ const Dashboard: React.FC = () => {
           </div>
         </section>
 
-        {/* My Activities */}
+        {/* My Activities - appears first on mobile */}
         <section
-          className="flex flex-col gap-6"
+          className="flex flex-col gap-4 md:gap-6 order-1 lg:order-2"
           onDrop={handleDropToMyActivities}
           onDragOver={handleDragOver}
         >
@@ -894,10 +895,10 @@ const Dashboard: React.FC = () => {
       )}
       {/* Floating Meetings Widget */}
       {meetings.length > 0 && (
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4 animate-in fade-in slide-in-from-bottom-10 duration-500">
+        <div className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-50 flex flex-col items-end gap-4 animate-in fade-in slide-in-from-bottom-10 duration-500">
           {/* Expanded Panel */}
           {isMeetingsExpanded && (
-            <div className="bg-[#f8fafc] dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 p-4 rounded-2xl shadow-2xl w-80 max-h-[60vh] overflow-y-auto custom-scrollbar flex flex-col gap-3 relative animate-in zoom-in-95 duration-200">
+            <div className="bg-[#f8fafc] dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 p-4 rounded-2xl shadow-2xl w-72 md:w-80 max-h-[60vh] overflow-y-auto custom-scrollbar flex flex-col gap-3 relative animate-in zoom-in-95 duration-200">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="font-extrabold text-[#0d141b] dark:text-white flex items-center gap-2">
                   <span className="material-symbols-outlined text-yellow-500">
@@ -986,6 +987,7 @@ const Dashboard: React.FC = () => {
 const StatCard = (
   {
     title,
+    shortTitle,
     value,
     trend,
     trendType,
@@ -997,29 +999,33 @@ const StatCard = (
     iconColor,
   }: any,
 ) => (
-  <div className="flex flex-col gap-2 rounded-2xl p-6 bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 shadow-sm transition-transform hover:-translate-y-1">
-    <p className="text-[#4c739a] dark:text-slate-400 text-xs font-bold uppercase tracking-widest">
+  <div className="flex flex-col gap-1 md:gap-2 rounded-2xl p-3 md:p-6 bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 shadow-sm transition-transform hover:-translate-y-1">
+    {/* Full title on md+, short title on mobile */}
+    <p className="text-[#4c739a] dark:text-slate-400 text-[9px] md:text-xs font-bold uppercase tracking-widest hidden md:block">
       {title}
     </p>
+    <p className="text-[#4c739a] dark:text-slate-400 text-[9px] font-bold uppercase tracking-wider md:hidden">
+      {shortTitle || title}
+    </p>
     <div className="flex items-end justify-between">
-      <p className="text-[#0d141b] dark:text-white text-4xl font-extrabold">
+      <p className="text-[#0d141b] dark:text-white text-2xl md:text-4xl font-extrabold">
         {value}
       </p>
       {trend && (
         <p
-          className={`text-sm font-bold flex items-center gap-1 px-2 py-1 rounded-lg ${
+          className={`text-[9px] md:text-sm font-bold flex items-center gap-0.5 md:gap-1 px-1.5 md:px-2 py-0.5 md:py-1 rounded-lg ${
             trendType === "positive"
               ? "text-green-600 bg-green-100 dark:bg-green-900/30"
               : "text-red-600 bg-red-100"
           }`}
         >
-          <span className="material-symbols-outlined text-sm">trending_up</span>
-          {" "}
-          {trend}
+          <span className="material-symbols-outlined text-[10px] md:text-sm">trending_up</span>
+          <span className="hidden md:inline">{trend}</span>
+          <span className="md:hidden">{trend.replace(/[+-]/, '')}</span>
         </p>
       )}
       {progress !== undefined && (
-        <div className="w-32 h-2.5 bg-[#e7edf3] dark:bg-slate-800 rounded-full overflow-hidden mb-2">
+        <div className="w-16 md:w-32 h-2 md:h-2.5 bg-[#e7edf3] dark:bg-slate-800 rounded-full overflow-hidden mb-1 md:mb-2">
           <div
             className="bg-primary h-full rounded-full shadow-[0_0_8px_rgba(19,127,236,0.5)]"
             style={{ width: `${progress}%` }}
@@ -1029,7 +1035,7 @@ const StatCard = (
       )}
       {badge && (
         <p
-          className={`text-sm font-bold flex items-center gap-1 px-2 py-1 rounded-lg ${
+          className={`text-[9px] md:text-sm font-bold flex items-center gap-0.5 md:gap-1 px-1.5 md:px-2 py-0.5 md:py-1 rounded-lg ${
             badgeColor
               ? badgeColor
               : badgeType === "warning"
@@ -1037,20 +1043,19 @@ const StatCard = (
               : ""
           }`}
         >
-          <span className="material-symbols-outlined text-sm">warning</span>
-          {" "}
-          {badge}
+          <span className="material-symbols-outlined text-[10px] md:text-sm">warning</span>
+          <span className="hidden md:inline">{badge}</span>
         </p>
       )}
       {icon && (
         <div
-          className={`p-2 rounded-lg ${
+          className={`p-1.5 md:p-2 rounded-lg ${
             iconColor
               ? iconColor
               : "bg-slate-100 dark:bg-slate-800 text-[#4c739a]"
           }`}
         >
-          <span className="material-symbols-outlined">{icon}</span>
+          <span className="material-symbols-outlined text-[18px] md:text-[24px]">{icon}</span>
         </div>
       )}
     </div>
@@ -1108,7 +1113,7 @@ const TaskCard = ({ task, onPull, onDragStart }: any) => {
     <div
       draggable
       onDragStart={onDragStart}
-      className={`bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group border-l-4 cursor-grab active:cursor-grabbing ${
+      className={`bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 rounded-2xl p-4 md:p-6 shadow-sm hover:shadow-md transition-all group border-l-4 cursor-grab active:cursor-grabbing ${
         task.periodicity === "diaria"
           ? "border-l-green-500"
           : task.periodicity === "semanal"
@@ -1120,7 +1125,7 @@ const TaskCard = ({ task, onPull, onDragStart }: any) => {
           : "border-l-amber-500"
       }`}
     >
-      <div className="flex justify-between items-start mb-4">
+      <div className="flex justify-between items-start mb-2 md:mb-4">
         <span
           className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-widest ${
             periodicityColors[task.periodicity]
@@ -1132,13 +1137,13 @@ const TaskCard = ({ task, onPull, onDragStart }: any) => {
           {task.specialties?.join(" + ")}
         </span>
       </div>
-      <h4 className="text-[#0d141b] dark:text-white font-bold text-lg mb-2">
+      <h4 className="text-[#0d141b] dark:text-white font-bold text-base md:text-lg mb-1 md:mb-2">
         {task.name}
       </h4>
-      <p className="text-[#4c739a] dark:text-slate-400 text-sm mb-6 line-clamp-2 leading-relaxed">
+      <p className="text-[#4c739a] dark:text-slate-400 text-xs md:text-sm mb-3 md:mb-6 line-clamp-2 leading-relaxed">
         {task.description}
       </p>
-      <div className="flex items-center justify-between border-t border-[#e7edf3] dark:border-slate-800 pt-5 mt-auto">
+      <div className="flex items-center justify-between border-t border-[#e7edf3] dark:border-slate-800 pt-3 md:pt-5 mt-auto">
         <div className="flex items-center gap-2 text-[10px] font-bold text-[#4c739a]">
           <span className="material-symbols-outlined text-lg">
             calendar_today
@@ -1196,7 +1201,7 @@ const MyTaskCard = (
       <div
         draggable
         onDragStart={onDragStart}
-        className="bg-white dark:bg-slate-900 border-2 border-primary rounded-2xl p-6 shadow-xl relative overflow-hidden cursor-grab active:cursor-grabbing"
+        className="bg-white dark:bg-slate-900 border-2 border-primary rounded-2xl p-4 md:p-6 shadow-xl relative overflow-hidden cursor-grab active:cursor-grabbing"
       >
         <div className="absolute top-0 right-0 p-1.5">
           <div className="bg-primary text-white px-3 py-1 rounded-bl-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
@@ -1262,7 +1267,7 @@ const MyTaskCard = (
     <div
       draggable
       onDragStart={onDragStart}
-      className="bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing opacity-90 hover:opacity-100"
+      className="bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 rounded-2xl p-4 md:p-6 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing opacity-90 hover:opacity-100"
     >
       <div className="flex justify-between items-start mb-4">
         <span

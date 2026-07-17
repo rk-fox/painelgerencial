@@ -208,7 +208,7 @@ const MembersList: React.FC = () => {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mb-8">
                 <StatCard
                     title="Total de Equipe"
                     value={members.length.toString()}
@@ -231,9 +231,16 @@ const MembersList: React.FC = () => {
                     icon="flight"
                     color="amber"
                 />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <StatCard
+                    title="Indisponíveis"
+                    value={members.filter((m) =>
+                        (m.status === "Indisponível" ||
+                            !!getMemberUnavailToday(m.id)) &&
+                        !isMemberOnMission(m.id)
+                    ).length.toString()}
+                    icon="close"
+                    color="red"
+                />
                 <StatCard
                     title="Especialistas BCT"
                     value={members.filter((m) => m.specialty === "BCT").length
@@ -247,16 +254,6 @@ const MembersList: React.FC = () => {
                         .toString()}
                     image="https://raw.githubusercontent.com/rk-fox/painelgerencial/refs/heads/main/ais-icon-transp.png"
                     color="purple"
-                />
-                <StatCard
-                    title="Indisponíveis"
-                    value={members.filter((m) =>
-                        (m.status === "Indisponível" ||
-                            !!getMemberUnavailToday(m.id)) &&
-                        !isMemberOnMission(m.id)
-                    ).length.toString()}
-                    icon="close"
-                    color="red"
                 />
             </div>
 
@@ -411,22 +408,22 @@ const MembersList: React.FC = () => {
             {/* Table */}
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm overflow-hidden mb-8">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse min-w-[800px]">
+                    <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-[#f8fafc] dark:bg-slate-800/50 border-b border-[#e7edf3] dark:border-slate-800">
                                 <th className="px-6 py-4 text-xs font-bold text-[#4c739a] dark:text-slate-400 uppercase tracking-wider">
                                     Membro
                                 </th>
-                                <th className="px-6 py-4 text-xs font-bold text-[#4c739a] dark:text-slate-400 uppercase tracking-wider">
+                                <th className="hidden md:table-cell px-6 py-4 text-xs font-bold text-[#4c739a] dark:text-slate-400 uppercase tracking-wider">
                                     Graduação
                                 </th>
-                                <th className="px-6 py-4 text-xs font-bold text-[#4c739a] dark:text-slate-400 uppercase tracking-wider">
+                                <th className="hidden md:table-cell px-6 py-4 text-xs font-bold text-[#4c739a] dark:text-slate-400 uppercase tracking-wider">
                                     Especialidade
                                 </th>
-                                <th className="px-6 py-4 text-xs font-bold text-[#4c739a] dark:text-slate-400 uppercase tracking-wider">
+                                <th className="hidden md:table-cell px-6 py-4 text-xs font-bold text-[#4c739a] dark:text-slate-400 uppercase tracking-wider">
                                     Entrada
                                 </th>
-                                <th className="px-6 py-4 text-xs font-bold text-[#4c739a] dark:text-slate-400 uppercase tracking-wider">
+                                <th className="hidden md:table-cell px-6 py-4 text-xs font-bold text-[#4c739a] dark:text-slate-400 uppercase tracking-wider">
                                     Status
                                 </th>
                                 <th className="px-6 py-4 text-xs font-bold text-[#4c739a] dark:text-slate-400 uppercase tracking-wider text-right">
@@ -1170,10 +1167,10 @@ const MemberRow = ({
                     </div>
                 </div>
             </td>
-            <td className="px-6 py-4 text-sm text-[#4c739a] dark:text-slate-400">
+            <td className="hidden md:table-cell px-6 py-4 text-sm text-[#4c739a] dark:text-slate-400">
                 {rank}
             </td>
-            <td className="px-6 py-4">
+            <td className="hidden md:table-cell px-6 py-4">
                 {rank !== "Civil" && specialty && (
                     <span
                         className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${
@@ -1191,10 +1188,10 @@ const MemberRow = ({
                     </span>
                 )}
             </td>
-            <td className="px-6 py-4 text-sm text-[#4c739a] dark:text-slate-400">
+            <td className="hidden md:table-cell px-6 py-4 text-sm text-[#4c739a] dark:text-slate-400">
                 {entry}
             </td>
-            <td className="px-6 py-4">
+            <td className="hidden md:table-cell px-6 py-4">
                 <span
                     className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${
                         badges[statusColor]
@@ -1215,7 +1212,7 @@ const MemberRow = ({
             </td>
             <td className="px-6 py-4 text-right">
                 <div
-                    className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="flex justify-end gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                     onClick={(e) => e.stopPropagation()}
                 >
                     {canDelegate && (
