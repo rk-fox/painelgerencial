@@ -533,7 +533,12 @@ const AnnualUnavailability: React.FC = () => {
             string,
             Record<
                 string,
-                { type?: string; details?: string; annotation?: Annotation; atividade?: string }
+                {
+                    type?: string;
+                    details?: string;
+                    annotation?: Annotation;
+                    atividade?: string;
+                }
             >
         > = {};
         const yearStart = new Date(selectedYear, 0, 1, 12, 0, 0);
@@ -805,6 +810,10 @@ const AnnualUnavailability: React.FC = () => {
                             monthIndex + 1,
                             0,
                         ).getDate();
+                        const todayObj = new Date();
+                        const todayStr = `${todayObj.getFullYear()}-${
+                            String(todayObj.getMonth() + 1).padStart(2, "0")
+                        }-${String(todayObj.getDate()).padStart(2, "0")}`;
                         const days = Array.from(
                             { length: daysInMonth },
                             (_, i) => {
@@ -813,14 +822,16 @@ const AnnualUnavailability: React.FC = () => {
                                     monthIndex,
                                     i + 1,
                                 );
+                                const dateStr = `${selectedYear}-${
+                                    String(monthIndex + 1).padStart(2, "0")
+                                }-${String(i + 1).padStart(2, "0")}`;
                                 return {
                                     day: i + 1,
                                     dow: date.getDay(),
                                     isWeekend: date.getDay() === 0 ||
                                         date.getDay() === 6,
-                                    dateStr: `${selectedYear}-${
-                                        String(monthIndex + 1).padStart(2, "0")
-                                    }-${String(i + 1).padStart(2, "0")}`,
+                                    dateStr,
+                                    isToday: dateStr === todayStr,
                                 };
                             },
                         );
@@ -867,7 +878,9 @@ const AnnualUnavailability: React.FC = () => {
                                                     <th
                                                         key={`dow-${d.day}`}
                                                         className={`border border-slate-300 dark:border-slate-700 px-0 py-0.5 text-center font-bold text-[8px] uppercase tracking-tight ${
-                                                            d.isWeekend
+                                                            d.isToday
+                                                                ? "bg-blue-200 dark:bg-slate-600 text-blue-800 dark:text-blue-200"
+                                                                : d.isWeekend
                                                                 ? "bg-orange-200/70 dark:bg-orange-900/30 text-orange-800 dark:text-orange-400"
                                                                 : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500"
                                                         }`}
@@ -886,7 +899,9 @@ const AnnualUnavailability: React.FC = () => {
                                                     <th
                                                         key={`dn-${d.day}`}
                                                         className={`border border-slate-300 dark:border-slate-700 px-0 py-1 text-center font-black text-[11px] ${
-                                                            d.isWeekend
+                                                            d.isToday
+                                                                ? "bg-blue-300 dark:bg-slate-500 text-blue-900 dark:text-white"
+                                                                : d.isWeekend
                                                                 ? "bg-orange-200/70 dark:bg-orange-900/30 text-orange-800 dark:text-orange-400"
                                                                 : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
                                                         }`}
@@ -937,10 +952,13 @@ const AnnualUnavailability: React.FC = () => {
                                                             cellDataMap[
                                                                 member.id
                                                             ]?.[d.dateStr];
-                                                        const isAtividade = cell?.type === 'Atividade';
+                                                        const isAtividade =
+                                                            cell?.type ===
+                                                                "Atividade";
                                                         const visible =
                                                             cell?.type &&
-                                                            cell.type !== 'Atividade' &&
+                                                            cell.type !==
+                                                                "Atividade" &&
                                                             isTypeVisible(
                                                                 cell.type,
                                                             );
@@ -961,10 +979,19 @@ const AnnualUnavailability: React.FC = () => {
                                                                 }`,
                                                             );
                                                         }
-                                                        if (isAtividade && cell?.type) {
-                                                            const periodLabel = cell.atividade === 'M' ? 'Indisponível pela Manhã'
-                                                                : cell.atividade === 'T' ? 'Indisponível pela Tarde'
-                                                                : 'Indisponível Manhã e Tarde';
+                                                        if (
+                                                            isAtividade &&
+                                                            cell?.type
+                                                        ) {
+                                                            const periodLabel =
+                                                                cell.atividade ===
+                                                                        "M"
+                                                                    ? "Indisponível pela Manhã"
+                                                                    : cell
+                                                                            .atividade ===
+                                                                            "T"
+                                                                    ? "Indisponível pela Tarde"
+                                                                    : "Indisponível Manhã e Tarde";
                                                             titleParts.push(
                                                                 `${periodLabel}${
                                                                     cell.details
@@ -1002,7 +1029,9 @@ const AnnualUnavailability: React.FC = () => {
                                                                 <td
                                                                     key={d.day}
                                                                     className={`border border-slate-200 dark:border-slate-700/60 px-0 py-1 text-center cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors ${
-                                                                        d.isWeekend
+                                                                        d.isToday
+                                                                            ? "bg-blue-100/70 dark:bg-slate-700/70"
+                                                                            : d.isWeekend
                                                                             ? "bg-slate-50 dark:bg-slate-800/40"
                                                                             : ""
                                                                     }`}
@@ -1024,13 +1053,16 @@ const AnnualUnavailability: React.FC = () => {
 
                                                         if (
                                                             !visible &&
-                                                            (hasAnnotation || isAtividade)
+                                                            (hasAnnotation ||
+                                                                isAtividade)
                                                         ) {
                                                             return (
                                                                 <td
                                                                     key={d.day}
                                                                     className={`border border-slate-200 dark:border-slate-700/60 p-0 text-center cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors ${
-                                                                        d.isWeekend
+                                                                        d.isToday
+                                                                            ? "bg-blue-50 dark:bg-slate-700/50"
+                                                                            : d.isWeekend
                                                                             ? "bg-slate-50 dark:bg-slate-800/40"
                                                                             : ""
                                                                     }`}
@@ -1080,7 +1112,8 @@ const AnnualUnavailability: React.FC = () => {
                                                                         cell?.annotation,
                                                                     )}
                                                             >
-                                                                {(hasAnnotation || isAtividade) &&
+                                                                {(hasAnnotation ||
+                                                                    isAtividade) &&
                                                                     (
                                                                         <div className="absolute top-0 right-0 w-0 h-0 border-t-[8px] border-l-[8px] border-t-red-500 border-l-transparent z-10">
                                                                         </div>

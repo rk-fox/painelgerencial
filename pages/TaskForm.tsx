@@ -1096,13 +1096,13 @@ const TaskForm: React.FC = () => {
 
         if (diffDays < 0) {
             // Overdue (< 0)
-            return "bg-red-50 text-red-600 px-2 py-0.5 rounded";
+            return "bg-red-50 dark:bg-red-900/30 !text-red-600 dark:!text-red-400 px-2 py-0.5 rounded";
         } else if (diffDays <= 1) {
             // Due Today (0) or Tomorrow (1) - "Intersection 0-1"
-            return "bg-amber-300 text-amber-800 px-2 py-0.5 rounded";
+            return "bg-amber-100 dark:bg-amber-900/40 !text-amber-800 dark:!text-amber-300 px-2 py-0.5 rounded";
         } else if (diffDays <= 3) {
             // Upcoming (2, 3) - "Yellow 1-3" (excluding 1 as it falls in bucket above)
-            return "bg-amber-100 text-amber-600 px-2 py-0.5 rounded";
+            return "bg-amber-50 dark:bg-amber-900/20 !text-amber-600 dark:!text-amber-400 px-2 py-0.5 rounded";
         }
 
         return "";
@@ -3216,23 +3216,23 @@ const TaskForm: React.FC = () => {
                 ];
 
                 return (
-                    <div className="fixed inset-0 z-[999] bg-[#0c1322] text-white flex flex-col font-sans overflow-hidden animate-in fade-in duration-300">
+                    <div className="fixed inset-0 z-[999] bg-slate-50 dark:bg-[#0c1322] text-slate-800 dark:text-white flex flex-col font-sans overflow-hidden animate-in fade-in duration-300">
                         {/* Kiosk Background Decorative Glows */}
-                        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#cda250]/5 rounded-full blur-[140px] pointer-events-none" />
+                        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-primary/5 dark:bg-[#cda250]/5 rounded-full blur-[140px] pointer-events-none" />
                         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-primary/5 rounded-full blur-[140px] pointer-events-none" />
 
                         {/* Top Header - Kiosk Style */}
-                        <div className="bg-[#0f192b] border-b border-[#1d2d44] px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4 relative z-10 shadow-lg">
+                        <div className="bg-white dark:bg-[#0f192b] border-b border-slate-200 dark:border-[#1d2d44] px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4 relative z-10 shadow-lg">
                             <div className="flex items-center gap-3">
                                 {/* Gold Circular Avatar sector label */}
-                                <div className="w-12 h-12 rounded-full border-2 border-[#cda250] flex items-center justify-center font-bold text-base text-[#cda250] bg-[#132039] shadow-inner">
+                                <div className="w-12 h-12 rounded-full border-2 border-primary dark:border-[#cda250] flex items-center justify-center font-bold text-base text-primary dark:text-[#cda250] bg-slate-100 dark:bg-[#132039] shadow-inner">
                                     {userSector}
                                 </div>
                                 <div>
-                                    <h1 className="text-xl md:text-2xl font-serif font-bold text-white tracking-wide leading-tight">
+                                    <h1 className="text-xl md:text-2xl font-serif font-bold text-slate-800 dark:text-white tracking-wide leading-tight">
                                         Painel Gerencial
                                     </h1>
-                                    <p className="text-[10px] md:text-xs text-[#cda250] font-bold uppercase tracking-wider">
+                                    <p className="text-[10px] md:text-xs text-primary dark:text-[#cda250] font-bold uppercase tracking-wider">
                                         {sectorFullName} • {loggedUserLabel}
                                     </p>
                                 </div>
@@ -3240,23 +3240,23 @@ const TaskForm: React.FC = () => {
 
                             {/* Clock in real time */}
                             <div className="flex flex-col items-center">
-                                <span className="text-3xl md:text-4xl font-black font-mono tracking-widest text-white leading-none">
+                                <span className="text-3xl md:text-4xl font-black font-mono tracking-widest text-slate-800 dark:text-white leading-none">
                                     {timeStr}
                                 </span>
-                                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">
+                                <span className="text-[9px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mt-1">
                                     {dateStr}
                                 </span>
                             </div>
 
                             {/* Slide Controls and Close Button */}
                             <div className="flex items-center gap-3">
-                                <div className="flex items-center bg-[#132039] border border-[#1d2d44] rounded-lg p-1">
+                                <div className="flex items-center bg-slate-100 dark:bg-[#132039] border border-slate-200 dark:border-[#1d2d44] rounded-lg p-1">
                                     <button
                                         onClick={() =>
                                             setCurrentSlide((prev) =>
                                                 (prev - 1 + 4) % 4
                                             )}
-                                        className="p-1.5 rounded hover:bg-slate-800 transition-colors text-slate-300"
+                                        className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-300"
                                         title="Slide Anterior"
                                     >
                                         <span className="material-symbols-outlined text-[20px] block">
@@ -3266,7 +3266,7 @@ const TaskForm: React.FC = () => {
                                     <button
                                         onClick={() =>
                                             setIsSlidePaused(!isSlidePaused)}
-                                        className="p-1.5 rounded hover:bg-slate-800 transition-colors text-[#cda250]"
+                                        className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors text-primary dark:text-[#cda250]"
                                         title={isSlidePaused
                                             ? "Retomar Slideshow"
                                             : "Pausar Slideshow"}
@@ -3282,7 +3282,7 @@ const TaskForm: React.FC = () => {
                                             setCurrentSlide((prev) =>
                                                 (prev + 1) % 4
                                             )}
-                                        className="p-1.5 rounded hover:bg-slate-800 transition-colors text-slate-300"
+                                        className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-300"
                                         title="Próximo Slide"
                                     >
                                         <span className="material-symbols-outlined text-[20px] block">
@@ -3305,7 +3305,7 @@ const TaskForm: React.FC = () => {
                         </div>
 
                         {/* Custom Tab Progress Navigation Bar */}
-                        <div className="bg-[#0c1424] border-b border-[#17243c] px-6 py-2.5 flex items-center justify-around md:justify-start gap-6 md:gap-12 relative z-10">
+                        <div className="bg-slate-100 dark:bg-[#0c1424] border-b border-slate-300 dark:border-[#17243c] px-6 py-2.5 flex items-center justify-around md:justify-start gap-6 md:gap-12 relative z-10">
                             {tabs.map((tab, idx) => {
                                 const isActive = currentSlide === idx;
                                 return (
@@ -3317,7 +3317,7 @@ const TaskForm: React.FC = () => {
                                         <span
                                             className={`text-[10px] font-bold font-mono tracking-wider ${
                                                 isActive
-                                                    ? "text-[#cda250]"
+                                                    ? "text-primary dark:text-[#cda250]"
                                                     : "text-slate-500"
                                             }`}
                                         >
@@ -3326,14 +3326,14 @@ const TaskForm: React.FC = () => {
                                         <span
                                             className={`text-xs md:text-sm font-semibold tracking-tight transition-colors ${
                                                 isActive
-                                                    ? "text-white font-bold"
-                                                    : "text-slate-400 group-hover:text-slate-200"
+                                                    ? "text-slate-800 dark:text-white font-bold"
+                                                    : "text-slate-500 dark:text-slate-400 group-hover:text-slate-200"
                                             }`}
                                         >
                                             {tab.label}
                                         </span>
                                         {isActive && (
-                                            <div className="absolute bottom-[-11px] left-0 right-0 h-0.5 bg-[#cda250] rounded-full shadow-lg" />
+                                            <div className="absolute bottom-[-11px] left-0 right-0 h-0.5 bg-primary dark:bg-[#cda250] rounded-full shadow-lg" />
                                         )}
                                     </button>
                                 );
@@ -3344,7 +3344,7 @@ const TaskForm: React.FC = () => {
                                 <div className="ml-auto hidden md:block w-32 h-1 bg-slate-800 rounded-full overflow-hidden">
                                     <div
                                         key={currentSlide}
-                                        className="h-full bg-[#cda250] rounded-full animate-progress duration-10000"
+                                        className="h-full bg-primary dark:bg-[#cda250] rounded-full animate-progress duration-10000"
                                         style={{
                                             animation:
                                                 "progress 10s linear forwards",
@@ -3356,14 +3356,14 @@ const TaskForm: React.FC = () => {
 
                         {/* Title and Subtitle Block */}
                         <div className="px-8 pt-8 pb-4 relative z-10 flex flex-col gap-1">
-                            <h2 className="text-3xl md:text-4xl font-serif font-bold text-white tracking-wide">
+                            <h2 className="text-3xl md:text-4xl font-serif font-bold text-slate-800 dark:text-white tracking-wide">
                                 {currentSlide === 0 && "Controle do Efetivo"}
                                 {currentSlide === 1 && "Projetos em Andamento"}
                                 {currentSlide === 2 &&
                                     "D-10 — Eventos dos Próximos 10 Dias"}
                                 {currentSlide === 3 && "Reuniões da Seção"}
                             </h2>
-                            <p className="text-xs md:text-sm text-[#cda250] font-medium tracking-wide">
+                            <p className="text-xs md:text-sm text-primary dark:text-[#cda250] font-medium tracking-wide">
                                 {currentSlide === 0 &&
                                     "Status operacional e disponibilidade dos militares no momento"}
                                 {currentSlide === 1 &&
@@ -3402,7 +3402,7 @@ const TaskForm: React.FC = () => {
                                             );
 
                                         let cardBg =
-                                            "bg-[#131f37] border-[#1d2d44]";
+                                            "bg-white dark:bg-[#131f37] border-slate-200 dark:border-[#1d2d44]";
                                         let borderAccent =
                                             "border-l-4 border-l-[#38bdf8]";
                                         let statusBadge = (
@@ -3413,11 +3413,11 @@ const TaskForm: React.FC = () => {
 
                                         if (currentMission) {
                                             cardBg =
-                                                "bg-[#1a2035] border-[#252f4c]";
+                                                "bg-blue-50 dark:bg-[#1a2035] border-blue-200 dark:border-[#252f4c]";
                                             borderAccent =
                                                 "border-l-4 border-l-[#cda250]";
                                             statusBadge = (
-                                                <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-[#cda250]/15 text-[#cda250] border border-[#cda250]/20">
+                                                <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-primary/10 dark:bg-[#cda250]/15 text-primary dark:text-[#cda250] border border-primary dark:border-primary/20 dark:border-[#cda250]/20">
                                                     Em Viagem
                                                 </span>
                                             );
@@ -3426,7 +3426,7 @@ const TaskForm: React.FC = () => {
                                             currentUnavail?.type === "Atividade"
                                         ) {
                                             cardBg =
-                                                "bg-[#142337] border-[#1f3552]";
+                                                "bg-emerald-50 dark:bg-[#142337] border-emerald-200 dark:border-[#1f3552]";
                                             borderAccent =
                                                 "border-l-4 border-l-[#10b981]";
                                             statusBadge = (
@@ -3436,7 +3436,7 @@ const TaskForm: React.FC = () => {
                                             );
                                         } else if (isUnavailable) {
                                             cardBg =
-                                                "bg-[#221c29] border-[#382b43]";
+                                                "bg-red-50 dark:bg-[#221c29] border-red-200 dark:border-[#382b43]";
                                             borderAccent =
                                                 "border-l-4 border-l-red-500";
                                             statusBadge = (
@@ -3454,7 +3454,7 @@ const TaskForm: React.FC = () => {
                                                 className={`p-4 rounded-xl border ${cardBg} ${borderAccent} flex flex-col justify-between gap-3 shadow-md backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg`}
                                             >
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-700 bg-[#0f192b] flex items-center justify-center font-bold text-xs uppercase text-slate-300">
+                                                    <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-700 bg-white dark:bg-[#0f192b] flex items-center justify-center font-bold text-xs uppercase text-slate-600 dark:text-slate-300">
                                                         {member.avatar
                                                             ? (
                                                                 <img
@@ -3474,18 +3474,18 @@ const TaskForm: React.FC = () => {
                                                             )}
                                                     </div>
                                                     <div className="flex-1 min-w-0">
-                                                        <h4 className="text-sm font-extrabold text-white truncate">
+                                                        <h4 className="text-sm font-extrabold text-slate-800 dark:text-white truncate">
                                                             {member.abrev}{" "}
                                                             {member.war_name}
                                                         </h4>
-                                                        <span className="text-[10px] text-slate-400 block truncate">
+                                                        <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">
                                                             {member.name}
                                                         </span>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center justify-between border-t border-[#1d2d44]/50 pt-2 mt-1">
+                                                <div className="flex items-center justify-between border-t border-slate-200 dark:border-[#1d2d44]/50 pt-2 mt-1">
                                                     {statusBadge}
-                                                    <span className="text-[10px] text-slate-400 font-semibold">
+                                                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">
                                                         {memberTasks.length}
                                                         {" "}
                                                         {memberTasks.length ===
@@ -3516,7 +3516,7 @@ const TaskForm: React.FC = () => {
                                                     return (
                                                         <div
                                                             key={task.id}
-                                                            className={`p-5 rounded-xl border border-[#1d2d44] bg-[#131f37] flex flex-col justify-between gap-4 shadow-md ${
+                                                            className={`p-5 rounded-xl border border-slate-200 dark:border-[#1d2d44] bg-white dark:bg-[#131f37] flex flex-col justify-between gap-4 shadow-md ${
                                                                 isEven
                                                                     ? "border-l-4 border-l-[#cda250]"
                                                                     : "border-l-4 border-l-[#3b82f6]"
@@ -3524,12 +3524,12 @@ const TaskForm: React.FC = () => {
                                                         >
                                                             <div>
                                                                 <div className="flex items-center justify-between gap-2 mb-2">
-                                                                    <span className="text-[10px] font-bold text-[#cda250] uppercase tracking-wider">
+                                                                    <span className="text-[10px] font-bold text-primary dark:text-[#cda250] uppercase tracking-wider">
                                                                         {task
                                                                             .periodicity ||
                                                                             "Tarefa"}
                                                                     </span>
-                                                                    <span className="text-[10px] text-slate-400 font-medium">
+                                                                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
                                                                         Prazo:
                                                                         {" "}
                                                                         {task
@@ -3542,14 +3542,14 @@ const TaskForm: React.FC = () => {
                                                                             : "S/P"}
                                                                     </span>
                                                                 </div>
-                                                                <h4 className="text-base font-extrabold text-white leading-tight">
+                                                                <h4 className="text-base font-extrabold text-slate-800 dark:text-white leading-tight">
                                                                     {task.name}
                                                                 </h4>
-                                                                <div className="mt-3 p-3 rounded bg-[#0c1424]/60 border border-[#1c2a3f]">
-                                                                    <span className="text-[9px] text-[#cda250] font-black uppercase tracking-wider block mb-1">
+                                                                <div className="mt-3 p-3 rounded bg-slate-50 dark:bg-[#0c1424]/60 border border-slate-200 dark:border-[#1c2a3f]">
+                                                                    <span className="text-[9px] text-primary dark:text-[#cda250] font-black uppercase tracking-wider block mb-1">
                                                                         Despacho
                                                                     </span>
-                                                                    <p className="text-xs text-slate-300 leading-relaxed">
+                                                                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                                                                         {task
                                                                             .despacho ||
                                                                             (
@@ -3563,11 +3563,11 @@ const TaskForm: React.FC = () => {
                                                                 </div>
                                                             </div>
 
-                                                            <div className="border-t border-[#1d2d44]/50 pt-3 flex items-center justify-between">
-                                                                <span className="text-[10px] text-slate-400 font-semibold uppercase">
+                                                            <div className="border-t border-slate-200 dark:border-[#1d2d44]/50 pt-3 flex items-center justify-between">
+                                                                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold uppercase">
                                                                     Responsável:
                                                                 </span>
-                                                                <span className="text-xs font-bold text-white">
+                                                                <span className="text-xs font-bold text-slate-800 dark:text-white">
                                                                     {respMember
                                                                         ? `${respMember.abrev} ${respMember.war_name}`
                                                                         : "Não designado"}
@@ -3627,7 +3627,7 @@ const TaskForm: React.FC = () => {
                                             return (
                                                 <div
                                                     key={index}
-                                                    className={`p-4 rounded-xl border flex flex-col gap-3 min-h-[160px] shadow-md transition-all duration-300 hover:border-slate-500 bg-[#131f37] border-[#1d2d44] ${
+                                                    className={`p-4 rounded-xl border flex flex-col gap-3 min-h-[160px] shadow-md transition-all duration-300 hover:border-slate-500 bg-white dark:bg-[#131f37] border-slate-200 dark:border-[#1d2d44] ${
                                                         isToday
                                                             ? "border-l-4 border-l-[#cda250]"
                                                             : isEven
@@ -3635,19 +3635,19 @@ const TaskForm: React.FC = () => {
                                                             : "border-l-4 border-l-[#cda250]/70"
                                                     }`}
                                                 >
-                                                    <div className="border-b border-[#1d2d44]/50 pb-2 flex items-center justify-between">
+                                                    <div className="border-b border-slate-200 dark:border-[#1d2d44]/50 pb-2 flex items-center justify-between">
                                                         <span
                                                             className={`text-[10px] font-black tracking-wider ${
                                                                 isToday
-                                                                    ? "text-[#cda250]"
-                                                                    : "text-slate-400"
+                                                                    ? "text-primary dark:text-[#cda250]"
+                                                                    : "text-slate-500 dark:text-slate-400"
                                                             }`}
                                                         >
                                                             {isToday
                                                                 ? "HOJE"
                                                                 : weekday}
                                                         </span>
-                                                        <span className="text-sm font-bold text-white">
+                                                        <span className="text-sm font-bold text-slate-800 dark:text-white">
                                                             {formattedDate}
                                                         </span>
                                                     </div>
@@ -3660,13 +3660,13 @@ const TaskForm: React.FC = () => {
                                                                     <div
                                                                         key={sdia
                                                                             .id}
-                                                                        className="p-2 rounded bg-[#0c1424]/60 border border-[#1a283e] flex flex-col gap-1"
+                                                                        className="p-2 rounded bg-slate-50 dark:bg-[#0c1424]/60 border border-slate-200 dark:border-[#1a283e] flex flex-col gap-1"
                                                                     >
-                                                                        <div className="text-[9px] font-mono font-bold text-[#cda250] leading-none">
+                                                                        <div className="text-[9px] font-mono font-bold text-primary dark:text-[#cda250] leading-none">
                                                                             [{sdia
                                                                                 .indicativo}]
                                                                         </div>
-                                                                        <div className="text-xs font-semibold text-white leading-tight">
+                                                                        <div className="text-xs font-semibold text-slate-800 dark:text-white leading-tight">
                                                                             {sdia
                                                                                 .titulo_sdia}
                                                                         </div>
@@ -3686,7 +3686,7 @@ const TaskForm: React.FC = () => {
                                                                                     {sdia
                                                                                         .cap &&
                                                                                         (
-                                                                                            <span className="px-1 py-0.2 rounded bg-[#cda250]/10 border border-[#cda250]/20 text-[#cda250] text-[7px] font-bold uppercase tracking-wide">
+                                                                                            <span className="px-1 py-0.2 rounded bg-primary/10 dark:bg-[#cda250]/10 border border-primary dark:border-primary/20 dark:border-[#cda250]/20 text-primary dark:text-[#cda250] text-[7px] font-bold uppercase tracking-wide">
                                                                                                 CAP
                                                                                             </span>
                                                                                         )}
@@ -3773,7 +3773,7 @@ const TaskForm: React.FC = () => {
                                                     return (
                                                         <div
                                                             key={meeting.id}
-                                                            className={`p-5 rounded-xl border border-[#1d2d44] bg-[#131f37] flex flex-col justify-between gap-4 shadow-md transition-all duration-300 hover:border-slate-650 ${
+                                                            className={`p-5 rounded-xl border border-slate-200 dark:border-[#1d2d44] bg-white dark:bg-[#131f37] flex flex-col justify-between gap-4 shadow-md transition-all duration-300 hover:border-slate-650 ${
                                                                 isEven
                                                                     ? "border-l-4 border-l-[#cda250]"
                                                                     : "border-l-4 border-l-[#3b82f6]"
@@ -3781,21 +3781,21 @@ const TaskForm: React.FC = () => {
                                                         >
                                                             <div>
                                                                 <div className="flex items-center justify-between gap-2 mb-2">
-                                                                    <span className="text-sm font-bold text-[#cda250] font-mono leading-none">
+                                                                    <span className="text-sm font-bold text-primary dark:text-[#cda250] font-mono leading-none">
                                                                         {startTime}
                                                                     </span>
-                                                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                                                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
                                                                         {formattedDate}
                                                                     </span>
                                                                 </div>
-                                                                <h4 className="text-base font-extrabold text-white leading-tight font-serif">
+                                                                <h4 className="text-base font-extrabold text-slate-800 dark:text-white leading-tight font-serif">
                                                                     {meeting
                                                                         .assunto}
                                                                 </h4>
                                                                 {meeting.link &&
                                                                     (
-                                                                        <div className="mt-2.5 p-2 rounded bg-[#0c1424]/40 border border-[#1a283e] flex items-center gap-1.5">
-                                                                            <span className="material-symbols-outlined text-[14px] text-[#cda250]">
+                                                                        <div className="mt-2.5 p-2 rounded bg-slate-50 dark:bg-[#0c1424]/40 border border-slate-200 dark:border-[#1a283e] flex items-center gap-1.5">
+                                                                            <span className="material-symbols-outlined text-[14px] text-primary dark:text-[#cda250]">
                                                                                 link
                                                                             </span>
                                                                             <span className="text-xs text-primary truncate hover:underline cursor-pointer">
@@ -3806,8 +3806,8 @@ const TaskForm: React.FC = () => {
                                                                     )}
                                                             </div>
 
-                                                            <div className="border-t border-[#1d2d44]/50 pt-3">
-                                                                <span className="text-[9px] text-[#cda250] font-bold uppercase tracking-wider block mb-2">
+                                                            <div className="border-t border-slate-200 dark:border-[#1d2d44]/50 pt-3">
+                                                                <span className="text-[9px] text-primary dark:text-[#cda250] font-bold uppercase tracking-wider block mb-2">
                                                                     Convocados
                                                                 </span>
                                                                 <div className="flex flex-wrap gap-1.5">
@@ -3823,7 +3823,7 @@ const TaskForm: React.FC = () => {
                                                                                         <span
                                                                                             key={m
                                                                                                 .id}
-                                                                                            className="px-2 py-0.5 rounded bg-[#0c1424] text-slate-300 text-[10px] font-semibold border border-[#1a283e]"
+                                                                                            className="px-2 py-0.5 rounded bg-slate-100 dark:bg-[#0c1424] text-slate-600 dark:text-slate-300 text-[10px] font-semibold border border-slate-200 dark:border-[#1a283e]"
                                                                                         >
                                                                                             {m.abrev}
                                                                                             {" "}

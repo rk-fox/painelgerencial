@@ -586,8 +586,8 @@ const Reports: React.FC = () => {
     const maxCategoryTotal = categoryRankings.length > 0 ? categoryRankings[0].total : 1;
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="flex flex-col lg:grid lg:grid-cols-12 gap-6 animate-in fade-in duration-500">
+            <div className="lg:col-span-12 order-2 lg:order-1 grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <ReportCard
                     icon="assignment" color="blue"
                     title="Total de Tarefas" value={totalTasks.toString()}
@@ -611,7 +611,7 @@ const Reports: React.FC = () => {
                 />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="lg:col-span-12 order-3 lg:order-2 grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <ReportCard
                     icon="explore" color="amber"
                     title="Missões Únicas Previstas" 
@@ -641,16 +641,16 @@ const Reports: React.FC = () => {
                 />
             </div>
 
-            {/* Ranking de Atividades and Conclusão de Tarefas */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                {/* Ranking de Atividades (Categories) */}
-                <div className="lg:col-span-8 bg-white dark:bg-slate-900 p-6 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm">
-                    <div className="flex items-center justify-between mb-8">
-                        <div>
-                            <h4 className="text-base font-bold text-slate-800 dark:text-white">Ranking de Atividades</h4>
-                            <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Categorias por Quantidade Concluída</p>
+            {/* Ranking de Atividades (Categories) */}
+            <div className="lg:col-span-8 order-4 lg:order-3 bg-white dark:bg-slate-900 p-6 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm">
+                    <div className="flex flex-col gap-4 mb-8">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h4 className="text-base font-bold text-slate-800 dark:text-white">Ranking de Atividades</h4>
+                                <p className="text-[10px] font-bold text-[#4c739a] dark:text-[#cda250] uppercase tracking-widest mt-1">Categorias por Quantidade Concluída</p>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
                             <button
                                 type="button"
                                 onClick={() => navigate('/app/reports/comparative')}
@@ -701,10 +701,10 @@ const Reports: React.FC = () => {
                 </div>
 
                 {/* Conclusão de Tarefas */}
-                <div className="lg:col-span-4 bg-white dark:bg-slate-900 p-6 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm">
+                <div className="lg:col-span-4 order-1 lg:order-4 lg:self-start bg-white dark:bg-slate-900 p-6 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm">
                     <div className="mb-8">
                         <h4 className="text-base font-bold text-slate-800 dark:text-white">Conclusão de Tarefas</h4>
-                        <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Status das Atividades</p>
+                        <p className="text-[10px] font-bold text-[#4c739a] dark:text-[#cda250] uppercase tracking-widest mt-1">Status das Atividades</p>
                     </div>
                     <div className="flex flex-col items-center">
                         <div className="relative w-40 h-40 xl:w-48 xl:h-48">
@@ -769,17 +769,24 @@ const Reports: React.FC = () => {
                         </div>
                     </div>
                 </div>
-            </div>
 
-            {/* Diárias Realizadas pelo Efetivo (Full Width Bottom) */}
-            <div className="grid grid-cols-1 gap-6">
+            {/* Listas e Rankings */}
+            <div className="lg:col-span-12 order-5 lg:order-5 grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Diárias Realizadas pelo Efetivo */}
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm">
-                    <div className="flex items-center justify-between mb-8">
-                        <div>
-                            <h4 className="text-base font-bold text-slate-800 dark:text-white">Diárias Realizadas pelo Efetivo</h4>
-                            <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Acumulado - {selectedRankingYear}</p>
+                    <div className="flex flex-col gap-4 mb-8">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h4 className="text-base font-bold text-slate-800 dark:text-white">Diárias Realizadas pelo Efetivo</h4>
+                                <p className="text-[10px] font-bold text-[#4c739a] dark:text-[#cda250] uppercase tracking-widest mt-1">Acumulado - {selectedRankingYear}</p>
+                            </div>
+                            {memberRankings.length > 0 && (
+                                <div className="text-right shrink-0 ml-2">
+                                    <span className="text-xs font-bold text-primary">{memberRankings[0].totalDiarias} diárias (Max)</span>
+                                </div>
+                            )}
                         </div>
-                        <div className="flex items-center gap-4">
+                        <div className="flex flex-wrap items-center gap-3">
                             <select 
                                 value={selectedRankingYear}
                                 onChange={(e) => setSelectedRankingYear(Number(e.target.value))}
@@ -789,11 +796,6 @@ const Reports: React.FC = () => {
                                     <option key={year} value={year}>{year}</option>
                                 ))}
                             </select>
-                            {memberRankings.length > 0 && (
-                                <div className="text-right">
-                                    <span className="text-xs font-bold text-primary">{memberRankings[0].totalDiarias} diárias (Max)</span>
-                                </div>
-                            )}
                         </div>
                     </div>
                     <div className="space-y-6">
@@ -842,16 +844,21 @@ const Reports: React.FC = () => {
                         )}
                     </div>
                 </div>
-            </div>
-            {/* Afastamentos (Unavailability) Ranking */}
-            <div className="grid grid-cols-1 gap-6">
+                {/* Afastamentos (Unavailability) Ranking */}
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm">
-                    <div className="flex items-center justify-between mb-8">
-                        <div>
-                            <h4 className="text-base font-bold text-slate-800 dark:text-white">Relatórios de Afastamentos</h4>
-                            <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Acumulado - {selectedRankingYear}</p>
+                    <div className="flex flex-col gap-4 mb-8">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h4 className="text-base font-bold text-slate-800 dark:text-white">Relatórios de Afastamentos</h4>
+                                <p className="text-[10px] font-bold text-[#4c739a] dark:text-[#cda250] uppercase tracking-widest mt-1">Acumulado - {selectedRankingYear}</p>
+                            </div>
+                            {unavailRankings.length > 0 && (
+                                <div className="text-right shrink-0 ml-2">
+                                    <span className="text-xs font-bold text-primary">{unavailRankings[0].totalDays} dias (Max)</span>
+                                </div>
+                            )}
                         </div>
-                        <div className="flex items-center gap-4">
+                        <div className="flex flex-wrap items-center gap-3">
                             <select 
                                 value={selectedUnavailType}
                                 onChange={(e) => setSelectedUnavailType(e.target.value)}
@@ -865,11 +872,6 @@ const Reports: React.FC = () => {
                                     <option value="">Nenhum registro</option>
                                 )}
                             </select>
-                            {unavailRankings.length > 0 && (
-                                <div className="text-right">
-                                    <span className="text-xs font-bold text-primary">{unavailRankings[0].totalDays} dias (Max)</span>
-                                </div>
-                            )}
                         </div>
                     </div>
                     <div className="space-y-6">
@@ -915,15 +917,14 @@ const Reports: React.FC = () => {
                         )}
                     </div>
                 </div>
-            </div>
-
-            {/* Tempo de Seção */}
-            <div className="grid grid-cols-1 gap-6">
+                {/* Tempo de Seção */}
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm">
-                    <div className="flex items-center justify-between mb-8">
-                        <div>
-                            <h4 className="text-base font-bold text-slate-800 dark:text-white">Tempo de Seção</h4>
-                            <p className="text-[10px] font-bold text-[#4c739a] uppercase tracking-widest mt-1">Calculado a partir da data de entrada</p>
+                    <div className="flex flex-col gap-4 mb-8">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h4 className="text-base font-bold text-slate-800 dark:text-white">Tempo de Seção</h4>
+                                <p className="text-[10px] font-bold text-[#4c739a] dark:text-[#cda250] uppercase tracking-widest mt-1">Calculado a partir da data de entrada</p>
+                            </div>
                         </div>
                     </div>
                     <div className="space-y-6">
