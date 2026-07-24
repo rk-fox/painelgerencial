@@ -149,7 +149,8 @@ const TaskForm: React.FC = () => {
     const [totalTasks, setTotalTasks] = useState<number>(0);
     const itemsPerPage = 100;
     const hasActiveFilters = searchTerm !== "" || filterStatuses.length > 0 ||
-        filterSpecialties.length > 0 || filterPeriodicities.length > 0 || filterMember !== "";
+        filterSpecialties.length > 0 || filterPeriodicities.length > 0 ||
+        filterMember !== "";
 
     // Category State
     const [categories, setCategories] = useState<Category[]>([]);
@@ -407,7 +408,13 @@ const TaskForm: React.FC = () => {
     // When filters change, reset to page 1 and re-fetch all tasks
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, filterStatuses, filterSpecialties, filterPeriodicities, filterMember]);
+    }, [
+        searchTerm,
+        filterStatuses,
+        filterSpecialties,
+        filterPeriodicities,
+        filterMember,
+    ]);
 
     useEffect(() => {
         fetchTasks();
@@ -1122,8 +1129,7 @@ const TaskForm: React.FC = () => {
     const filteredTasks = tasks.filter((task) => {
         const memberName = getMemberName(task.assigned_to).toLowerCase();
         const searchLower = searchTerm.toLowerCase();
-        const matchesSearch =
-            task.name.toLowerCase().includes(searchLower) ||
+        const matchesSearch = task.name.toLowerCase().includes(searchLower) ||
             (task.description || "").toLowerCase().includes(searchLower) ||
             memberName.includes(searchLower);
 
@@ -1599,7 +1605,7 @@ const TaskForm: React.FC = () => {
             {/* Personnel Control Section */}
             <div className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-center gap-3">
-                    <button 
+                    <button
                         onClick={() => setIsEfetivoOpen(!isEfetivoOpen)}
                         className="flex items-center gap-2 hover:opacity-80 transition-opacity text-left"
                     >
@@ -1644,375 +1650,411 @@ const TaskForm: React.FC = () => {
                         <p className="text-[#4c739a] dark:text-slate-400 text-base font-normal">
                             Tarefas atribuídas ao efetivo nesse momento.
                         </p>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
-                    {members
-                        .filter((m) => {
-                            // 1. CH vê todos os ranks
-                            if (currentUser?.sector === "CH") return true;
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
+                            {members
+                                .filter((m) => {
+                                    // 1. CH vê todos os ranks
+                                    if (
+                                        currentUser?.sector === "CH"
+                                    ) return true;
 
-                            const val = getRankPriority(m.rank, m.abrev);
+                                    const val = getRankPriority(
+                                        m.rank,
+                                        m.abrev,
+                                    );
 
-                            // Busca a prioridade do usuário logado atualmente
-                            const currentUserVal = getRankPriority(
-                                currentUser?.rank,
-                                currentUser?.abrev,
-                            );
+                                    // Busca a prioridade do usuário logado atualmente
+                                    const currentUserVal = getRankPriority(
+                                        currentUser?.rank,
+                                        currentUser?.abrev,
+                                    );
 
-                            // 2. Se o usuário logado for nível <= 3, ele pode ver >= 3 - Tenente pra baixo
-                            if (currentUserVal <= 3) return val >= 2;
+                                    // 2. Se o usuário logado for nível <= 3, ele pode ver >= 3 - Tenente pra baixo
+                                    if (currentUserVal <= 3) return val >= 2;
 
-                            // 3. Os outros (>= 4) veem apenas >= 4 - Suboficial pra baixo
-                            return val >= 4;
-                        })
-                        .map((member) => {
-                            const currentMission = getMemberMission(member.id);
-                            const currentUnavail = getMemberUnavailToday(
-                                member.id,
-                            );
-                            const isUnavailable =
-                                member.status === "Indisponível" ||
-                                !!currentUnavail;
+                                    // 3. Os outros (>= 4) veem apenas >= 4 - Suboficial pra baixo
+                                    return val >= 4;
+                                })
+                                .map((member) => {
+                                    const currentMission = getMemberMission(
+                                        member.id,
+                                    );
+                                    const currentUnavail =
+                                        getMemberUnavailToday(
+                                            member.id,
+                                        );
+                                    const isUnavailable =
+                                        member.status === "Indisponível" ||
+                                        !!currentUnavail;
 
-                            // Get member tasks
-                            const memberTasks = activeAssignedTasks.filter((
-                                t,
-                            ) => t.assigned_to === member.id);
+                                    // Get member tasks
+                                    const memberTasks = activeAssignedTasks
+                                        .filter((
+                                            t,
+                                        ) => t.assigned_to === member.id);
 
-                            // Get member annotations for today
-                            const memberAnnotations = annotations.filter((a) =>
-                                a.member_id === member.id
-                            );
+                                    // Get member annotations for today
+                                    const memberAnnotations = annotations
+                                        .filter((a) =>
+                                            a.member_id === member.id
+                                        );
 
-                            // Sort: In Progress first
-                            memberTasks.sort((a, b) => {
-                                if (
-                                    a.status === "iniciada" &&
-                                    b.status !== "iniciada"
-                                ) return -1;
-                                if (
-                                    a.status !== "iniciada" &&
-                                    b.status === "iniciada"
-                                ) return 1;
-                                return 0;
-                            });
+                                    // Sort: In Progress first
+                                    memberTasks.sort((a, b) => {
+                                        if (
+                                            a.status === "iniciada" &&
+                                            b.status !== "iniciada"
+                                        ) return -1;
+                                        if (
+                                            a.status !== "iniciada" &&
+                                            b.status === "iniciada"
+                                        ) return 1;
+                                        return 0;
+                                    });
 
-                            return (
-                                <div
-                                    key={member.id}
-                                    className={`
+                                    return (
+                                        <div
+                                            key={member.id}
+                                            className={`
                                         p-2 md:p-4 rounded-xl border shadow-sm flex flex-col gap-2 md:gap-3 transition-all duration-300
                                         ${
-                                        currentMission
-                                            ? "bg-amber-50/50 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800"
-                                            : isUnavailable &&
-                                                    currentUnavail?.type ===
-                                                        "Atividade"
-                                            ? "bg-green-50/50 border-green-200 dark:bg-green-900/10 dark:border-green-800"
-                                            : isUnavailable
-                                            ? "bg-red-50/50 border-red-200 dark:bg-red-900/10 dark:border-red-800"
-                                            : "bg-white border-[#e7edf3] dark:bg-slate-900 dark:border-slate-800"
-                                    }
-                                    `}
-                                >
-                                    <div className="flex flex-col items-center gap-2 mb-1">
-                                        <div
-                                            className={`
-                                            w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center font-bold text-xs md:text-sm uppercase overflow-hidden shadow-sm border-2
-                                            ${
                                                 currentMission
-                                                    ? "border-amber-400"
+                                                    ? "bg-amber-50/50 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800"
                                                     : isUnavailable &&
                                                             currentUnavail
                                                                     ?.type ===
                                                                 "Atividade"
-                                                    ? "border-green-400"
+                                                    ? "bg-green-50/50 border-green-200 dark:bg-green-900/10 dark:border-green-800"
                                                     : isUnavailable
-                                                    ? "border-red-400"
-                                                    : "border-white dark:border-slate-800 bg-slate-200 dark:bg-slate-700 text-[#4c739a]"
+                                                    ? "bg-red-50/50 border-red-200 dark:bg-red-900/10 dark:border-red-800"
+                                                    : "bg-white border-[#e7edf3] dark:bg-slate-900 dark:border-slate-800"
                                             }
-                                        `}
+                                    `}
                                         >
-                                            {/* Avatar or Initials */}
-                                            {member.avatar
-                                                ? (
-                                                    <img
-                                                        src={member.avatar}
-                                                        alt={member.name}
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                )
-                                                : (
-                                                    member.name.substring(0, 2)
-                                                )}
-                                        </div>
-                                        <div className="flex flex-col items-center text-center">
-                                            <span className="text-xs md:text-lg font-bold text-[#0d141b] dark:text-white leading-tight">
-                                                {member.abrev} {member.war_name}
-                                            </span>
-                                            {currentMission
-                                                ? (
-                                                    <div className="flex items-center gap-1.5 mt-0.5">
-                                                        <span className="material-symbols-outlined text-[14px] text-amber-600 dark:text-amber-500">
-                                                            flight_takeoff
-                                                        </span>
-                                                        <span className="text-[10px] text-amber-600 dark:text-amber-500 font-bold uppercase tracking-wider">
-                                                            Em Viagem
-                                                        </span>
-                                                    </div>
-                                                )
-                                                : isUnavailable &&
-                                                        currentUnavail?.type ===
-                                                            "Atividade"
-                                                ? (
-                                                    <div className="flex items-center gap-1.5 mt-0.5">
-                                                        <span className="material-symbols-outlined text-[14px] text-green-600 dark:text-green-500">
-                                                            event_note
-                                                        </span>
-                                                        <span className="text-[10px] text-green-600 dark:text-green-500 font-bold uppercase tracking-wider">
-                                                            {currentUnavail
-                                                                    ?.atividade ===
-                                                                    "M"
-                                                                ? "Indisponível pela Manhã"
-                                                                : currentUnavail
-                                                                        ?.atividade ===
-                                                                        "T"
-                                                                ? "Indisponível pela Tarde"
-                                                                : "Indisponível Manhã e Tarde"}
-                                                        </span>
-                                                    </div>
-                                                )
-                                                : isUnavailable
-                                                ? (
-                                                    <div className="flex items-center gap-1.5 mt-0.5">
-                                                        <span className="material-symbols-outlined text-[14px] text-red-600 dark:text-red-500">
-                                                            block
-                                                        </span>
-                                                        <span className="text-[10px] text-red-600 dark:text-red-500 font-bold uppercase tracking-wider">
-                                                            {currentUnavail
-                                                                ? currentUnavail
-                                                                    .type
-                                                                : "Indisponível"}
-                                                        </span>
-                                                    </div>
-                                                )
-                                                : (
-                                                    <span className="text-[10px] text-[#4c739a] font-medium uppercase mt-0.5">
-                                                        {memberTasks.length}
-                                                        {" "}
-                                                        Atividades
-                                                    </span>
-                                                )}
-                                        </div>
-                                    </div>
-
-                                    <div
-                                        className={`h-px w-full ${
-                                            currentMission
-                                                ? "bg-amber-200 dark:bg-amber-800/50"
-                                                : isUnavailable &&
-                                                        currentUnavail?.type ===
-                                                            "Atividade"
-                                                ? "bg-green-200 dark:bg-green-800/50"
-                                                : isUnavailable
-                                                ? "bg-red-200 dark:bg-red-800/50"
-                                                : "bg-[#e7edf3] dark:bg-slate-800"
-                                        }`}
-                                    >
-                                    </div>
-
-                                    <div className="flex flex-col gap-1.5 min-h-[60px]">
-                                        {currentMission
-                                            ? (
-                                                <div className="flex items-start gap-2 py-1">
-                                                    <div className="mt-0.5 p-1 bg-amber-100 dark:bg-amber-900/30 rounded">
-                                                        <span className="material-symbols-outlined text-[14px] text-amber-600 dark:text-amber-500">
-                                                            stars
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[11px] font-black text-amber-700 dark:text-amber-400 uppercase leading-tight line-clamp-2">
-                                                            {currentMission
-                                                                .nome}
-                                                        </span>
-                                                        <span className="text-[9px] font-bold text-amber-600/70 dark:text-amber-500/70 uppercase">
-                                                            Missão Ativa
-                                                        </span>
-                                                    </div>
+                                            <div className="flex flex-col items-center gap-2 mb-1">
+                                                <div
+                                                    className={`
+                                            w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center font-bold text-xs md:text-sm uppercase overflow-hidden shadow-sm border-2
+                                            ${
+                                                        currentMission
+                                                            ? "border-amber-400"
+                                                            : isUnavailable &&
+                                                                    currentUnavail
+                                                                            ?.type ===
+                                                                        "Atividade"
+                                                            ? "border-green-400"
+                                                            : isUnavailable
+                                                            ? "border-red-400"
+                                                            : "border-white dark:border-slate-800 bg-slate-200 dark:bg-slate-700 text-[#4c739a]"
+                                                    }
+                                        `}
+                                                >
+                                                    {/* Avatar or Initials */}
+                                                    {member.avatar
+                                                        ? (
+                                                            <img
+                                                                src={member
+                                                                    .avatar}
+                                                                alt={member
+                                                                    .name}
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                        )
+                                                        : (
+                                                            member.name
+                                                                .substring(0, 2)
+                                                        )}
                                                 </div>
-                                            )
-                                            : currentUnavail &&
-                                                    [
-                                                        "Atividade",
-                                                        "Home Office",
-                                                        "Dispensa",
-                                                        "Outros",
-                                                    ].includes(
-                                                        currentUnavail.type,
+                                                <div className="flex flex-col items-center text-center">
+                                                    <span className="text-xs md:text-lg font-bold text-[#0d141b] dark:text-white leading-tight">
+                                                        {member.abrev}{" "}
+                                                        {member.war_name}
+                                                    </span>
+                                                    {currentMission
+                                                        ? (
+                                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                                <span className="material-symbols-outlined text-[14px] text-amber-600 dark:text-amber-500">
+                                                                    flight_takeoff
+                                                                </span>
+                                                                <span className="text-[10px] text-amber-600 dark:text-amber-500 font-bold uppercase tracking-wider">
+                                                                    Em Viagem
+                                                                </span>
+                                                            </div>
+                                                        )
+                                                        : isUnavailable &&
+                                                                currentUnavail
+                                                                        ?.type ===
+                                                                    "Atividade"
+                                                        ? (
+                                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                                <span className="material-symbols-outlined text-[14px] text-green-600 dark:text-green-500">
+                                                                    event_note
+                                                                </span>
+                                                                <span className="text-[10px] text-green-600 dark:text-green-500 font-bold uppercase tracking-wider">
+                                                                    {currentUnavail
+                                                                            ?.atividade ===
+                                                                            "M"
+                                                                        ? "Indisponível pela Manhã"
+                                                                        : currentUnavail
+                                                                                ?.atividade ===
+                                                                                "T"
+                                                                        ? "Indisponível pela Tarde"
+                                                                        : "Indisponível Manhã e Tarde"}
+                                                                </span>
+                                                            </div>
+                                                        )
+                                                        : isUnavailable
+                                                        ? (
+                                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                                <span className="material-symbols-outlined text-[14px] text-red-600 dark:text-red-500">
+                                                                    block
+                                                                </span>
+                                                                <span className="text-[10px] text-red-600 dark:text-red-500 font-bold uppercase tracking-wider">
+                                                                    {currentUnavail
+                                                                        ? currentUnavail
+                                                                            .type
+                                                                        : "Indisponível"}
+                                                                </span>
+                                                            </div>
+                                                        )
+                                                        : (
+                                                            <span className="text-[10px] text-[#4c739a] font-medium uppercase mt-0.5">
+                                                                {memberTasks
+                                                                    .length}
+                                                                {" "}
+                                                                Atividades
+                                                            </span>
+                                                        )}
+                                                </div>
+                                            </div>
+
+                                            <div
+                                                className={`h-px w-full ${
+                                                    currentMission
+                                                        ? "bg-amber-200 dark:bg-amber-800/50"
+                                                        : isUnavailable &&
+                                                                currentUnavail
+                                                                        ?.type ===
+                                                                    "Atividade"
+                                                        ? "bg-green-200 dark:bg-green-800/50"
+                                                        : isUnavailable
+                                                        ? "bg-red-200 dark:bg-red-800/50"
+                                                        : "bg-[#e7edf3] dark:bg-slate-800"
+                                                }`}
+                                            >
+                                            </div>
+
+                                            <div className="flex flex-col gap-1.5 min-h-[60px]">
+                                                {currentMission
+                                                    ? (
+                                                        <div className="flex items-start gap-2 py-1">
+                                                            <div className="mt-0.5 p-1 bg-amber-100 dark:bg-amber-900/30 rounded">
+                                                                <span className="material-symbols-outlined text-[14px] text-amber-600 dark:text-amber-500">
+                                                                    stars
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[11px] font-black text-amber-700 dark:text-amber-400 uppercase leading-tight line-clamp-2">
+                                                                    {currentMission
+                                                                        .nome}
+                                                                </span>
+                                                                <span className="text-[9px] font-bold text-amber-600/70 dark:text-amber-500/70 uppercase">
+                                                                    Missão Ativa
+                                                                </span>
+                                                            </div>
+                                                        </div>
                                                     )
-                                            ? (
-                                                <div className="flex items-start gap-2 py-1">
-                                                    <div
-                                                        className={`mt-0.5 p-1 rounded ${
-                                                            currentUnavail
-                                                                    .type ===
-                                                                    "Atividade"
-                                                                ? "bg-green-100 dark:bg-green-900/30"
-                                                                : "bg-red-100 dark:bg-red-900/30"
-                                                        }`}
-                                                    >
-                                                        <span
-                                                            className={`material-symbols-outlined text-[14px] ${
+                                                    : currentUnavail &&
+                                                            [
+                                                                "Atividade",
+                                                                "Home Office",
+                                                                "Dispensa",
+                                                                "Outros",
+                                                            ].includes(
                                                                 currentUnavail
-                                                                        .type ===
-                                                                        "Atividade"
-                                                                    ? "text-green-600 dark:text-green-500"
-                                                                    : "text-red-600 dark:text-red-500"
-                                                            }`}
-                                                        >
-                                                            {currentUnavail
-                                                                    .type ===
-                                                                    "Atividade"
-                                                                ? "event_note"
-                                                                : currentUnavail
-                                                                        .type ===
-                                                                        "Home Office"
-                                                                ? "home"
-                                                                : "info"}
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex flex-col">
-                                                        <span
-                                                            className={`text-[11px] font-black uppercase leading-tight line-clamp-2 ${
-                                                                currentUnavail
-                                                                        .type ===
-                                                                        "Atividade"
-                                                                    ? "text-green-700 dark:text-green-400"
-                                                                    : "text-red-700 dark:text-red-400"
-                                                            }`}
-                                                        >
-                                                            {currentUnavail
-                                                                .detalhes ||
-                                                                "Sem detalhes informados"}
-                                                        </span>
-                                                        {
-                                                            /* <span className={`text-[9px] font-bold uppercase ${  //Tipo de dispensa
+                                                                    .type,
+                                                            )
+                                                    ? (
+                                                        <div className="flex items-start gap-2 py-1">
+                                                            <div
+                                                                className={`mt-0.5 p-1 rounded ${
+                                                                    currentUnavail
+                                                                            .type ===
+                                                                            "Atividade"
+                                                                        ? "bg-green-100 dark:bg-green-900/30"
+                                                                        : "bg-red-100 dark:bg-red-900/30"
+                                                                }`}
+                                                            >
+                                                                <span
+                                                                    className={`material-symbols-outlined text-[14px] ${
+                                                                        currentUnavail
+                                                                                .type ===
+                                                                                "Atividade"
+                                                                            ? "text-green-600 dark:text-green-500"
+                                                                            : "text-red-600 dark:text-red-500"
+                                                                    }`}
+                                                                >
+                                                                    {currentUnavail
+                                                                            .type ===
+                                                                            "Atividade"
+                                                                        ? "event_note"
+                                                                        : currentUnavail
+                                                                                .type ===
+                                                                                "Home Office"
+                                                                        ? "home"
+                                                                        : "info"}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex flex-col">
+                                                                <span
+                                                                    className={`text-[11px] font-black uppercase leading-tight line-clamp-2 ${
+                                                                        currentUnavail
+                                                                                .type ===
+                                                                                "Atividade"
+                                                                            ? "text-green-700 dark:text-green-400"
+                                                                            : "text-red-700 dark:text-red-400"
+                                                                    }`}
+                                                                >
+                                                                    {currentUnavail
+                                                                        .detalhes ||
+                                                                        "Sem detalhes informados"}
+                                                                </span>
+                                                                {
+                                                                    /* <span className={`text-[9px] font-bold uppercase ${  //Tipo de dispensa
                                                             currentUnavail.type === 'Atividade'
                                                                 ? 'text-green-600/70 dark:text-green-500/70'
                                                                 : 'text-red-600/70 dark:text-red-500/70'
                                                         }`}>
                                                             {currentUnavail.type}
                                                         </span> */
-                                                        }
-                                                    </div>
-                                                </div>
-                                            )
-                                            : (
-                                                <>
-                                                    {memberTasks.length > 0
-                                                        ? (
-                                                            memberTasks.slice(
-                                                                0,
-                                                                3,
-                                                            ).map((task) => (
-                                                                <div
-                                                                    key={task
-                                                                        .id}
-                                                                    className={`text-xs truncate py-0.5 cursor-help ${
-                                                                        task.status ===
-                                                                                "iniciada"
-                                                                            ? "font-bold text-primary"
-                                                                            : "text-[#4c739a]"
-                                                                    }`}
-                                                                    title={`${task.name}${
-                                                                        task.description
-                                                                            ? `\nDescrição: ${task.description}`
-                                                                            : ""
-                                                                    }${
-                                                                        task.end_date
-                                                                            ? `\nPrazo: ${
-                                                                                new Date(
-                                                                                    task.end_date +
-                                                                                        "T12:00:00",
-                                                                                ).toLocaleDateString(
-                                                                                    "pt-BR",
-                                                                                )
-                                                                            }`
-                                                                            : ""
-                                                                    }`}
-                                                                >
-                                                                    {task
-                                                                                .status ===
-                                                                            "iniciada" &&
-                                                                        "▶ "}
-                                                                    {task.name}
-                                                                </div>
-                                                            ))
-                                                        )
-                                                        : (
-                                                            <span className="text-[10px] text-slate-400 italic">
-                                                                Sem tarefas
-                                                                atribuídas
-                                                            </span>
-                                                        )}
-                                                    {memberTasks.length > 3 && (
-                                                        <span className="text-[10px] text-slate-400 font-medium">
-                                                            + {memberTasks
-                                                                .length - 3}
-                                                            {" "}
-                                                            outras...
-                                                        </span>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                    : (
+                                                        <>
+                                                            {memberTasks
+                                                                    .length > 0
+                                                                ? (
+                                                                    memberTasks
+                                                                        .slice(
+                                                                            0,
+                                                                            3,
+                                                                        ).map((
+                                                                            task,
+                                                                        ) => (
+                                                                            <div
+                                                                                key={task
+                                                                                    .id}
+                                                                                className={`text-xs truncate py-0.5 cursor-help ${
+                                                                                    task.status ===
+                                                                                            "iniciada"
+                                                                                        ? "font-bold text-primary"
+                                                                                        : "text-[#4c739a]"
+                                                                                }`}
+                                                                                title={`${task.name}${
+                                                                                    task.description
+                                                                                        ? `\nDescrição: ${task.description}`
+                                                                                        : ""
+                                                                                }${
+                                                                                    task.end_date
+                                                                                        ? `\nPrazo: ${
+                                                                                            new Date(
+                                                                                                task.end_date +
+                                                                                                    "T12:00:00",
+                                                                                            ).toLocaleDateString(
+                                                                                                "pt-BR",
+                                                                                            )
+                                                                                        }`
+                                                                                        : ""
+                                                                                }`}
+                                                                            >
+                                                                                {task
+                                                                                            .status ===
+                                                                                        "iniciada" &&
+                                                                                    "▶ "}
+                                                                                {task
+                                                                                    .name}
+                                                                            </div>
+                                                                        ))
+                                                                )
+                                                                : (
+                                                                    <span className="text-[10px] text-slate-400 italic">
+                                                                        Sem
+                                                                        tarefas
+                                                                        atribuídas
+                                                                    </span>
+                                                                )}
+                                                            {memberTasks
+                                                                        .length >
+                                                                    3 && (
+                                                                <span className="text-[10px] text-slate-400 font-medium">
+                                                                    +{" "}
+                                                                    {memberTasks
+                                                                        .length -
+                                                                        3}{" "}
+                                                                    outras...
+                                                                </span>
+                                                            )}
+                                                        </>
                                                     )}
-                                                </>
-                                            )}
 
-                                        {memberAnnotations &&
-                                            memberAnnotations.length > 0 && (
-                                            <div className="flex flex-col gap-1.5 mt-2 border-t border-slate-100 dark:border-slate-800/40 pt-2">
-                                                {memberAnnotations.map((
-                                                    anno,
-                                                ) => (
-                                                    <div
-                                                        key={anno.id}
-                                                        className="flex items-start gap-1.5 py-0.5"
-                                                    >
-                                                        <div className="mt-0.5 p-0.5 bg-amber-50 dark:bg-amber-950/20 rounded shrink-0">
-                                                            <span className="material-symbols-outlined text-[12px] text-amber-600 dark:text-amber-500 leading-none">
-                                                                sticky_note_2
-                                                            </span>
+                                                {memberAnnotations &&
+                                                    memberAnnotations.length >
+                                                        0 &&
+                                                    (
+                                                        <div className="flex flex-col gap-1.5 mt-2 border-t border-slate-100 dark:border-slate-800/40 pt-2">
+                                                            {memberAnnotations
+                                                                .map((
+                                                                    anno,
+                                                                ) => (
+                                                                    <div
+                                                                        key={anno
+                                                                            .id}
+                                                                        className="flex items-start gap-1.5 py-0.5"
+                                                                    >
+                                                                        <div className="mt-0.5 p-0.5 bg-amber-50 dark:bg-amber-950/20 rounded shrink-0">
+                                                                            <span className="material-symbols-outlined text-[12px] text-amber-600 dark:text-amber-500 leading-none">
+                                                                                sticky_note_2
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="flex flex-col min-w-0">
+                                                                            <span
+                                                                                className="text-[10px] font-bold text-slate-700 dark:text-slate-300 leading-tight break-words"
+                                                                                title={anno
+                                                                                    .annotation}
+                                                                            >
+                                                                                {anno
+                                                                                    .annotation}
+                                                                            </span>
+                                                                            <span className="text-[8px] font-medium text-slate-400 dark:text-slate-500 uppercase">
+                                                                                Anotação:
+                                                                                {" "}
+                                                                                {anno
+                                                                                    .start_time}
+                                                                                {" "}
+                                                                                -
+                                                                                {" "}
+                                                                                {anno
+                                                                                    .end_time}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
                                                         </div>
-                                                        <div className="flex flex-col min-w-0">
-                                                            <span
-                                                                className="text-[10px] font-bold text-slate-700 dark:text-slate-300 leading-tight break-words"
-                                                                title={anno
-                                                                    .annotation}
-                                                            >
-                                                                {anno
-                                                                    .annotation}
-                                                            </span>
-                                                            <span className="text-[8px] font-medium text-slate-400 dark:text-slate-500 uppercase">
-                                                                Anotação: {anno
-                                                                    .start_time}
-                                                                {" "}
-                                                                -{" "}
-                                                                {anno.end_time}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                                    )}
                                             </div>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                </div>
-                </>
+                                        </div>
+                                    );
+                                })}
+                        </div>
+                    </>
                 )}
             </div>
 
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex flex-col gap-2">
-                    <button 
+                    <button
                         onClick={() => setIsTarefasOpen(!isTarefasOpen)}
                         className="flex items-center gap-2 hover:opacity-80 transition-opacity text-left w-fit"
                     >
@@ -2025,7 +2067,8 @@ const TaskForm: React.FC = () => {
                     </button>
                     {isTarefasOpen && (
                         <p className="text-[#4c739a] dark:text-slate-400 text-base font-normal pl-[36px]">
-                            Gerencie todas as atividades, filtre por especialidade e controle recorrências.
+                            Gerencie todas as atividades, filtre por
+                            especialidade e controle recorrências.
                         </p>
                     )}
                 </div>
@@ -2049,561 +2092,604 @@ const TaskForm: React.FC = () => {
 
             {isTarefasOpen && (
                 <>
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm p-4 flex flex-col gap-4">
-                {/* Search Bar */}
-                <div className="relative">
-                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]">
-                        search
-                    </span>
-                    <input
-                        type="text"
-                        placeholder="Buscar por nome da tarefa ou membro..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm focus:ring-2 focus:ring-primary/20 focus:outline-none transition-all"
-                    />
-                </div>
+                    <div className="bg-white dark:bg-slate-900 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm p-4 flex flex-col gap-4">
+                        {/* Search Bar */}
+                        <div className="relative">
+                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]">
+                                search
+                            </span>
+                            <input
+                                type="text"
+                                placeholder="Buscar por nome ou descrição da tarefa ou nome do membro..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm focus:ring-2 focus:ring-primary/20 focus:outline-none transition-all"
+                            />
+                        </div>
 
-                {/* Filters Row */}
-                <div className="flex flex-wrap items-center gap-3 md:gap-6 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
-                    {/* Specialties */}
-                    <div className="flex items-center gap-2">
-                        {["BCT", "AIS", "CTA", "TAAM"].map((spec) => (
-                            <button
-                                key={spec}
-                                onClick={() => {
-                                    setFilterSpecialties((prev) =>
-                                        prev.includes(spec)
-                                            ? prev.filter((s) => s !== spec)
-                                            : [...prev, spec]
-                                    );
-                                }}
-                                className={`
+                        {/* Filters Row */}
+                        <div className="flex flex-wrap items-center gap-3 md:gap-6 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
+                            {/* Specialties */}
+                            <div className="flex items-center gap-2">
+                                {["BCT", "AIS", "CTA", "TAAM"].map((spec) => (
+                                    <button
+                                        key={spec}
+                                        onClick={() => {
+                                            setFilterSpecialties((prev) =>
+                                                prev.includes(spec)
+                                                    ? prev.filter((s) =>
+                                                        s !== spec
+                                                    )
+                                                    : [...prev, spec]
+                                            );
+                                        }}
+                                        className={`
                                     px-4 py-1.5 rounded-full text-xs font-bold border transition-all whitespace-nowrap
                                     ${
-                                    filterSpecialties.includes(spec)
-                                        ? "bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400"
-                                        : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400"
-                                }
+                                            filterSpecialties.includes(spec)
+                                                ? "bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400"
+                                                : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400"
+                                        }
                                 `}
-                            >
-                                {spec}
-                            </button>
-                        ))}
-                    </div>
+                                    >
+                                        {spec}
+                                    </button>
+                                ))}
+                            </div>
 
-                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden md:block">
-                    </div>
+                            <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden md:block">
+                            </div>
 
-                    {/* Periodicities */}
-                    <div className="flex items-center gap-2">
-                        {[
-                            { id: "diaria", label: "Diária" },
-                            { id: "semanal", label: "Semanal" },
-                            { id: "quinzenal", label: "Quinzenal" },
-                            { id: "mensal", label: "Mensal" },
-                            { id: "temporada", label: "Temporada" },
-                            { id: "pontual", label: "Pontual" },
-                        ].map((period) => (
-                            <button
-                                key={period.id}
-                                onClick={() => {
-                                    setFilterPeriodicities((prev) =>
-                                        prev.includes(period.id)
-                                            ? prev.filter((p) =>
-                                                p !== period.id
-                                            )
-                                            : [...prev, period.id]
-                                    );
-                                }}
-                                className={`
+                            {/* Periodicities */}
+                            <div className="flex items-center gap-2">
+                                {[
+                                    { id: "diaria", label: "Diária" },
+                                    { id: "semanal", label: "Semanal" },
+                                    { id: "quinzenal", label: "Quinzenal" },
+                                    { id: "mensal", label: "Mensal" },
+                                    { id: "temporada", label: "Temporada" },
+                                    { id: "pontual", label: "Pontual" },
+                                ].map((period) => (
+                                    <button
+                                        key={period.id}
+                                        onClick={() => {
+                                            setFilterPeriodicities((prev) =>
+                                                prev.includes(period.id)
+                                                    ? prev.filter((p) =>
+                                                        p !== period.id
+                                                    )
+                                                    : [...prev, period.id]
+                                            );
+                                        }}
+                                        className={`
                                     px-4 py-1.5 rounded-full text-xs font-bold border transition-all whitespace-nowrap
                                     ${
-                                    filterPeriodicities.includes(period.id)
-                                        ? "bg-white border-primary text-primary shadow-sm dark:bg-slate-800 dark:border-primary dark:text-primary"
-                                        : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400"
-                                }
+                                            filterPeriodicities.includes(
+                                                    period.id,
+                                                )
+                                                ? "bg-white border-primary text-primary shadow-sm dark:bg-slate-800 dark:border-primary dark:text-primary"
+                                                : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400"
+                                        }
                                 `}
-                            >
-                                {period.label}
-                            </button>
-                        ))}
-                    </div>
+                                    >
+                                        {period.label}
+                                    </button>
+                                ))}
+                            </div>
 
-                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden md:block">
-                    </div>
+                            <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden md:block">
+                            </div>
 
-                    {/* Reset Button */}
-                    <button
-                        onClick={() => {
-                            setFilterSpecialties([]);
-                            setFilterPeriodicities([]);
-                            setFilterStatuses([]);
-                            setFilterMember("");
-                            setSelectedYear(new Date().getFullYear());
-                            setCurrentPage(1);
-                            setSearchTerm("");
-                        }}
-                        className="px-4 py-1.5 rounded-full text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-colors shadow-md shadow-primary/20 flex items-center gap-1 whitespace-nowrap"
-                    >
-                        Todas
-                        <span className="material-symbols-outlined text-[14px]">
-                            close
-                        </span>
-                    </button>
-
-                    {/* Statuses */}
-                    <div className="flex items-center gap-2">
-                        {[
-                            { id: "pendente", label: "Pendente" },
-                            { id: "iniciada", label: "Em Andamento" },
-                            { id: "concluida", label: "Concluída" },
-                            // { id: 'pausada', label: 'Pausada' }
-                        ].map((status) => (
+                            {/* Reset Button */}
                             <button
-                                key={status.id}
                                 onClick={() => {
-                                    setFilterStatuses((prev) =>
-                                        prev.includes(status.id)
-                                            ? prev.filter((s) =>
-                                                s !== status.id
-                                            )
-                                            : [...prev, status.id]
-                                    );
+                                    setFilterSpecialties([]);
+                                    setFilterPeriodicities([]);
+                                    setFilterStatuses([]);
+                                    setFilterMember("");
+                                    setSelectedYear(new Date().getFullYear());
+                                    setCurrentPage(1);
+                                    setSearchTerm("");
                                 }}
-                                className={`
+                                className="px-4 py-1.5 rounded-full text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-colors shadow-md shadow-primary/20 flex items-center gap-1 whitespace-nowrap"
+                            >
+                                Todas
+                                <span className="material-symbols-outlined text-[14px]">
+                                    close
+                                </span>
+                            </button>
+
+                            {/* Statuses */}
+                            <div className="flex items-center gap-2">
+                                {[
+                                    { id: "pendente", label: "Pendente" },
+                                    { id: "iniciada", label: "Em Andamento" },
+                                    { id: "concluida", label: "Concluída" },
+                                    // { id: 'pausada', label: 'Pausada' }
+                                ].map((status) => (
+                                    <button
+                                        key={status.id}
+                                        onClick={() => {
+                                            setFilterStatuses((prev) =>
+                                                prev.includes(status.id)
+                                                    ? prev.filter((s) =>
+                                                        s !== status.id
+                                                    )
+                                                    : [...prev, status.id]
+                                            );
+                                        }}
+                                        className={`
                                     px-4 py-1.5 rounded-full text-xs font-bold border transition-all whitespace-nowrap
                                     ${
-                                    filterStatuses.includes(status.id)
-                                        ? "bg-slate-800 border-slate-800 text-white dark:bg-white dark:border-white dark:text-slate-900"
-                                        : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400"
-                                }
+                                            filterStatuses.includes(status.id)
+                                                ? "bg-slate-800 border-slate-800 text-white dark:bg-white dark:border-white dark:text-slate-900"
+                                                : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400"
+                                        }
                                 `}
-                            >
-                                {status.label}
-                            </button>
-                        ))}
-                    </div>
+                                    >
+                                        {status.label}
+                                    </button>
+                                ))}
+                            </div>
 
-                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden md:block">
-                    </div>
+                            <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden md:block">
+                            </div>
 
-                    {/* Year Select */}
-                    <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black text-[#4c739a] uppercase tracking-wider">
-                            Ano:
-                        </span>
-                        <select
-                            value={selectedYear}
-                            onChange={(e) => {
-                                setSelectedYear(Number(e.target.value));
-                                setCurrentPage(1);
-                            }}
-                            className="bg-white dark:bg-slate-800 border-none w-[70px] rounded-lg px-2 py-1 text-xs font-bold text-[#0d141b] dark:text-white focus:outline-none ring-1 ring-slate-200 dark:ring-slate-700"
-                        >
-                            {[2022, 2023, 2024, 2025, 2026].map((year) => (
-                                <option key={year} value={year}>{year}</option>
-                            ))}
-                        </select>
-                    </div>
+                            {/* Year Select */}
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black text-[#4c739a] uppercase tracking-wider">
+                                    Ano:
+                                </span>
+                                <select
+                                    value={selectedYear}
+                                    onChange={(e) => {
+                                        setSelectedYear(Number(e.target.value));
+                                        setCurrentPage(1);
+                                    }}
+                                    className="bg-white dark:bg-slate-800 border-none w-[70px] rounded-lg px-2 py-1 text-xs font-bold text-[#0d141b] dark:text-white focus:outline-none ring-1 ring-slate-200 dark:ring-slate-700"
+                                >
+                                    {[2022, 2023, 2024, 2025, 2026].map((
+                                        year,
+                                    ) => (
+                                        <option key={year} value={year}>
+                                            {year}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
 
-                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden md:block">
-                    </div>
+                            <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden md:block">
+                            </div>
 
-                    {/* Member Filter */}
-                    <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black text-[#4c739a] uppercase tracking-wider whitespace-nowrap">
-                            Membro:
-                        </span>
-                        <select
-                            value={filterMember}
-                            onChange={(e) => {
-                                setFilterMember(e.target.value);
-                                setCurrentPage(1);
-                            }}
-                            className={`
+                            {/* Member Filter */}
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black text-[#4c739a] uppercase tracking-wider whitespace-nowrap">
+                                    Membro:
+                                </span>
+                                <select
+                                    value={filterMember}
+                                    onChange={(e) => {
+                                        setFilterMember(e.target.value);
+                                        setCurrentPage(1);
+                                    }}
+                                    className={`
                                 bg-white dark:bg-slate-800 border-none min-w-[120px] rounded-lg px-2 py-1 text-xs font-bold focus:outline-none ring-1 transition-all
-                                ${filterMember
-                                    ? "ring-primary text-primary dark:ring-primary dark:text-primary"
-                                    : "ring-slate-200 dark:ring-slate-700 text-[#0d141b] dark:text-white"
-                                }
+                                ${
+                                        filterMember
+                                            ? "ring-primary text-primary dark:ring-primary dark:text-primary"
+                                            : "ring-slate-200 dark:ring-slate-700 text-[#0d141b] dark:text-white"
+                                    }
                             `}
-                        >
-                            <option value="">Todos</option>
-                            {members.map((m) => (
-                                <option key={m.id} value={m.id}>
-                                    {m.war_name || m.name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
+                                >
+                                    <option value="">Todos</option>
+                                    {members.map((m) => (
+                                        <option key={m.id} value={m.id}>
+                                            {m.war_name || m.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="border-b border-[#e7edf3] dark:border-slate-800 text-[#4c739a] dark:text-slate-400 text-xs uppercase tracking-wider">
-                                <th
-                                    className="p-2 md:p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th"
-                                    onClick={() => handleSort("name")}
-                                >
-                                    <div className="flex items-center gap-1">
-                                        Nome
-                                        <span
-                                            className={`material-symbols-outlined text-[14px] transition-transform ${
-                                                sortField === "name"
-                                                    ? "text-primary"
-                                                    : "opacity-0 group-hover/th:opacity-50"
-                                            } ${
-                                                sortField === "name" &&
-                                                    sortDirection === "desc"
-                                                    ? "rotate-180"
-                                                    : ""
-                                            }`}
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="border-b border-[#e7edf3] dark:border-slate-800 text-[#4c739a] dark:text-slate-400 text-xs uppercase tracking-wider">
+                                        <th
+                                            className="p-2 md:p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th"
+                                            onClick={() => handleSort("name")}
                                         >
-                                            arrow_upward
-                                        </span>
-                                    </div>
-                                </th>
-                                <th
-                                    className="p-2 md:p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th hidden md:table-cell"
-                                    onClick={() => handleSort("periodicity")}
-                                >
-                                    <div className="flex items-center gap-1">
-                                        Periodicidade
-                                        <span
-                                            className={`material-symbols-outlined text-[14px] transition-transform ${
-                                                sortField === "periodicity"
-                                                    ? "text-primary"
-                                                    : "opacity-0 group-hover/th:opacity-50"
-                                            } ${
-                                                sortField === "periodicity" &&
-                                                    sortDirection === "desc"
-                                                    ? "rotate-180"
-                                                    : ""
-                                            }`}
-                                        >
-                                            arrow_upward
-                                        </span>
-                                    </div>
-                                </th>
-                                <th
-                                    className="p-2 md:p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th"
-                                    onClick={() => handleSort("start_date")}
-                                >
-                                    <div className="flex items-center gap-1">
-                                        Início
-                                        <span
-                                            className={`material-symbols-outlined text-[14px] transition-transform ${
-                                                sortField === "start_date"
-                                                    ? "text-primary"
-                                                    : "opacity-0 group-hover/th:opacity-50"
-                                            } ${
-                                                sortField === "start_date" &&
-                                                    sortDirection === "desc"
-                                                    ? "rotate-180"
-                                                    : ""
-                                            }`}
-                                        >
-                                            arrow_upward
-                                        </span>
-                                    </div>
-                                </th>
-                                <th
-                                    className="p-2 md:p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th hidden md:table-cell"
-                                    onClick={() => handleSort("assigned_to")}
-                                >
-                                    <div className="flex items-center gap-1">
-                                        Membro
-                                        <span
-                                            className={`material-symbols-outlined text-[14px] transition-transform ${
-                                                sortField === "assigned_to"
-                                                    ? "text-primary"
-                                                    : "opacity-0 group-hover/th:opacity-50"
-                                            } ${
-                                                sortField === "assigned_to" &&
-                                                    sortDirection === "desc"
-                                                    ? "rotate-180"
-                                                    : ""
-                                            }`}
-                                        >
-                                            arrow_upward
-                                        </span>
-                                    </div>
-                                </th>
-                                <th
-                                    className="p-2 md:p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th"
-                                    onClick={() => handleSort("status")}
-                                >
-                                    <div className="flex items-center gap-1">
-                                        Status
-                                        <span
-                                            className={`material-symbols-outlined text-[14px] transition-transform ${
-                                                sortField === "status"
-                                                    ? "text-primary"
-                                                    : "opacity-0 group-hover/th:opacity-50"
-                                            } ${
-                                                sortField === "status" &&
-                                                    sortDirection === "desc"
-                                                    ? "rotate-180"
-                                                    : ""
-                                            }`}
-                                        >
-                                            arrow_upward
-                                        </span>
-                                    </div>
-                                </th>
-                                <th className="p-2 md:p-4 font-bold text-right">
-                                    Ações
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#e7edf3] dark:divide-slate-800">
-                            {displayedTasks.length > 0
-                                ? (
-                                    displayedTasks.map((task) => (
-                                        <tr
-                                            key={task.id}
-                                            className="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-                                        >
-                                            <td className="p-2 md:p-4">
-                                                <p
-                                                    className={`text-sm font-bold text-[#0d141b] dark:text-white inline-block ${
-                                                        getTaskHighlight(task)
-                                                    }`}
-                                                >
-                                                    {task.name}
-                                                </p>
-                                                <div className="flex gap-1 mt-1">
-                                                    {task.specialties?.map(
-                                                        (s) => (
-                                                            <span
-                                                                key={s}
-                                                                className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[#4c739a] font-bold"
-                                                            >
-                                                                {s}
-                                                            </span>
-                                                        ),
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="p-2 md:p-4 text-sm text-[#4c739a] dark:text-slate-300 hidden md:table-cell">
-                                                {formatPeriodicity(
-                                                    task.periodicity,
-                                                )}
-                                                {task.recurrence_active && (
-                                                    <span
-                                                        className="ml-1 text-[10px] text-green-600 font-bold"
-                                                        title="Recorrência Ativa"
-                                                    >
-                                                        ↺
-                                                    </span>
-                                                )}
-                                                {!task.recurrence_active &&
-                                                    [
-                                                        "diaria",
-                                                        "semanal",
-                                                        "quinzenal",
-                                                        "mensal",
-                                                    ].includes(
-                                                        task.periodicity,
-                                                    ) && (
-                                                    <span
-                                                        className="ml-1 text-[10px] text-red-400 font-bold"
-                                                        title="Recorrência Parada"
-                                                    >
-                                                        ✕
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td className="p-2 md:p-4 text-xs md:text-sm text-[#4c739a] dark:text-slate-300">
-                                                {task.start_date
-                                                    ? task.start_date.split(
-                                                        "T",
-                                                    )[0].split("-").reverse()
-                                                        .join("/")
-                                                    : "-"}
-                                            </td>
-                                            <td className="p-2 md:p-4 text-sm text-[#4c739a] dark:text-slate-300 hidden md:table-cell">
-                                                {getMemberName(
-                                                    task.assigned_to,
-                                                )}
-                                            </td>
-                                            <td className="p-2 md:p-4">
+                                            <div className="flex items-center gap-1">
+                                                Nome
                                                 <span
-                                                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
-                                                        getStatusStyle(
-                                                            task.status,
-                                                        )
+                                                    className={`material-symbols-outlined text-[14px] transition-transform ${
+                                                        sortField === "name"
+                                                            ? "text-primary"
+                                                            : "opacity-0 group-hover/th:opacity-50"
+                                                    } ${
+                                                        sortField === "name" &&
+                                                            sortDirection ===
+                                                                "desc"
+                                                            ? "rotate-180"
+                                                            : ""
                                                     }`}
                                                 >
-                                                    {getStatusLabel(
-                                                        task.status,
-                                                    )}
+                                                    arrow_upward
                                                 </span>
-                                            </td>
-                                            <td className="p-2 md:p-4">
-                                                <div className="flex items-center justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                                                    <button
-                                                        onClick={() =>
-                                                            handleEdit(task)}
-                                                        className="p-2 text-[#4c739a] hover:bg-white hover:text-primary dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
-                                                        title="Editar"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[18px]">
-                                                            edit
-                                                        </span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() =>
-                                                            handleClone(task)}
-                                                        className="p-2 text-[#4c739a] hover:bg-white hover:text-blue-600 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
-                                                        title="Clonar"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[18px]">
-                                                            content_copy
-                                                        </span>
-                                                    </button>
-                                                    {task.recurrence_active && (
-                                                        <button
-                                                            onClick={() =>
-                                                                handleToggleRecurrence(
-                                                                    task,
-                                                                )}
-                                                            className="p-2 text-[#4c739a] hover:bg-white hover:text-amber-600 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
-                                                            title="Interromper Recorrência"
-                                                        >
-                                                            <span className="material-symbols-outlined text-[18px]">
-                                                                event_busy
-                                                            </span>
-                                                        </button>
-                                                    )}
-                                                    {!task.recurrence_active &&
-                                                        [
-                                                            "diaria",
-                                                            "semanal",
-                                                            "quinzenal",
-                                                            "mensal",
-                                                        ].includes(
-                                                            task.periodicity,
-                                                        ) && (
-                                                        <button
-                                                            onClick={() =>
-                                                                handleToggleRecurrence(
-                                                                    task,
-                                                                )}
-                                                            className="p-2 text-[#4c739a] hover:bg-white hover:text-green-600 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
-                                                            title="Ativar Recorrência"
-                                                        >
-                                                            <span className="material-symbols-outlined text-[18px]">
-                                                                update
-                                                            </span>
-                                                        </button>
-                                                    )}
-                                                    {canDelete() && (
-                                                        <button
-                                                            onClick={() =>
-                                                                handleDelete(
-                                                                    task,
-                                                                )}
-                                                            className="p-2 text-[#4c739a] hover:bg-red-100 hover:text-red-600 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
-                                                        >
-                                                            <span className="material-symbols-outlined text-[16px]">
-                                                                delete
-                                                            </span>
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )
-                                : (
-                                    <tr>
-                                        <td
-                                            colSpan={6}
-                                            className="p-8 text-center text-[#4c739a] text-sm italic"
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="p-2 md:p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th hidden md:table-cell"
+                                            onClick={() =>
+                                                handleSort("periodicity")}
                                         >
-                                            Nenhuma tarefa encontrada com os
-                                            filtros atuais.
-                                        </td>
+                                            <div className="flex items-center gap-1">
+                                                Periodicidade
+                                                <span
+                                                    className={`material-symbols-outlined text-[14px] transition-transform ${
+                                                        sortField ===
+                                                                "periodicity"
+                                                            ? "text-primary"
+                                                            : "opacity-0 group-hover/th:opacity-50"
+                                                    } ${
+                                                        sortField ===
+                                                                "periodicity" &&
+                                                            sortDirection ===
+                                                                "desc"
+                                                            ? "rotate-180"
+                                                            : ""
+                                                    }`}
+                                                >
+                                                    arrow_upward
+                                                </span>
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="p-2 md:p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th"
+                                            onClick={() =>
+                                                handleSort("start_date")}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                Início
+                                                <span
+                                                    className={`material-symbols-outlined text-[14px] transition-transform ${
+                                                        sortField ===
+                                                                "start_date"
+                                                            ? "text-primary"
+                                                            : "opacity-0 group-hover/th:opacity-50"
+                                                    } ${
+                                                        sortField ===
+                                                                "start_date" &&
+                                                            sortDirection ===
+                                                                "desc"
+                                                            ? "rotate-180"
+                                                            : ""
+                                                    }`}
+                                                >
+                                                    arrow_upward
+                                                </span>
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="p-2 md:p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th hidden md:table-cell"
+                                            onClick={() =>
+                                                handleSort("assigned_to")}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                Membro
+                                                <span
+                                                    className={`material-symbols-outlined text-[14px] transition-transform ${
+                                                        sortField ===
+                                                                "assigned_to"
+                                                            ? "text-primary"
+                                                            : "opacity-0 group-hover/th:opacity-50"
+                                                    } ${
+                                                        sortField ===
+                                                                "assigned_to" &&
+                                                            sortDirection ===
+                                                                "desc"
+                                                            ? "rotate-180"
+                                                            : ""
+                                                    }`}
+                                                >
+                                                    arrow_upward
+                                                </span>
+                                            </div>
+                                        </th>
+                                        <th
+                                            className="p-2 md:p-4 font-bold cursor-pointer hover:text-primary transition-colors group/th"
+                                            onClick={() => handleSort("status")}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                Status
+                                                <span
+                                                    className={`material-symbols-outlined text-[14px] transition-transform ${
+                                                        sortField === "status"
+                                                            ? "text-primary"
+                                                            : "opacity-0 group-hover/th:opacity-50"
+                                                    } ${
+                                                        sortField ===
+                                                                "status" &&
+                                                            sortDirection ===
+                                                                "desc"
+                                                            ? "rotate-180"
+                                                            : ""
+                                                    }`}
+                                                >
+                                                    arrow_upward
+                                                </span>
+                                            </div>
+                                        </th>
+                                        <th className="p-2 md:p-4 font-bold text-right">
+                                            Ações
+                                        </th>
                                     </tr>
-                                )}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Pagination Controls */}
-                {totalCount > 0 && (
-                    <div className="flex items-center justify-between border-t border-[#e7edf3] dark:divide-slate-800 pt-4 mt-2">
-                        <div className="text-xs text-[#4c739a] font-medium">
-                            Mostrando{" "}
-                            <span className="font-bold text-[#0d141b] dark:text-white">
-                                {(currentPage - 1) * itemsPerPage + 1}
-                            </span>{" "}
-                            a{" "}
-                            <span className="font-bold text-[#0d141b] dark:text-white">
-                                {Math.min(
-                                    currentPage * itemsPerPage,
-                                    totalCount,
-                                )}
-                            </span>{" "}
-                            de{" "}
-                            <span className="font-bold text-[#0d141b] dark:text-white">
-                                {totalCount}
-                            </span>{" "}
-                            tarefas
+                                </thead>
+                                <tbody className="divide-y divide-[#e7edf3] dark:divide-slate-800">
+                                    {displayedTasks.length > 0
+                                        ? (
+                                            displayedTasks.map((task) => (
+                                                <tr
+                                                    key={task.id}
+                                                    className="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                                                >
+                                                    <td className="p-2 md:p-4">
+                                                        <p
+                                                            className={`text-sm font-bold text-[#0d141b] dark:text-white inline-block ${
+                                                                getTaskHighlight(
+                                                                    task,
+                                                                )
+                                                            }`}
+                                                        >
+                                                            {task.name}
+                                                        </p>
+                                                        <div className="flex gap-1 mt-1">
+                                                            {task.specialties
+                                                                ?.map(
+                                                                    (s) => (
+                                                                        <span
+                                                                            key={s}
+                                                                            className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[#4c739a] font-bold"
+                                                                        >
+                                                                            {s}
+                                                                        </span>
+                                                                    ),
+                                                                )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-2 md:p-4 text-sm text-[#4c739a] dark:text-slate-300 hidden md:table-cell">
+                                                        {formatPeriodicity(
+                                                            task.periodicity,
+                                                        )}
+                                                        {task
+                                                            .recurrence_active &&
+                                                            (
+                                                                <span
+                                                                    className="ml-1 text-[10px] text-green-600 font-bold"
+                                                                    title="Recorrência Ativa"
+                                                                >
+                                                                    ↺
+                                                                </span>
+                                                            )}
+                                                        {!task
+                                                            .recurrence_active &&
+                                                            [
+                                                                "diaria",
+                                                                "semanal",
+                                                                "quinzenal",
+                                                                "mensal",
+                                                            ].includes(
+                                                                task.periodicity,
+                                                            ) && (
+                                                            <span
+                                                                className="ml-1 text-[10px] text-red-400 font-bold"
+                                                                title="Recorrência Parada"
+                                                            >
+                                                                ✕
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-2 md:p-4 text-xs md:text-sm text-[#4c739a] dark:text-slate-300">
+                                                        {task.start_date
+                                                            ? task.start_date
+                                                                .split(
+                                                                    "T",
+                                                                )[0].split("-")
+                                                                .reverse()
+                                                                .join("/")
+                                                            : "-"}
+                                                    </td>
+                                                    <td className="p-2 md:p-4 text-sm text-[#4c739a] dark:text-slate-300 hidden md:table-cell">
+                                                        {getMemberName(
+                                                            task.assigned_to,
+                                                        )}
+                                                    </td>
+                                                    <td className="p-2 md:p-4">
+                                                        <span
+                                                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
+                                                                getStatusStyle(
+                                                                    task.status,
+                                                                )
+                                                            }`}
+                                                        >
+                                                            {getStatusLabel(
+                                                                task.status,
+                                                            )}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-2 md:p-4">
+                                                        <div className="flex items-center justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                                            <button
+                                                                onClick={() =>
+                                                                    handleEdit(
+                                                                        task,
+                                                                    )}
+                                                                className="p-2 text-[#4c739a] hover:bg-white hover:text-primary dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
+                                                                title="Editar"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[18px]">
+                                                                    edit
+                                                                </span>
+                                                            </button>
+                                                            <button
+                                                                onClick={() =>
+                                                                    handleClone(
+                                                                        task,
+                                                                    )}
+                                                                className="p-2 text-[#4c739a] hover:bg-white hover:text-blue-600 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
+                                                                title="Clonar"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[18px]">
+                                                                    content_copy
+                                                                </span>
+                                                            </button>
+                                                            {task
+                                                                .recurrence_active &&
+                                                                (
+                                                                    <button
+                                                                        onClick={() =>
+                                                                            handleToggleRecurrence(
+                                                                                task,
+                                                                            )}
+                                                                        className="p-2 text-[#4c739a] hover:bg-white hover:text-amber-600 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
+                                                                        title="Interromper Recorrência"
+                                                                    >
+                                                                        <span className="material-symbols-outlined text-[18px]">
+                                                                            event_busy
+                                                                        </span>
+                                                                    </button>
+                                                                )}
+                                                            {!task
+                                                                .recurrence_active &&
+                                                                [
+                                                                    "diaria",
+                                                                    "semanal",
+                                                                    "quinzenal",
+                                                                    "mensal",
+                                                                ].includes(
+                                                                    task.periodicity,
+                                                                ) && (
+                                                                <button
+                                                                    onClick={() =>
+                                                                        handleToggleRecurrence(
+                                                                            task,
+                                                                        )}
+                                                                    className="p-2 text-[#4c739a] hover:bg-white hover:text-green-600 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
+                                                                    title="Ativar Recorrência"
+                                                                >
+                                                                    <span className="material-symbols-outlined text-[18px]">
+                                                                        update
+                                                                    </span>
+                                                                </button>
+                                                            )}
+                                                            {canDelete() && (
+                                                                <button
+                                                                    onClick={() =>
+                                                                        handleDelete(
+                                                                            task,
+                                                                        )}
+                                                                    className="p-2 text-[#4c739a] hover:bg-red-100 hover:text-red-600 dark:hover:bg-slate-800 rounded-lg transition-colors border border-transparent hover:border-[#e7edf3] hover:shadow-sm"
+                                                                >
+                                                                    <span className="material-symbols-outlined text-[16px]">
+                                                                        delete
+                                                                    </span>
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )
+                                        : (
+                                            <tr>
+                                                <td
+                                                    colSpan={6}
+                                                    className="p-8 text-center text-[#4c739a] text-sm italic"
+                                                >
+                                                    Nenhuma tarefa encontrada
+                                                    com os filtros atuais.
+                                                </td>
+                                            </tr>
+                                        )}
+                                </tbody>
+                            </table>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() =>
-                                    setCurrentPage((prev) =>
-                                        Math.max(1, prev - 1)
-                                    )}
-                                disabled={currentPage === 1}
-                                className="p-2 rounded-lg border border-[#e7edf3] dark:border-slate-800 bg-white dark:bg-slate-900 text-[#4c739a] hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                            >
-                                <span className="material-symbols-outlined text-[20px]">
-                                    chevron_left
-                                </span>
-                            </button>
 
-                            {[...Array(Math.min(5, totalPages))].map((_, i) => (
-                                <button
-                                    key={i + 1}
-                                    onClick={() => setCurrentPage(i + 1)}
-                                    className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
-                                        currentPage === i + 1
-                                            ? "bg-primary text-white"
-                                            : "hover:bg-slate-100 dark:hover:bg-slate-800 text-[#4c739a]"
-                                    }`}
-                                >
-                                    {i + 1}
-                                </button>
-                            ))}
+                        {/* Pagination Controls */}
+                        {totalCount > 0 && (
+                            <div className="flex items-center justify-between border-t border-[#e7edf3] dark:divide-slate-800 pt-4 mt-2">
+                                <div className="text-xs text-[#4c739a] font-medium">
+                                    Mostrando{" "}
+                                    <span className="font-bold text-[#0d141b] dark:text-white">
+                                        {(currentPage - 1) * itemsPerPage + 1}
+                                    </span>{" "}
+                                    a{" "}
+                                    <span className="font-bold text-[#0d141b] dark:text-white">
+                                        {Math.min(
+                                            currentPage * itemsPerPage,
+                                            totalCount,
+                                        )}
+                                    </span>{" "}
+                                    de{" "}
+                                    <span className="font-bold text-[#0d141b] dark:text-white">
+                                        {totalCount}
+                                    </span>{" "}
+                                    tarefas
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() =>
+                                            setCurrentPage((prev) =>
+                                                Math.max(1, prev - 1)
+                                            )}
+                                        disabled={currentPage === 1}
+                                        className="p-2 rounded-lg border border-[#e7edf3] dark:border-slate-800 bg-white dark:bg-slate-900 text-[#4c739a] hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                    >
+                                        <span className="material-symbols-outlined text-[20px]">
+                                            chevron_left
+                                        </span>
+                                    </button>
 
-                            <button
-                                onClick={() =>
-                                    setCurrentPage((prev) =>
-                                        Math.min(totalPages, prev + 1)
-                                    )}
-                                disabled={currentPage >= totalPages}
-                                className="p-2 rounded-lg border border-[#e7edf3] dark:border-slate-800 bg-white dark:bg-slate-900 text-[#4c739a] hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                            >
-                                <span className="material-symbols-outlined text-[20px]">
-                                    chevron_right
-                                </span>
-                            </button>
-                        </div>
+                                    {[...Array(Math.min(5, totalPages))].map((
+                                        _,
+                                        i,
+                                    ) => (
+                                        <button
+                                            key={i + 1}
+                                            onClick={() =>
+                                                setCurrentPage(i + 1)}
+                                            className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
+                                                currentPage === i + 1
+                                                    ? "bg-primary text-white"
+                                                    : "hover:bg-slate-100 dark:hover:bg-slate-800 text-[#4c739a]"
+                                            }`}
+                                        >
+                                            {i + 1}
+                                        </button>
+                                    ))}
+
+                                    <button
+                                        onClick={() =>
+                                            setCurrentPage((prev) =>
+                                                Math.min(totalPages, prev + 1)
+                                            )}
+                                        disabled={currentPage >= totalPages}
+                                        className="p-2 rounded-lg border border-[#e7edf3] dark:border-slate-800 bg-white dark:bg-slate-900 text-[#4c739a] hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                    >
+                                        <span className="material-symbols-outlined text-[20px]">
+                                            chevron_right
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
-                )}
-            </div>
-            </>
+                </>
             )}
 
             {/* Meetings List Section */}
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm p-4 mt-4 md:mt-8 flex flex-col gap-4">
-                <button 
+                <button
                     onClick={() => setIsReunioesOpen(!isReunioesOpen)}
                     className="flex items-center gap-3 mb-2 hover:opacity-80 transition-opacity w-fit text-left"
                 >
@@ -2621,70 +2707,55 @@ const TaskForm: React.FC = () => {
                 </button>
 
                 {isReunioesOpen && (
-                <div className="overflow-x-auto custom-scrollbar">
-                    <table className="w-full text-left border-collapse min-w-[800px]">
-                        <thead>
-                            <tr className="border-b-2 border-[#e7edf3] dark:border-slate-800 text-[#4c739a] dark:text-slate-400 text-[10px] uppercase font-black tracking-widest">
-                                <th className="py-4 px-4">Assunto</th>
-                                <th className="py-4 px-4">Início</th>
-                                <th className="py-4 px-4">Fim</th>
-                                <th className="py-4 px-4 text-center">
-                                    Convocados
-                                </th>
-                                <th className="py-4 px-4 text-center">
-                                    Ações
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#e7edf3] dark:divide-slate-800/50">
-                            {meetings.length > 0
-                                ? (
-                                    meetings.map((meeting) => (
-                                        <tr
-                                            key={meeting.id}
-                                            className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
-                                        >
-                                            <td className="py-4 px-4">
-                                                <div className="flex flex-col gap-1">
-                                                    <span className="font-bold text-[#0d141b] dark:text-white text-sm">
-                                                        {meeting.assunto}
-                                                    </span>
-                                                    {meeting.link && (
-                                                        <a
-                                                            href={meeting
-                                                                .link}
-                                                            target="_blank"
-                                                            rel="noreferrer"
-                                                            className="text-primary text-[11px] font-bold hover:underline flex items-center gap-1"
-                                                        >
-                                                            <span className="material-symbols-outlined text-[12px]">
-                                                                link
-                                                            </span>{" "}
-                                                            Abrir Link
-                                                        </a>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="py-4 px-4">
-                                                <span className="text-sm text-[#4c739a] dark:text-slate-300 font-medium">
-                                                    {new Date(
-                                                        meeting.inicio,
-                                                    ).toLocaleString(
-                                                        "pt-BR",
-                                                        {
-                                                            day: "2-digit",
-                                                            month: "2-digit",
-                                                            year: "numeric",
-                                                            hour: "2-digit",
-                                                            minute: "2-digit",
-                                                        },
-                                                    )}
-                                                </span>
-                                            </td>
-                                            <td className="py-4 px-4">
-                                                <span className="text-sm text-[#4c739a] dark:text-slate-300 font-medium">
-                                                    {new Date(meeting.fim)
-                                                        .toLocaleString(
+                    <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left border-collapse min-w-[800px]">
+                            <thead>
+                                <tr className="border-b-2 border-[#e7edf3] dark:border-slate-800 text-[#4c739a] dark:text-slate-400 text-[10px] uppercase font-black tracking-widest">
+                                    <th className="py-4 px-4">Assunto</th>
+                                    <th className="py-4 px-4">Início</th>
+                                    <th className="py-4 px-4">Fim</th>
+                                    <th className="py-4 px-4 text-center">
+                                        Convocados
+                                    </th>
+                                    <th className="py-4 px-4 text-center">
+                                        Ações
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#e7edf3] dark:divide-slate-800/50">
+                                {meetings.length > 0
+                                    ? (
+                                        meetings.map((meeting) => (
+                                            <tr
+                                                key={meeting.id}
+                                                className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
+                                            >
+                                                <td className="py-4 px-4">
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="font-bold text-[#0d141b] dark:text-white text-sm">
+                                                            {meeting.assunto}
+                                                        </span>
+                                                        {meeting.link && (
+                                                            <a
+                                                                href={meeting
+                                                                    .link}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                className="text-primary text-[11px] font-bold hover:underline flex items-center gap-1"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[12px]">
+                                                                    link
+                                                                </span>{" "}
+                                                                Abrir Link
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 px-4">
+                                                    <span className="text-sm text-[#4c739a] dark:text-slate-300 font-medium">
+                                                        {new Date(
+                                                            meeting.inicio,
+                                                        ).toLocaleString(
                                                             "pt-BR",
                                                             {
                                                                 day: "2-digit",
@@ -2696,70 +2767,90 @@ const TaskForm: React.FC = () => {
                                                                     "2-digit",
                                                             },
                                                         )}
-                                                </span>
-                                            </td>
-                                            <td className="py-4 px-4 text-center">
-                                                <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-[#4c739a] dark:text-slate-300 text-[11px] font-bold rounded-full">
-                                                    {meeting.membros
-                                                        ?.length || 0} Membros
-                                                </span>
-                                            </td>
-                                            <td className="py-4 px-4">
-                                                <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button
-                                                        onClick={() =>
-                                                            handleEditMeeting(
-                                                                meeting,
+                                                    </span>
+                                                </td>
+                                                <td className="py-4 px-4">
+                                                    <span className="text-sm text-[#4c739a] dark:text-slate-300 font-medium">
+                                                        {new Date(meeting.fim)
+                                                            .toLocaleString(
+                                                                "pt-BR",
+                                                                {
+                                                                    day: "2-digit",
+                                                                    month:
+                                                                        "2-digit",
+                                                                    year:
+                                                                        "numeric",
+                                                                    hour:
+                                                                        "2-digit",
+                                                                    minute:
+                                                                        "2-digit",
+                                                                },
                                                             )}
-                                                        className="p-1.5 rounded-lg text-[#4c739a] hover:bg-primary/10 hover:text-primary transition-colors"
-                                                        title="Editar Reunião"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[20px]">
-                                                            edit
-                                                        </span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() =>
-                                                            handleCloneMeeting(
-                                                                meeting,
-                                                            )}
-                                                        className="p-1.5 rounded-lg text-[#4c739a] hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                                                        title="Clonar Reunião"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[20px]">
-                                                            content_copy
-                                                        </span>
-                                                    </button>
-                                                    <button
-                                                        onClick={() =>
-                                                            handleDeleteMeeting(
-                                                                meeting,
-                                                            )}
-                                                        className="p-1.5 rounded-lg text-[#4c739a] hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/30 transition-colors"
-                                                        title="Apagar Reunião"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[20px]">
-                                                            delete
-                                                        </span>
-                                                    </button>
-                                                </div>
+                                                    </span>
+                                                </td>
+                                                <td className="py-4 px-4 text-center">
+                                                    <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-[#4c739a] dark:text-slate-300 text-[11px] font-bold rounded-full">
+                                                        {meeting.membros
+                                                            ?.length || 0}{" "}
+                                                        Membros
+                                                    </span>
+                                                </td>
+                                                <td className="py-4 px-4">
+                                                    <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button
+                                                            onClick={() =>
+                                                                handleEditMeeting(
+                                                                    meeting,
+                                                                )}
+                                                            className="p-1.5 rounded-lg text-[#4c739a] hover:bg-primary/10 hover:text-primary transition-colors"
+                                                            title="Editar Reunião"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[20px]">
+                                                                edit
+                                                            </span>
+                                                        </button>
+                                                        <button
+                                                            onClick={() =>
+                                                                handleCloneMeeting(
+                                                                    meeting,
+                                                                )}
+                                                            className="p-1.5 rounded-lg text-[#4c739a] hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                                            title="Clonar Reunião"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[20px]">
+                                                                content_copy
+                                                            </span>
+                                                        </button>
+                                                        <button
+                                                            onClick={() =>
+                                                                handleDeleteMeeting(
+                                                                    meeting,
+                                                                )}
+                                                            className="p-1.5 rounded-lg text-[#4c739a] hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/30 transition-colors"
+                                                            title="Apagar Reunião"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[20px]">
+                                                                delete
+                                                            </span>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )
+                                    : (
+                                        <tr>
+                                            <td
+                                                colSpan={5}
+                                                className="py-12 text-center text-[#4c739a] dark:text-slate-500 text-sm"
+                                            >
+                                                Nenhuma reunião encontrada.
                                             </td>
                                         </tr>
-                                    ))
-                                )
-                                : (
-                                    <tr>
-                                        <td
-                                            colSpan={5}
-                                            className="py-12 text-center text-[#4c739a] dark:text-slate-500 text-sm"
-                                        >
-                                            Nenhuma reunião encontrada.
-                                        </td>
-                                    </tr>
-                                )}
-                        </tbody>
-                    </table>
-                </div>
+                                    )}
+                            </tbody>
+                        </table>
+                    </div>
                 )}
             </div>
 
@@ -3865,7 +3956,7 @@ const TaskForm: React.FC = () => {
                                                                                             {" "}
                                                                                             {m.war_name}
                                                                                         </span>
-                                                                                    )
+                                                                                    ),
                                                                                 )
                                                                         )
                                                                         : (
