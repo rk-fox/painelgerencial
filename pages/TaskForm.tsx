@@ -139,6 +139,7 @@ const TaskForm: React.FC = () => {
     const [filterPeriodicities, setFilterPeriodicities] = useState<string[]>(
         [],
     );
+    const [filterMember, setFilterMember] = useState<string>("");
     const [sortField, setSortField] = useState<string>("created_at");
     const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
     const [selectedYear, setSelectedYear] = useState<number>(
@@ -148,7 +149,7 @@ const TaskForm: React.FC = () => {
     const [totalTasks, setTotalTasks] = useState<number>(0);
     const itemsPerPage = 100;
     const hasActiveFilters = searchTerm !== "" || filterStatuses.length > 0 ||
-        filterSpecialties.length > 0 || filterPeriodicities.length > 0;
+        filterSpecialties.length > 0 || filterPeriodicities.length > 0 || filterMember !== "";
 
     // Category State
     const [categories, setCategories] = useState<Category[]>([]);
@@ -406,7 +407,7 @@ const TaskForm: React.FC = () => {
     // When filters change, reset to page 1 and re-fetch all tasks
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, filterStatuses, filterSpecialties, filterPeriodicities]);
+    }, [searchTerm, filterStatuses, filterSpecialties, filterPeriodicities, filterMember]);
 
     useEffect(() => {
         fetchTasks();
@@ -1119,11 +1120,12 @@ const TaskForm: React.FC = () => {
 
     // FILTERING
     const filteredTasks = tasks.filter((task) => {
+        const memberName = getMemberName(task.assigned_to).toLowerCase();
+        const searchLower = searchTerm.toLowerCase();
         const matchesSearch =
-            task.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (task.description || "").toLowerCase().includes(
-                searchTerm.toLowerCase(),
-            );
+            task.name.toLowerCase().includes(searchLower) ||
+            (task.description || "").toLowerCase().includes(searchLower) ||
+            memberName.includes(searchLower);
 
         const matchesStatus = filterStatuses.length === 0 ||
             filterStatuses.includes(task.status);
@@ -1131,9 +1133,11 @@ const TaskForm: React.FC = () => {
             task.specialties?.some((s) => filterSpecialties.includes(s));
         const matchesPeriodicity = filterPeriodicities.length === 0 ||
             filterPeriodicities.includes(task.periodicity);
+        const matchesMember = filterMember === "" ||
+            task.assigned_to === filterMember;
 
         return matchesSearch && matchesStatus && matchesSpecialty &&
-            matchesPeriodicity;
+            matchesPeriodicity && matchesMember;
     }).sort((a, b) => {
         let valA: any = "";
         let valB: any = "";
@@ -2053,7 +2057,7 @@ const TaskForm: React.FC = () => {
                     </span>
                     <input
                         type="text"
-                        placeholder="Buscar por nome, graduação ou especialidade..."
+                        placeholder="Buscar por nome da tarefa ou membro..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm focus:ring-2 focus:ring-primary/20 focus:outline-none transition-all"
@@ -2135,6 +2139,7 @@ const TaskForm: React.FC = () => {
                             setFilterSpecialties([]);
                             setFilterPeriodicities([]);
                             setFilterStatuses([]);
+                            setFilterMember("");
                             setSelectedYear(new Date().getFullYear());
                             setCurrentPage(1);
                             setSearchTerm("");
@@ -2198,6 +2203,37 @@ const TaskForm: React.FC = () => {
                         >
                             {[2022, 2023, 2024, 2025, 2026].map((year) => (
                                 <option key={year} value={year}>{year}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden md:block">
+                    </div>
+
+                    {/* Member Filter */}
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black text-[#4c739a] uppercase tracking-wider whitespace-nowrap">
+                            Membro:
+                        </span>
+                        <select
+                            value={filterMember}
+                            onChange={(e) => {
+                                setFilterMember(e.target.value);
+                                setCurrentPage(1);
+                            }}
+                            className={`
+                                bg-white dark:bg-slate-800 border-none min-w-[120px] rounded-lg px-2 py-1 text-xs font-bold focus:outline-none ring-1 transition-all
+                                ${filterMember
+                                    ? "ring-primary text-primary dark:ring-primary dark:text-primary"
+                                    : "ring-slate-200 dark:ring-slate-700 text-[#0d141b] dark:text-white"
+                                }
+                            `}
+                        >
+                            <option value="">Todos</option>
+                            {members.map((m) => (
+                                <option key={m.id} value={m.id}>
+                                    {m.war_name || m.name}
+                                </option>
                             ))}
                         </select>
                     </div>
