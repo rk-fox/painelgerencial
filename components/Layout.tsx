@@ -377,9 +377,20 @@ const Layout: React.FC = () => {
                     <h3 className="font-bold text-xs text-[#0d141b] dark:text-white uppercase tracking-wider">
                       Novas Tarefas
                     </h3>
-                    <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">
-                      {newTasks.length}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {newTasks.length > 0 && (
+                        <button
+                          onClick={() => setNewTasks([])}
+                          className="text-[10px] font-bold text-[#4c739a] hover:text-red-500 transition-colors uppercase tracking-wider"
+                          title="Limpar todas as notificações"
+                        >
+                          Limpar
+                        </button>
+                      )}
+                      <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        {newTasks.length}
+                      </span>
+                    </div>
                   </div>
                   <div className="max-h-60 overflow-y-auto">
                     {newTasks.length === 0
