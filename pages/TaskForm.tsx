@@ -185,7 +185,18 @@ const TaskForm: React.FC = () => {
     const [isReunioesOpen, setIsReunioesOpen] = useState(true);
 
     // Strategic Summary state
-    const [isStrategicSummaryOpen, setIsStrategicSummaryOpen] = useState(false);
+    const [isStrategicSummaryOpen, setIsStrategicSummaryOpen] = useState(() => {
+        if (typeof window !== "undefined") {
+            return localStorage.getItem("isStrategicSummaryOpen") === "true";
+        }
+        return false;
+    });
+
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            localStorage.setItem("isStrategicSummaryOpen", isStrategicSummaryOpen.toString());
+        }
+    }, [isStrategicSummaryOpen]);
     const [currentSlide, setCurrentSlide] = useState(0);
     const [isSlidePaused, setIsSlidePaused] = useState(false);
     const [currentTime, setCurrentTime] = useState(new Date());
@@ -295,11 +306,18 @@ const TaskForm: React.FC = () => {
     useEffect(() => {
         let clockInterval: any;
         let slideInterval: any;
+        const initialDay = new Date().getDate();
 
         if (isStrategicSummaryOpen) {
             // Clock interval (UTC-3 formatted via client America/Sao_Paulo timezone)
             clockInterval = setInterval(() => {
-                setCurrentTime(new Date());
+                const now = new Date();
+                setCurrentTime(now);
+                
+                // Atualiza a tela automaticamente na virada do dia
+                if (now.getDate() !== initialDay) {
+                    window.location.reload();
+                }
             }, 1000);
 
             // Slideshow rotation (10s interval, looping infinitely)
