@@ -131,16 +131,33 @@ const QuadroBranco: React.FC = () => {
         const taskDateStr = t.start_date || t.created_at;
         const taskDate = taskDateStr ? new Date(taskDateStr.length === 10 ? `${taskDateStr}T12:00:00` : taskDateStr) : new Date();
         
-        const taskMonth = taskDate.getMonth();
-        const taskYear = taskDate.getFullYear();
+        const startMonth = taskDate.getMonth();
+        const startYear = taskDate.getFullYear();
         
-        const createdInSelectedMonth = taskMonth === selectedMonth && taskYear === selectedYear;
-        const createdBeforeSelectedMonth = taskYear < selectedYear || (taskYear === selectedYear && taskMonth < selectedMonth);
-        
-        if (createdInSelectedMonth) return true;
-        if (createdBeforeSelectedMonth && latest.status !== 'concluida') return true;
-        
-        return false;
+        let endMonth = startMonth;
+        let endYear = startYear;
+        const endDateStr = t.prazo_final || t.end_date;
+        if (endDateStr) {
+            const endDate = new Date(endDateStr.length === 10 ? `${endDateStr}T12:00:00` : endDateStr);
+            endMonth = endDate.getMonth();
+            endYear = endDate.getFullYear();
+        }
+
+        // Check if selected month is BEFORE start month
+        if (selectedYear < startYear || (selectedYear === startYear && selectedMonth < startMonth)) {
+            return false;
+        }
+
+        // Check if selected month is AFTER end month
+        // If there is no deadline and we are past start month, it carries over unless concluded
+        // If there is a deadline and we are past it, it carries over unless concluded
+        if (selectedYear > endYear || (selectedYear === endYear && selectedMonth > endMonth)) {
+            return latest.status !== 'concluida';
+        }
+
+        // If we are here, selected month is between start and end month (inclusive)
+        // It should ALWAYS show in this range, even if concluded early.
+        return true;
     });
 
     if (loading) {
