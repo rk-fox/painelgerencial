@@ -145,7 +145,12 @@ const ScheduleAdjustment: React.FC = () => {
             );
 
         if (filterSector) {
-            query = query.eq("sector", filterSector);
+            if (filterSector === "CH") {
+                // If filterSector is CH (should not normally happen with current logic, but just in case), fetch everything or just CP, EA, CH
+                query = query.in("sector", ["CP", "EA", "CH"]);
+            } else {
+                query = query.in("sector", [filterSector, "CH"]);
+            }
         }
 
         const { data: membersData, error: membersError } = await query;

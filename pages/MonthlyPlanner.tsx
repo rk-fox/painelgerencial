@@ -292,9 +292,7 @@ const MonthlyPlanner: React.FC = () => {
 
             setMissions(missionsRes.data || []);
             setUnavailabilities(unavailRes.data || []);
-            setMembers(membersRes.data || []);
-
-            const sortedAll = [...(allMembersRes.data || [])].sort((a, b) => {
+            const sortLogic = (a: any, b: any) => {
                 const pA = getRankPriority(a.rank, a.abrev);
                 const pB = getRankPriority(b.rank, b.abrev);
                 if (pA !== pB) return pA - pB;
@@ -314,7 +312,12 @@ const MonthlyPlanner: React.FC = () => {
                 const nameA = a.war_name || a.name || "";
                 const nameB = b.war_name || b.name || "";
                 return nameA.localeCompare(nameB);
-            });
+            };
+
+            const sortedMembers = [...(membersRes.data || [])].sort(sortLogic);
+            setMembers(sortedMembers);
+
+            const sortedAll = [...(allMembersRes.data || [])].sort(sortLogic);
             setAllMembers(sortedAll);
         } catch (err) {
             console.error("Error fetching initial data:", err);

@@ -183,7 +183,7 @@ const YearlySchedule: React.FC = () => {
             "id, name, war_name, rank, abrev, last_promotion_date, guia_antiguidade",
         );
         if (currentSector === "CP" || currentSector === "EA") {
-            query = query.eq("sector", currentSector);
+            query = query.in("sector", [currentSector, "CH"]);
         }
         const { data, error } = await query;
         if (!error && data) {

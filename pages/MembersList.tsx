@@ -115,6 +115,52 @@ const MembersList: React.FC = () => {
 
         try {
             setLoading(true);
+
+            // Remover referências em outras tabelas para evitar erro de FK
+            
+            // 1. Deletar unavailability (diretamente ligado)
+            await supabase.from("unavailability").delete().eq("member", memberToDelete.id);
+            
+            // 2. Deletar annotations (diretamente ligado)
+            await supabase.from("annotations").delete().eq("member_id", memberToDelete.id);
+            
+            // 3. Remover de tarefas (tasks)
+            await supabase.from("tasks").update({ assigned_to: null }).eq("assigned_to", memberToDelete.id);
+            
+            // 4. Remover de sdia
+            await supabase.from("sdia").update({ analista: null }).eq("analista", memberToDelete.id);
+            
+            // 5. Remover de missions (array equipe)
+            const { data: missions } = await supabase
+                .from("missions")
+                .select("id, equipe")
+                .contains("equipe", [memberToDelete.id]);
+            
+            if (missions && missions.length > 0) {
+                for (const m of missions) {
+                    if (m.equipe) {
+                        const newEquipe = m.equipe.filter((id: string) => id !== memberToDelete.id);
+                        await supabase.from("missions").update({ equipe: newEquipe }).eq("id", m.id);
+                    }
+                }
+            }
+
+            // 6. Remover de meetings (array membros) se existir
+            const { data: meetings } = await supabase
+                .from("meeting")
+                .select("id, membros")
+                .contains("membros", [memberToDelete.id]);
+            
+            if (meetings && meetings.length > 0) {
+                for (const mtg of meetings) {
+                    if (mtg.membros) {
+                        const newMembros = mtg.membros.filter((id: string) => id !== memberToDelete.id);
+                        await supabase.from("meeting").update({ membros: newMembros }).eq("id", mtg.id);
+                    }
+                }
+            }
+
+            // Finalmente, deletar o membro
             const { error } = await supabase
                 .from("members")
                 .delete()
