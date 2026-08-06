@@ -237,7 +237,8 @@ const TaskForm: React.FC = () => {
 let tasksQuery = supabase
     .from("tasks")
     .select("*")
-    .order("start_date", { ascending: true }); // Removemos os filtros rígidos de data e status daqui
+    .order("created_at", { ascending: false }) 
+    .limit(5000); // Essencial trazer o mesmo limite do QuadroBranco para não quebrar a lógica de despachos
 
 if (userSector && userSector !== "CH") {
     tasksQuery = tasksQuery.eq("sector", userSector);
@@ -250,11 +251,30 @@ if (tasksData) {
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
+    // 2.1. Recria a função exata do QuadroBranco para achar a última subtarefa (despacho)[cite: 1]
+    const getLatestTask = (head) => {
+        let current = head;
+        while (current.despacho) {
+            const child = tasksData.find((t) => t.id === current.despacho);
+            if (!child) break;
+            current = child;
+        }
+        return current;
+    };
+
+    // 2.2. Filtra as tarefas usando as mesmas amarrações[cite: 1]
     const filteredTasks = tasksData.filter((task) => {
         // Exige que seja uma tarefa de Quadro Branco (qb === true)
         if (!task.qb) return false;
 
-        // Calcula a data de início
+        // Verifica se essa tarefa é filha de outra. Se for, ignora (pois só listamos as "Mães")[cite: 1]
+        const isChild = tasksData.some((other) => other.despacho === task.id);
+        if (isChild) return false;
+
+        // Pega o status da tarefa mais recente vinculada a ela[cite: 1]
+        const latest = getLatestTask(task);
+
+        // Calcula a data de início[cite: 1]
         const taskDateStr = task.start_date || task.created_at;
         const taskDate = taskDateStr 
             ? new Date(taskDateStr.length === 10 ? `${taskDateStr}T12:00:00` : taskDateStr) 
@@ -263,7 +283,7 @@ if (tasksData) {
         const startMonth = taskDate.getMonth();
         const startYear = taskDate.getFullYear();
 
-        // Calcula a data de fim / prazo
+        // Calcula a data de fim / prazo[cite: 1]
         let endMonth = startMonth;
         let endYear = startYear;
         const endDateStr = task.prazo_final || task.end_date; 
@@ -274,19 +294,17 @@ if (tasksData) {
             endYear = endDate.getFullYear();
         }
 
-        // REGRA 1: Se a tarefa só começa no futuro, esconde.
+        // REGRA 1: Se a tarefa só começa no futuro (em relação ao mês atual), esconde.[cite: 1]
         if (currentYear < startYear || (currentYear === startYear && currentMonth < startMonth)) {
             return false;
         }
 
-        // REGRA 2: Se já passamos do mês limite, só aparece se AINDA NÃO FOI CONCLUÍDA.
+        // REGRA 2: Se já passamos do prazo limite, só aparece se a ÚLTIMA TAREFA AINDA NÃO FOI CONCLUÍDA.[cite: 1]
         if (currentYear > endYear || (currentYear === endYear && currentMonth > endMonth)) {
-            return task.status !== 'concluida'; 
-            // Obs: Se você for usar a lógica de sub-tarefas (despachos) do Quadro Branco aqui, 
-            // substitua "task.status" pelo status da última subtarefa (latest.status).
+            return latest.status !== 'concluida'; 
         }
 
-        // REGRA 3: Se o mês atual está entre o mês de início e o de fim, mostra sempre (mesmo se concluída neste mês).
+        // REGRA 3: O mês atual está entre o mês de início e o de fim (aparece sempre, mesmo se concluída).[cite: 1]
         return true;
     });
 
