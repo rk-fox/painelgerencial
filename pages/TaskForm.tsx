@@ -3718,25 +3718,32 @@ if (tasksData) {
                                                             }`}
                                                         >
                                                             <div>
-                                                                <div className="flex items-center justify-between gap-2 mb-2">
-                                                                    <span className="text-[10px] font-bold text-primary dark:text-[#cda250] uppercase tracking-wider">
-                                                                        {task
-                                                                            .periodicity ||
-                                                                            "Tarefa"}
-                                                                    </span>
-                                                                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                                                                        Prazo:
-                                                                        {" "}
-                                                                        {task
-                                                                                .prazo_final
-                                                                            ? new Date(
-                                                                                task.prazo_final,
-                                                                            ).toLocaleDateString(
-                                                                                "pt-BR",
-                                                                            )
-                                                                            : "S/P"}
-                                                                    </span>
-                                                                </div>
+                                                                <div className="flex items-start justify-between gap-2 mb-2">
+    <span className="text-[10px] font-bold text-primary dark:text-[#cda250] uppercase tracking-wider mt-1">
+        {task.periodicity || "Tarefa"}
+    </span>
+    <div className="flex flex-col items-end gap-1.5">
+        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+            Prazo:{" "}
+            {task.prazo_final
+                ? new Date(
+                      task.prazo_final,
+                  ).toLocaleDateString(
+                      "pt-BR",
+                  )
+                : "S/P"}
+        </span>
+        <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+            task.status === "concluida"
+                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                : task.status === "iniciada"
+                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+        }`}>
+            {task.status === "iniciada" ? "Em andamento" : task.status === "concluida" ? "Concluída" : "Pendente"}
+        </span>
+    </div>
+</div>
                                                                 <h4 className="text-base font-extrabold text-slate-800 dark:text-white leading-tight">
                                                                     {task.name}
                                                                 </h4>
