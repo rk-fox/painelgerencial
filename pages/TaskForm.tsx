@@ -3860,7 +3860,7 @@ if (tasksData) {
                                                                             .id}
                                                                         className="p-2 rounded bg-slate-50 dark:bg-[#0c1424]/60 border border-slate-200 dark:border-[#1a283e] flex flex-col gap-1"
                                                                     >
-                                                                        <div className="text-[9px] font-mono font-bold text-primary dark:text-[#cda250] leading-none">
+                                                                        <div className="text-xs font-mono font-bold text-primary dark:text-[#cda250] leading-none">
                                                                             [{sdia
                                                                                 .indicativo}]
                                                                         </div>
