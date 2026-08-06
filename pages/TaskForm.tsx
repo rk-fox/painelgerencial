@@ -233,33 +233,65 @@ const TaskForm: React.FC = () => {
                     const { data: sdiaData } = await sdiaQuery;
                     if (sdiaData) setSdiaEvents(sdiaData);
 
-                    // 2. Fetch Pending Tasks of current month with qb === true (filtered by sector, unless CH)
-                    const now = new Date();
-                    const startOfMonth = new Date(
-                        now.getFullYear(),
-                        now.getMonth(),
-                        1,
-                    ).toLocaleDateString("en-CA");
-                    const endOfMonth = new Date(
-                        now.getFullYear(),
-                        now.getMonth() + 1,
-                        0,
-                    ).toLocaleDateString("en-CA");
+                    // 2. Fetch Tasks and apply QuadroBranco logic for the current month
+let tasksQuery = supabase
+    .from("tasks")
+    .select("*")
+    .order("start_date", { ascending: true }); // Removemos os filtros rígidos de data e status daqui
 
-                    let tasksQuery = supabase
-                        .from("tasks")
-                        .select("*")
-                        .eq("qb", true)
-                        .neq("status", "concluida")
-                        .gte("start_date", startOfMonth)
-                        .lte("start_date", endOfMonth)
-                        .order("start_date", { ascending: true });
+if (userSector && userSector !== "CH") {
+    tasksQuery = tasksQuery.eq("sector", userSector);
+}
 
-                    if (userSector && userSector !== "CH") {
-                        tasksQuery = tasksQuery.eq("sector", userSector);
-                    }
-                    const { data: tasksData } = await tasksQuery;
-                    if (tasksData) setPopupPendingTasks(tasksData);
+const { data: tasksData } = await tasksQuery;
+
+if (tasksData) {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const filteredTasks = tasksData.filter((task) => {
+        // Exige que seja uma tarefa de Quadro Branco (qb === true)
+        if (!task.qb) return false;
+
+        // Calcula a data de início
+        const taskDateStr = task.start_date || task.created_at;
+        const taskDate = taskDateStr 
+            ? new Date(taskDateStr.length === 10 ? `${taskDateStr}T12:00:00` : taskDateStr) 
+            : new Date();
+        
+        const startMonth = taskDate.getMonth();
+        const startYear = taskDate.getFullYear();
+
+        // Calcula a data de fim / prazo
+        let endMonth = startMonth;
+        let endYear = startYear;
+        const endDateStr = task.prazo_final || task.end_date; 
+        
+        if (endDateStr) {
+            const endDate = new Date(endDateStr.length === 10 ? `${endDateStr}T12:00:00` : endDateStr);
+            endMonth = endDate.getMonth();
+            endYear = endDate.getFullYear();
+        }
+
+        // REGRA 1: Se a tarefa só começa no futuro, esconde.
+        if (currentYear < startYear || (currentYear === startYear && currentMonth < startMonth)) {
+            return false;
+        }
+
+        // REGRA 2: Se já passamos do mês limite, só aparece se AINDA NÃO FOI CONCLUÍDA.
+        if (currentYear > endYear || (currentYear === endYear && currentMonth > endMonth)) {
+            return task.status !== 'concluida'; 
+            // Obs: Se você for usar a lógica de sub-tarefas (despachos) do Quadro Branco aqui, 
+            // substitua "task.status" pelo status da última subtarefa (latest.status).
+        }
+
+        // REGRA 3: Se o mês atual está entre o mês de início e o de fim, mostra sempre (mesmo se concluída neste mês).
+        return true;
+    });
+
+    setPopupPendingTasks(filteredTasks);
+}
 
                     // 3. Fetch Meetings and filter by sector involvement (unless CH)
                     const { data: meetingsData } = await supabase
@@ -363,7 +395,7 @@ const TaskForm: React.FC = () => {
 
     const slideTitles = [
         "Controle do Efetivo",
-        "Projetos em Andamento",
+        "Tarefas em Andamento",
         "D-10 - Próximos Eventos",
         "Reuniões Agendadas",
     ];
@@ -3355,7 +3387,7 @@ const TaskForm: React.FC = () => {
                 // Tab items for slideshow progress / navigation
                 const tabs = [
                     { num: "01", label: "Controle Efetivo" },
-                    { num: "02", label: "Projetos em Andamento" },
+                    { num: "02", label: "Tarefas em Andamento" },
                     { num: "03", label: "D-10 • Próximos Eventos" },
                     { num: "04", label: "Reuniões da Seção" },
                 ];
@@ -3503,7 +3535,7 @@ const TaskForm: React.FC = () => {
                         <div className="px-8 pt-8 pb-4 relative z-10 flex flex-col gap-1">
                             <h2 className="text-3xl md:text-4xl font-serif font-bold text-slate-800 dark:text-white tracking-wide">
                                 {currentSlide === 0 && "Controle do Efetivo"}
-                                {currentSlide === 1 && "Projetos em Andamento"}
+                                {currentSlide === 1 && "Tarefas em Andamento"}
                                 {currentSlide === 2 &&
                                     "D-10 — Eventos dos Próximos 10 Dias"}
                                 {currentSlide === 3 && "Reuniões da Seção"}
@@ -3512,7 +3544,7 @@ const TaskForm: React.FC = () => {
                                 {currentSlide === 0 &&
                                     "Status operacional e disponibilidade dos militares no momento"}
                                 {currentSlide === 1 &&
-                                    "Atividades e projetos sob responsabilidade da seção neste mês"}
+                                    "Atividades sob responsabilidade da seção neste mês"}
                                 {currentSlide === 2 &&
                                     `Janela: ${
                                         new Date().toLocaleDateString("pt-BR")
@@ -3691,21 +3723,17 @@ const TaskForm: React.FC = () => {
                                                                     {task.name}
                                                                 </h4>
                                                                 <div className="mt-3 p-3 rounded bg-slate-50 dark:bg-[#0c1424]/60 border border-slate-200 dark:border-[#1c2a3f]">
-                                                                    <span className="text-[9px] text-primary dark:text-[#cda250] font-black uppercase tracking-wider block mb-1">
-                                                                        Despacho
-                                                                    </span>
-                                                                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                                                                        {task
-                                                                            .despacho ||
-                                                                            (
-                                                                                <span className="text-slate-500 italic">
-                                                                                    Nenhum
-                                                                                    despacho
-                                                                                    lançado
-                                                                                </span>
-                                                                            )}
-                                                                    </p>
-                                                                </div>
+    <span className="text-[9px] text-primary dark:text-[#cda250] font-black uppercase tracking-wider block mb-1">
+        Descrição {/* <-- Título alterado de Despacho para Descrição */}
+    </span>
+    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+        {task.description || ( /* <-- Trocado de task.despacho para task.description */
+            <span className="text-slate-500 italic">
+                Nenhuma descrição informada {/* <-- Texto de fallback ajustado */}
+            </span>
+        )}
+    </p>
+</div>
                                                             </div>
 
                                                             <div className="border-t border-slate-200 dark:border-[#1d2d44]/50 pt-3 flex items-center justify-between">
