@@ -3798,16 +3798,21 @@ if (tasksData) {
                                 return (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 animate-in fade-in duration-300">
                                         {next10Days.map((date, index) => {
-                                            const dateStr = date
-                                                .toLocaleDateString("en-CA");
-                                            const dayEvents = sdiaEvents.filter(
-                                                (sdia) => {
-                                                    return sdia.data_inicio <=
-                                                            dateStr &&
-                                                        sdia.data_fim >=
-                                                            dateStr;
-                                                },
-                                            );
+                                            const dateStr = date.toLocaleDateString("en-CA"); // Padrão "YYYY-MM-DD"
+
+const dayEvents = sdiaEvents.filter((sdia) => {
+    // 1. Previne erros se a tarefa não tiver data de início
+    if (!sdia.data_inicio) return false;
+
+    // 2. Extrai apenas o formato YYYY-MM-DD, cortando possíveis horas (ex: "T15:00:00Z")
+    const dataInicioPura = sdia.data_inicio.split('T')[0];
+    
+    // 3. Pega a data de fim pura. Se não existir data fim, assume que é igual à data início
+    const dataFimPura = sdia.data_fim ? sdia.data_fim.split('T')[0] : dataInicioPura;
+
+    // 4. Realiza a comparação exata
+    return dataInicioPura <= dateStr && dataFimPura >= dateStr;
+});
 
                                             const isToday = index === 0;
                                             const weekday = date
