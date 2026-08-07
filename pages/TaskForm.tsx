@@ -3850,62 +3850,54 @@ if (tasksData) {
                                                         </span>
                                                     </div>
                                                     <div className="flex-1 overflow-y-auto flex flex-col gap-2 max-h-[160px] custom-scrollbar">
-                                                        {dayEvents.length > 0
-                                                            ? (
-                                                                dayEvents.map((
-                                                                    sdia,
-                                                                ) => (
-                                                                    <div
-                                                                        key={sdia
-                                                                            .id}
-                                                                        className="p-2 rounded bg-slate-50 dark:bg-[#0c1424]/60 border border-slate-200 dark:border-[#1a283e] flex flex-col gap-1"
-                                                                    >
-                                                                        <div className="text-xs font-mono font-bold text-primary dark:text-[#cda250] leading-none">
-                                                                            [{sdia
-                                                                                .indicativo}]
-                                                                        </div>
-                                                                        <div className="text-xs font-semibold text-slate-800 dark:text-white leading-tight">
-                                                                            {sdia
-                                                                                .titulo_sdia}
-                                                                        </div>
-                                                                        {(sdia
-                                                                            .impacto ||
-                                                                            sdia.cap ||
-                                                                            sdia.clsd) &&
-                                                                            (
-                                                                                <div className="flex flex-wrap gap-1 mt-1">
-                                                                                    {sdia
-                                                                                        .impacto &&
-                                                                                        (
-                                                                                            <span className="px-1 py-0.2 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-[7px] font-bold uppercase tracking-wide">
-                                                                                                IMP
-                                                                                            </span>
-                                                                                        )}
-                                                                                    {sdia
-                                                                                        .cap &&
-                                                                                        (
-                                                                                            <span className="px-1 py-0.2 rounded bg-primary/10 dark:bg-[#cda250]/10 border border-primary dark:border-primary/20 dark:border-[#cda250]/20 text-primary dark:text-[#cda250] text-[7px] font-bold uppercase tracking-wide">
-                                                                                                CAP
-                                                                                            </span>
-                                                                                        )}
-                                                                                    {sdia
-                                                                                        .clsd &&
-                                                                                        (
-                                                                                            <span className="px-1 py-0.2 rounded bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[7px] font-bold uppercase tracking-wide">
-                                                                                                CLSD
-                                                                                            </span>
-                                                                                        )}
-                                                                                </div>
-                                                                            )}
-                                                                    </div>
-                                                                ))
-                                                            )
-                                                            : (
-                                                                <span className="text-[10px] text-slate-500 italic">
-                                                                    Sem eventos
-                                                                </span>
-                                                            )}
-                                                    </div>
+    {dayEvents.length > 0 ? (
+        dayEvents.map((sdia) => (
+            <div
+                key={sdia.id}
+                className="p-2 rounded bg-slate-50 dark:bg-[#0c1424]/60 border border-slate-200 dark:border-[#1a283e] flex flex-col gap-1"
+            >
+                <div className="text-xs font-mono font-bold text-primary dark:text-[#cda250] leading-none">
+                    [{sdia.indicativo}]
+                </div>
+                <div className="text-xs font-semibold text-slate-800 dark:text-white leading-tight">
+                    {sdia.titulo_sdia}
+                </div>
+                {(sdia.impacto || sdia.cap || sdia.clsd) && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                        {sdia.impacto && (
+                            <span 
+                                title={sdia.analise || "Nenhuma análise informada"} 
+                                className="cursor-help px-1 py-0.2 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-[7px] font-bold uppercase tracking-wide"
+                            >
+                                IMP
+                            </span>
+                        )}
+                        {sdia.cap && (
+                            <span 
+                                title={sdia.r60 || "Sem valor R60"} 
+                                className="cursor-help px-1 py-0.2 rounded bg-primary/10 dark:bg-[#cda250]/10 border border-primary dark:border-primary/20 dark:border-[#cda250]/20 text-primary dark:text-[#cda250] text-[7px] font-bold uppercase tracking-wide"
+                            >
+                                CAP
+                            </span>
+                        )}
+                        {sdia.clsd && (
+                            <span 
+                                title={sdia.analise || "Nenhuma análise informada"} 
+                                className="cursor-help px-1 py-0.2 rounded bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[7px] font-bold uppercase tracking-wide"
+                            >
+                                CLSD
+                            </span>
+                        )}
+                    </div>
+                )}
+            </div>
+        ))
+    ) : (
+        <span className="text-[10px] text-slate-500 italic">
+            Sem eventos
+        </span>
+    )}
+</div>
                                                 </div>
                                             );
                                         })}
