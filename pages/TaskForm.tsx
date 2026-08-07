@@ -220,18 +220,18 @@ const TaskForm: React.FC = () => {
                     const userSector = userObj?.sector;
 
                     // 1. Fetch SDIA events for the next 10 days (filtered by sector, unless CH)
-                    let sdiaQuery = supabase
-                        .from("sdia")
-                        .select("*")
-                        .gte("data_inicio", today)
-                        .lte("data_inicio", tenDaysLaterStr)
-                        .order("data_inicio", { ascending: true });
+let sdiaQuery = supabase
+    .from("sdia")
+    .select("*")
+    .gte("data_fim", today) // Puxa tudo que termina de hoje em diante (mesmo que tenha começado no passado)
+    .lte("data_inicio", tenDaysLaterStr) // Puxa tudo que começa até o limite de 10 dias
+    .order("data_inicio", { ascending: true });
 
-                    if (userSector && userSector !== "CH") {
-                        sdiaQuery = sdiaQuery.eq("sector", userSector);
-                    }
-                    const { data: sdiaData } = await sdiaQuery;
-                    if (sdiaData) setSdiaEvents(sdiaData);
+if (userSector && userSector !== "CH") {
+    sdiaQuery = sdiaQuery.eq("sector", userSector);
+}
+const { data: sdiaData } = await sdiaQuery;
+if (sdiaData) setSdiaEvents(sdiaData);
 
                     // 2. Fetch Tasks and apply QuadroBranco logic for the current month
 let tasksQuery = supabase
