@@ -175,10 +175,13 @@ const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
                                 Missões
                             </h4>
                             <div className="grid grid-cols-2 gap-2">
-                                {missionNames.map((name: string, idx: number) => (
+                                {missionNames.map((
+                                    name: string,
+                                    idx: number,
+                                ) => (
                                     <div
                                         key={idx}
-                                        className="flex items-center justify-center h-10 border-2 border-primary/30 bg-primary/5 rounded-lg text-primary text-xs font-bold text-center px-2"
+                                        className="flex items-center justify-center h-10 border-2 border-primary/30 bg-primary/5 rounded-lg text-primary text-[10px] font-bold text-center px-2"
                                     >
                                         {name}
                                     </div>
