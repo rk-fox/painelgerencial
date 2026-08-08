@@ -220,46 +220,96 @@ const TaskForm: React.FC = () => {
                     const userSector = userObj?.sector;
 
                     // 1. Fetch SDIA events for the next 10 days (filtered by sector, unless CH)
-                    let sdiaQuery = supabase
-                        .from("sdia")
-                        .select("*")
-                        .gte("data_inicio", today)
-                        .lte("data_inicio", tenDaysLaterStr)
-                        .order("data_inicio", { ascending: true });
+let sdiaQuery = supabase
+    .from("sdia")
+    .select("*")
+    .gte("data_fim", today) // Puxa tudo que termina de hoje em diante (mesmo que tenha começado no passado)
+    .lte("data_inicio", tenDaysLaterStr) // Puxa tudo que começa até o limite de 10 dias
+    .order("data_inicio", { ascending: true });
 
-                    if (userSector && userSector !== "CH") {
-                        sdiaQuery = sdiaQuery.eq("sector", userSector);
-                    }
-                    const { data: sdiaData } = await sdiaQuery;
-                    if (sdiaData) setSdiaEvents(sdiaData);
+if (userSector && userSector !== "CH") {
+    sdiaQuery = sdiaQuery.eq("sector", userSector);
+}
+const { data: sdiaData } = await sdiaQuery;
+if (sdiaData) setSdiaEvents(sdiaData);
 
-                    // 2. Fetch Pending Tasks of current month with qb === true (filtered by sector, unless CH)
-                    const now = new Date();
-                    const startOfMonth = new Date(
-                        now.getFullYear(),
-                        now.getMonth(),
-                        1,
-                    ).toLocaleDateString("en-CA");
-                    const endOfMonth = new Date(
-                        now.getFullYear(),
-                        now.getMonth() + 1,
-                        0,
-                    ).toLocaleDateString("en-CA");
+                    // 2. Fetch Tasks and apply QuadroBranco logic for the current month
+let tasksQuery = supabase
+    .from("tasks")
+    .select("*")
+    .order("created_at", { ascending: false }) 
+    .limit(5000); // Essencial trazer o mesmo limite do QuadroBranco para não quebrar a lógica de despachos
 
-                    let tasksQuery = supabase
-                        .from("tasks")
-                        .select("*")
-                        .eq("qb", true)
-                        .neq("status", "concluida")
-                        .gte("start_date", startOfMonth)
-                        .lte("start_date", endOfMonth)
-                        .order("start_date", { ascending: true });
+if (userSector && userSector !== "CH") {
+    tasksQuery = tasksQuery.eq("sector", userSector);
+}
 
-                    if (userSector && userSector !== "CH") {
-                        tasksQuery = tasksQuery.eq("sector", userSector);
-                    }
-                    const { data: tasksData } = await tasksQuery;
-                    if (tasksData) setPopupPendingTasks(tasksData);
+const { data: tasksData } = await tasksQuery;
+
+if (tasksData) {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    // 2.1. Recria a função exata do QuadroBranco para achar a última subtarefa (despacho)[cite: 1]
+    const getLatestTask = (head) => {
+        let current = head;
+        while (current.despacho) {
+            const child = tasksData.find((t) => t.id === current.despacho);
+            if (!child) break;
+            current = child;
+        }
+        return current;
+    };
+
+    // 2.2. Filtra as tarefas usando as mesmas amarrações[cite: 1]
+    const filteredTasks = tasksData.filter((task) => {
+        // Exige que seja uma tarefa de Quadro Branco (qb === true)
+        if (!task.qb) return false;
+
+        // Verifica se essa tarefa é filha de outra. Se for, ignora (pois só listamos as "Mães")[cite: 1]
+        const isChild = tasksData.some((other) => other.despacho === task.id);
+        if (isChild) return false;
+
+        // Pega o status da tarefa mais recente vinculada a ela[cite: 1]
+        const latest = getLatestTask(task);
+
+        // Calcula a data de início[cite: 1]
+        const taskDateStr = task.start_date || task.created_at;
+        const taskDate = taskDateStr 
+            ? new Date(taskDateStr.length === 10 ? `${taskDateStr}T12:00:00` : taskDateStr) 
+            : new Date();
+        
+        const startMonth = taskDate.getMonth();
+        const startYear = taskDate.getFullYear();
+
+        // Calcula a data de fim / prazo[cite: 1]
+        let endMonth = startMonth;
+        let endYear = startYear;
+        const endDateStr = task.prazo_final || task.end_date; 
+        
+        if (endDateStr) {
+            const endDate = new Date(endDateStr.length === 10 ? `${endDateStr}T12:00:00` : endDateStr);
+            endMonth = endDate.getMonth();
+            endYear = endDate.getFullYear();
+        }
+
+        // REGRA 1: Se a tarefa só começa no futuro (em relação ao mês atual), esconde.[cite: 1]
+        if (currentYear < startYear || (currentYear === startYear && currentMonth < startMonth)) {
+            return false;
+        }
+
+        // REGRA 2: Se já passamos do prazo limite, só aparece se a ÚLTIMA TAREFA AINDA NÃO FOI CONCLUÍDA.[cite: 1]
+        if (currentYear > endYear || (currentYear === endYear && currentMonth > endMonth)) {
+            return latest.status !== 'concluida'; 
+        }
+
+        // REGRA 3: O mês atual está entre o mês de início e o de fim (aparece sempre, mesmo se concluída).[cite: 1]
+        return true;
+    });
+
+    setPopupPendingTasks(filteredTasks);
+}
 
                     // 3. Fetch Meetings and filter by sector involvement (unless CH)
                     const { data: meetingsData } = await supabase
@@ -363,7 +413,7 @@ const TaskForm: React.FC = () => {
 
     const slideTitles = [
         "Controle do Efetivo",
-        "Projetos em Andamento",
+        "Tarefas em Andamento",
         "D-10 - Próximos Eventos",
         "Reuniões Agendadas",
     ];
@@ -3355,7 +3405,7 @@ const TaskForm: React.FC = () => {
                 // Tab items for slideshow progress / navigation
                 const tabs = [
                     { num: "01", label: "Controle Efetivo" },
-                    { num: "02", label: "Projetos em Andamento" },
+                    { num: "02", label: "Tarefas em Andamento" },
                     { num: "03", label: "D-10 • Próximos Eventos" },
                     { num: "04", label: "Reuniões da Seção" },
                 ];
@@ -3503,7 +3553,7 @@ const TaskForm: React.FC = () => {
                         <div className="px-8 pt-8 pb-4 relative z-10 flex flex-col gap-1">
                             <h2 className="text-3xl md:text-4xl font-serif font-bold text-slate-800 dark:text-white tracking-wide">
                                 {currentSlide === 0 && "Controle do Efetivo"}
-                                {currentSlide === 1 && "Projetos em Andamento"}
+                                {currentSlide === 1 && "Tarefas em Andamento"}
                                 {currentSlide === 2 &&
                                     "D-10 — Eventos dos Próximos 10 Dias"}
                                 {currentSlide === 3 && "Reuniões da Seção"}
@@ -3512,7 +3562,7 @@ const TaskForm: React.FC = () => {
                                 {currentSlide === 0 &&
                                     "Status operacional e disponibilidade dos militares no momento"}
                                 {currentSlide === 1 &&
-                                    "Atividades e projetos sob responsabilidade da seção neste mês"}
+                                    "Atividades sob responsabilidade da seção neste mês"}
                                 {currentSlide === 2 &&
                                     `Janela: ${
                                         new Date().toLocaleDateString("pt-BR")
@@ -3668,44 +3718,47 @@ const TaskForm: React.FC = () => {
                                                             }`}
                                                         >
                                                             <div>
-                                                                <div className="flex items-center justify-between gap-2 mb-2">
-                                                                    <span className="text-[10px] font-bold text-primary dark:text-[#cda250] uppercase tracking-wider">
-                                                                        {task
-                                                                            .periodicity ||
-                                                                            "Tarefa"}
-                                                                    </span>
-                                                                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                                                                        Prazo:
-                                                                        {" "}
-                                                                        {task
-                                                                                .prazo_final
-                                                                            ? new Date(
-                                                                                task.prazo_final,
-                                                                            ).toLocaleDateString(
-                                                                                "pt-BR",
-                                                                            )
-                                                                            : "S/P"}
-                                                                    </span>
-                                                                </div>
+                                                                <div className="flex items-start justify-between gap-2 mb-2">
+    <span className="text-[10px] font-bold text-primary dark:text-[#cda250] uppercase tracking-wider mt-1">
+        {task.periodicity || "Tarefa"}
+    </span>
+    <div className="flex flex-col items-end gap-1.5">
+        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+            Prazo:{" "}
+            {task.prazo_final
+                ? new Date(
+                      task.prazo_final,
+                  ).toLocaleDateString(
+                      "pt-BR",
+                  )
+                : "S/P"}
+        </span>
+        <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+            task.status === "concluida"
+                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                : task.status === "iniciada"
+                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+        }`}>
+            {task.status === "iniciada" ? "Em andamento" : task.status === "concluida" ? "Concluída" : "Pendente"}
+        </span>
+    </div>
+</div>
                                                                 <h4 className="text-base font-extrabold text-slate-800 dark:text-white leading-tight">
                                                                     {task.name}
                                                                 </h4>
                                                                 <div className="mt-3 p-3 rounded bg-slate-50 dark:bg-[#0c1424]/60 border border-slate-200 dark:border-[#1c2a3f]">
-                                                                    <span className="text-[9px] text-primary dark:text-[#cda250] font-black uppercase tracking-wider block mb-1">
-                                                                        Despacho
-                                                                    </span>
-                                                                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                                                                        {task
-                                                                            .despacho ||
-                                                                            (
-                                                                                <span className="text-slate-500 italic">
-                                                                                    Nenhum
-                                                                                    despacho
-                                                                                    lançado
-                                                                                </span>
-                                                                            )}
-                                                                    </p>
-                                                                </div>
+    <span className="text-[9px] text-primary dark:text-[#cda250] font-black uppercase tracking-wider block mb-1">
+        Descrição {/* <-- Título alterado de Despacho para Descrição */}
+    </span>
+    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+        {task.description || ( /* <-- Trocado de task.despacho para task.description */
+            <span className="text-slate-500 italic">
+                Nenhuma descrição informada {/* <-- Texto de fallback ajustado */}
+            </span>
+        )}
+    </p>
+</div>
                                                             </div>
 
                                                             <div className="border-t border-slate-200 dark:border-[#1d2d44]/50 pt-3 flex items-center justify-between">
@@ -3745,16 +3798,21 @@ const TaskForm: React.FC = () => {
                                 return (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 animate-in fade-in duration-300">
                                         {next10Days.map((date, index) => {
-                                            const dateStr = date
-                                                .toLocaleDateString("en-CA");
-                                            const dayEvents = sdiaEvents.filter(
-                                                (sdia) => {
-                                                    return sdia.data_inicio <=
-                                                            dateStr &&
-                                                        sdia.data_fim >=
-                                                            dateStr;
-                                                },
-                                            );
+                                            const dateStr = date.toLocaleDateString("en-CA"); // Padrão "YYYY-MM-DD"
+
+const dayEvents = sdiaEvents.filter((sdia) => {
+    // 1. Previne erros se a tarefa não tiver data de início
+    if (!sdia.data_inicio) return false;
+
+    // 2. Extrai apenas o formato YYYY-MM-DD, cortando possíveis horas (ex: "T15:00:00Z")
+    const dataInicioPura = sdia.data_inicio.split('T')[0];
+    
+    // 3. Pega a data de fim pura. Se não existir data fim, assume que é igual à data início
+    const dataFimPura = sdia.data_fim ? sdia.data_fim.split('T')[0] : dataInicioPura;
+
+    // 4. Realiza a comparação exata
+    return dataInicioPura <= dateStr && dataFimPura >= dateStr;
+});
 
                                             const isToday = index === 0;
                                             const weekday = date
@@ -3797,62 +3855,54 @@ const TaskForm: React.FC = () => {
                                                         </span>
                                                     </div>
                                                     <div className="flex-1 overflow-y-auto flex flex-col gap-2 max-h-[160px] custom-scrollbar">
-                                                        {dayEvents.length > 0
-                                                            ? (
-                                                                dayEvents.map((
-                                                                    sdia,
-                                                                ) => (
-                                                                    <div
-                                                                        key={sdia
-                                                                            .id}
-                                                                        className="p-2 rounded bg-slate-50 dark:bg-[#0c1424]/60 border border-slate-200 dark:border-[#1a283e] flex flex-col gap-1"
-                                                                    >
-                                                                        <div className="text-[9px] font-mono font-bold text-primary dark:text-[#cda250] leading-none">
-                                                                            [{sdia
-                                                                                .indicativo}]
-                                                                        </div>
-                                                                        <div className="text-xs font-semibold text-slate-800 dark:text-white leading-tight">
-                                                                            {sdia
-                                                                                .titulo_sdia}
-                                                                        </div>
-                                                                        {(sdia
-                                                                            .impacto ||
-                                                                            sdia.cap ||
-                                                                            sdia.clsd) &&
-                                                                            (
-                                                                                <div className="flex flex-wrap gap-1 mt-1">
-                                                                                    {sdia
-                                                                                        .impacto &&
-                                                                                        (
-                                                                                            <span className="px-1 py-0.2 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-[7px] font-bold uppercase tracking-wide">
-                                                                                                IMP
-                                                                                            </span>
-                                                                                        )}
-                                                                                    {sdia
-                                                                                        .cap &&
-                                                                                        (
-                                                                                            <span className="px-1 py-0.2 rounded bg-primary/10 dark:bg-[#cda250]/10 border border-primary dark:border-primary/20 dark:border-[#cda250]/20 text-primary dark:text-[#cda250] text-[7px] font-bold uppercase tracking-wide">
-                                                                                                CAP
-                                                                                            </span>
-                                                                                        )}
-                                                                                    {sdia
-                                                                                        .clsd &&
-                                                                                        (
-                                                                                            <span className="px-1 py-0.2 rounded bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[7px] font-bold uppercase tracking-wide">
-                                                                                                CLSD
-                                                                                            </span>
-                                                                                        )}
-                                                                                </div>
-                                                                            )}
-                                                                    </div>
-                                                                ))
-                                                            )
-                                                            : (
-                                                                <span className="text-[10px] text-slate-500 italic">
-                                                                    Sem eventos
-                                                                </span>
-                                                            )}
-                                                    </div>
+    {dayEvents.length > 0 ? (
+        dayEvents.map((sdia) => (
+            <div
+                key={sdia.id}
+                className="p-2 rounded bg-slate-50 dark:bg-[#0c1424]/60 border border-slate-200 dark:border-[#1a283e] flex flex-col gap-1"
+            >
+                <div className="text-xs font-mono font-bold text-primary dark:text-[#cda250] leading-none">
+                    [{sdia.indicativo}]
+                </div>
+                <div className="text-xs font-semibold text-slate-800 dark:text-white leading-tight">
+                    {sdia.titulo_sdia}
+                </div>
+                {(sdia.impacto || sdia.cap || sdia.clsd) && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                        {sdia.impacto && (
+                            <span 
+                                title={sdia.analise || "Nenhuma análise informada"} 
+                                className="cursor-help px-1 py-0.2 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-[7px] font-bold uppercase tracking-wide"
+                            >
+                                IMP
+                            </span>
+                        )}
+                        {sdia.cap && (
+                            <span 
+                                title={sdia.r60 || "Sem valor R60"} 
+                                className="cursor-help px-1 py-0.2 rounded bg-primary/10 dark:bg-[#cda250]/10 border border-primary dark:border-primary/20 dark:border-[#cda250]/20 text-primary dark:text-[#cda250] text-[7px] font-bold uppercase tracking-wide"
+                            >
+                                CAP
+                            </span>
+                        )}
+                        {sdia.clsd && (
+                            <span 
+                                title={sdia.analise || "Nenhuma análise informada"} 
+                                className="cursor-help px-1 py-0.2 rounded bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[7px] font-bold uppercase tracking-wide"
+                            >
+                                CLSD
+                            </span>
+                        )}
+                    </div>
+                )}
+            </div>
+        ))
+    ) : (
+        <span className="text-[10px] text-slate-500 italic">
+            Sem eventos
+        </span>
+    )}
+</div>
                                                 </div>
                                             );
                                         })}
