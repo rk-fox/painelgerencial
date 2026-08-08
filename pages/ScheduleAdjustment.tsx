@@ -40,6 +40,8 @@ const ScheduleAdjustment: React.FC = () => {
     const [deslocamento, setDeslocamento] = useState("Aéreo");
     const [qtdEquipeManual, setQtdEquipeManual] = useState(0);
     const [fav, setFav] = useState(false);
+    const [gratrep, setGratrep] = useState(false);
+    const [gt, setGt] = useState(false);
     const [dataInicio, setDataInicio] = useState("");
     const [dataFim, setDataFim] = useState("");
     const [selectedTeam, setSelectedTeam] = useState<string[]>([]);
@@ -160,7 +162,7 @@ const ScheduleAdjustment: React.FC = () => {
         // Fetch all missions for the year to calculate totals
         const { data: missionsData } = await supabase
             .from("missions")
-            .select("equipe, data_inicio, data_fim, sector")
+            .select("equipe, data_inicio, data_fim, sector, gratrep, gt")
             .gte("data_inicio", startDate)
             .lte("data_inicio", endDate);
 
@@ -174,7 +176,8 @@ const ScheduleAdjustment: React.FC = () => {
                         // (Usually they match, but this is safer)
                         if (
                             mission.sector === member.sector &&
-                            mission.equipe && mission.equipe.includes(member.id)
+                            mission.equipe && mission.equipe.includes(member.id) &&
+                            !mission.gratrep && !mission.gt
                         ) {
                             const duration = calculateDuration(
                                 mission.data_inicio,
@@ -245,6 +248,8 @@ const ScheduleAdjustment: React.FC = () => {
                 setQtdEquipeManual(data.qtd_equipe || 0);
             }
             setFav(data.fav);
+            setGratrep(data.gratrep || false);
+            setGt(data.gt || false);
             setDataInicio(data.data_inicio);
             setDataFim(data.data_fim);
             setSelectedTeam(data.equipe || []);
@@ -403,6 +408,8 @@ const ScheduleAdjustment: React.FC = () => {
             data_fim: dataFim,
             deslocamento,
             fav,
+            gratrep,
+            gt,
             qtd_equipe: selectedTeam.length > 0
                 ? selectedTeam.length
                 : qtdEquipeManual,
@@ -726,6 +733,60 @@ const ScheduleAdjustment: React.FC = () => {
                                             onClick={() => setFav(false)}
                                             className={`flex-1 rounded-lg font-bold text-xs transition-all active:scale-95 ${
                                                 !fav
+                                                    ? "bg-white dark:bg-slate-700 shadow-sm text-red-600"
+                                                    : "text-slate-500 hover:text-slate-700"
+                                            }`}
+                                        >
+                                            Não
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-slate-700 dark:text-slate-300 text-sm font-bold">
+                                        GratRep
+                                    </label>
+                                    <div className="flex p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl h-12">
+                                        <button
+                                            onClick={() => setGratrep(true)}
+                                            className={`flex-1 rounded-lg font-bold text-xs transition-all active:scale-95 ${
+                                                gratrep
+                                                    ? "bg-white dark:bg-slate-700 shadow-sm text-green-600"
+                                                    : "text-slate-500 hover:text-slate-700"
+                                            }`}
+                                        >
+                                            Sim
+                                        </button>
+                                        <button
+                                            onClick={() => setGratrep(false)}
+                                            className={`flex-1 rounded-lg font-bold text-xs transition-all active:scale-95 ${
+                                                !gratrep
+                                                    ? "bg-white dark:bg-slate-700 shadow-sm text-red-600"
+                                                    : "text-slate-500 hover:text-slate-700"
+                                            }`}
+                                        >
+                                            Não
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-slate-700 dark:text-slate-300 text-sm font-bold">
+                                        Grupo de Trabalho
+                                    </label>
+                                    <div className="flex p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl h-12">
+                                        <button
+                                            onClick={() => setGt(true)}
+                                            className={`flex-1 rounded-lg font-bold text-xs transition-all active:scale-95 ${
+                                                gt
+                                                    ? "bg-white dark:bg-slate-700 shadow-sm text-green-600"
+                                                    : "text-slate-500 hover:text-slate-700"
+                                            }`}
+                                        >
+                                            Sim
+                                        </button>
+                                        <button
+                                            onClick={() => setGt(false)}
+                                            className={`flex-1 rounded-lg font-bold text-xs transition-all active:scale-95 ${
+                                                !gt
                                                     ? "bg-white dark:bg-slate-700 shadow-sm text-red-600"
                                                     : "text-slate-500 hover:text-slate-700"
                                             }`}

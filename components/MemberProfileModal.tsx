@@ -5,11 +5,13 @@ import { formatLocalDate } from "../utils/dateUtils";
 interface MemberProfileModalProps {
     member: Member;
     onClose: () => void;
+    missionNames?: string[];
 }
 
 const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
     member,
     onClose,
+    missionNames,
 }) => {
     const calculateSectionTime = (entryDate?: string) => {
         if (!entryDate) return "—";
@@ -166,8 +168,27 @@ const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
                         </div>
                     </div>
 
-                    {/* CURSOS Section */}
-                    {courses.length > 0 && (
+                    {/* MISSÕES Section (when missionNames provided) */}
+                    {missionNames && missionNames.length > 0 && (
+                        <div>
+                            <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 text-center">
+                                Missões
+                            </h4>
+                            <div className="grid grid-cols-2 gap-2">
+                                {missionNames.map((name: string, idx: number) => (
+                                    <div
+                                        key={idx}
+                                        className="flex items-center justify-center h-10 border-2 border-primary/30 bg-primary/5 rounded-lg text-primary text-xs font-bold text-center px-2"
+                                    >
+                                        {name}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* CURSOS Section (only when no missionNames) */}
+                    {!missionNames && courses.length > 0 && (
                         <div>
                             <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 text-center">
                                 Cursos
