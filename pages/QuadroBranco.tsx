@@ -238,14 +238,19 @@ const QuadroBranco: React.FC = () => {
 
                                 let deadlineColor = "";
                                 if (daysRemaining !== null) {
-                                    if (daysRemaining <= 3) {
-                                        deadlineColor =
-                                            "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 font-bold";
-                                    } else if (daysRemaining <= 10) {
-                                        deadlineColor =
-                                            "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 font-bold";
-                                    } else {deadlineColor =
-                                            "text-[#4c739a] dark:text-slate-400";}
+                                    if (latest.status !== 'concluida') {
+                                        if (daysRemaining <= 3) {
+                                            deadlineColor =
+                                                "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 font-bold";
+                                        } else if (daysRemaining <= 10) {
+                                            deadlineColor =
+                                                "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 font-bold";
+                                        } else {
+                                            deadlineColor = "text-[#4c739a] dark:text-slate-400";
+                                        }
+                                    } else {
+                                        deadlineColor = "text-[#4c739a] dark:text-slate-400";
+                                    }
                                 }
 
                                 const isDispatched = head.id !== latest.id;
