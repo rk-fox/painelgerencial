@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { parseLocalDate } from '../utils/dateUtils';
+import { canAccessScheduleAndReports } from '../utils/permissions';
 
 interface Category {
     id: string;
@@ -36,8 +37,17 @@ const ReportsComparative: React.FC = () => {
     }, [startYear]);
 
     useEffect(() => {
+        const checkAccess = async () => {
+            const userJson = localStorage.getItem('currentUser');
+            const currentUser = userJson ? JSON.parse(userJson) : null;
+            const allowed = await canAccessScheduleAndReports(currentUser);
+            if (!allowed) {
+                navigate('/app/dashboard');
+            }
+        };
+        checkAccess();
         fetchData();
-    }, []);
+    }, [navigate]);
 
     const getUserSector = () => {
         const userJson = localStorage.getItem('currentUser');

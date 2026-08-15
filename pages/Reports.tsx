@@ -4,6 +4,7 @@ import { supabase } from "../supabase";
 import { Member } from "../types";
 import { formatLocalDate, parseLocalDate } from "../utils/dateUtils";
 import MemberProfileModal from "../components/MemberProfileModal";
+import { canAccessScheduleAndReports } from "../utils/permissions";
 
 interface MemberRanking {
     id: string;
@@ -86,8 +87,12 @@ const Reports: React.FC = () => {
         "Dispensa",
     );
     const [selectedMember, setSelectedMember] = useState<Member | null>(null);
-    const [selectedMemberMissions, setSelectedMemberMissions] = useState<string[]>([]);
-    const [missionContext, setMissionContext] = useState<'regular' | 'gratrep' | 'gt' | null>(null);
+    const [selectedMemberMissions, setSelectedMemberMissions] = useState<
+        string[]
+    >([]);
+    const [missionContext, setMissionContext] = useState<
+        "regular" | "gratrep" | "gt" | "default" | null
+    >(null);
 
     // Filters State
     const [rankingTimeRange, setRankingTimeRange] = useState<string>("year");
@@ -105,9 +110,18 @@ const Reports: React.FC = () => {
     >([]);
 
     useEffect(() => {
+        const checkAccess = async () => {
+            const userJson = localStorage.getItem("currentUser");
+            const currentUser = userJson ? JSON.parse(userJson) : null;
+            const allowed = await canAccessScheduleAndReports(currentUser);
+            if (!allowed) {
+                navigate("/app/dashboard");
+            }
+        };
+        checkAccess();
         fetchAvailableYears();
         fetchAvailableTaskYears();
-    }, []);
+    }, [navigate]);
 
     useEffect(() => {
         fetchReportData();
@@ -127,7 +141,10 @@ const Reports: React.FC = () => {
         fetchUnavailRanking();
     }, [selectedRankingYear, selectedUnavailType]);
 
-    const handleMemberClick = async (memberId: string, context: 'regular' | 'gratrep' | 'gt') => {
+    const handleMemberClick = async (
+        memberId: string,
+        context?: "regular" | "gratrep" | "gt" | "default",
+    ) => {
         try {
             const { data, error } = await supabase
                 .from("members")
@@ -136,40 +153,51 @@ const Reports: React.FC = () => {
                 .single();
 
             if (!error && data) {
-                // Fetch missions for this member in the selected year
-                const sector = getUserSector();
-                let missQuery = supabase
-                    .from("missions")
-                    .select("nome, gratrep, gt, equipe")
-                    .gte("data_inicio", `${selectedRankingYear}-01-01`)
-                    .lte("data_inicio", `${selectedRankingYear}-12-31`);
+                if (context && context !== "default") {
+                    // Fetch missions for this member in the selected year
+                    const sector = getUserSector();
+                    let missQuery = supabase
+                        .from("missions")
+                        .select("nome, gratrep, gt, equipe")
+                        .eq("valid", true)
+                        .gte("data_inicio", `${selectedRankingYear}-01-01`)
+                        .lte("data_inicio", `${selectedRankingYear}-12-31`);
 
-                if (sector && (sector === "CP" || sector === "EA")) {
-                    missQuery = missQuery.eq("sector", sector);
+                    if (sector && (sector === "CP" || sector === "EA")) {
+                        missQuery = missQuery.eq("sector", sector);
+                    }
+
+                    const { data: missionsData } = await missQuery;
+
+                    const missionNames: string[] = [];
+                    if (missionsData) {
+                        missionsData.forEach((mission) => {
+                            if (
+                                !mission.equipe ||
+                                !mission.equipe.includes(memberId)
+                            ) return;
+                            const isGratrep = !!mission.gratrep;
+                            const isGt = !!mission.gt;
+                            const isRegular = !isGratrep && !isGt;
+
+                            if (
+                                (context === "regular" && isRegular) ||
+                                (context === "gratrep" && isGratrep) ||
+                                (context === "gt" && isGt)
+                            ) {
+                                missionNames.push(
+                                    mission.nome || "Missão sem nome",
+                                );
+                            }
+                        });
+                    }
+
+                    setSelectedMemberMissions(missionNames);
+                } else {
+                    setSelectedMemberMissions([]);
                 }
 
-                const { data: missionsData } = await missQuery;
-
-                const missionNames: string[] = [];
-                if (missionsData) {
-                    missionsData.forEach((mission) => {
-                        if (!mission.equipe || !mission.equipe.includes(memberId)) return;
-                        const isGratrep = !!mission.gratrep;
-                        const isGt = !!mission.gt;
-                        const isRegular = !isGratrep && !isGt;
-
-                        if (
-                            (context === 'regular' && isRegular) ||
-                            (context === 'gratrep' && isGratrep) ||
-                            (context === 'gt' && isGt)
-                        ) {
-                            missionNames.push(mission.nome || 'Missão sem nome');
-                        }
-                    });
-                }
-
-                setSelectedMemberMissions(missionNames);
-                setMissionContext(context);
+                setMissionContext(context === "default" ? null : (context || null));
                 setSelectedMember(data);
             }
         } catch (error) {
@@ -375,6 +403,7 @@ const Reports: React.FC = () => {
             let missQuery = supabase
                 .from("missions")
                 .select("id, data_inicio, data_fim, equipe, gratrep, gt")
+                .eq("valid", true)
                 .gte("data_inicio", `${selectedRankingYear}-01-01`)
                 .lte("data_inicio", `${selectedRankingYear}-12-31`);
 
@@ -1108,7 +1137,8 @@ const Reports: React.FC = () => {
                             <div
                                 key={member.id}
                                 className="relative cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 p-2 rounded-xl transition-colors group"
-                                onClick={() => handleMemberClick(member.id, 'regular')}
+                                onClick={() =>
+                                    handleMemberClick(member.id, "regular")}
                             >
                                 <div className="flex items-center gap-4 mb-2">
                                     {/* Avatar */}
@@ -1210,7 +1240,8 @@ const Reports: React.FC = () => {
                             <div
                                 key={member.id}
                                 className="relative cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 p-2 rounded-xl transition-colors group"
-                                onClick={() => handleMemberClick(member.id, 'gratrep')}
+                                onClick={() =>
+                                    handleMemberClick(member.id, "gratrep")}
                             >
                                 <div className="flex items-center gap-4 mb-2">
                                     <div className="flex-shrink-0">
@@ -1309,7 +1340,8 @@ const Reports: React.FC = () => {
                             <div
                                 key={member.id}
                                 className="relative cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 p-2 rounded-xl transition-colors group"
-                                onClick={() => handleMemberClick(member.id, 'gt')}
+                                onClick={() =>
+                                    handleMemberClick(member.id, "gt")}
                             >
                                 <div className="flex items-center gap-4 mb-2">
                                     <div className="flex-shrink-0">
@@ -1552,8 +1584,14 @@ const Reports: React.FC = () => {
             {selectedMember && (
                 <MemberProfileModal
                     member={selectedMember}
-                    onClose={() => { setSelectedMember(null); setSelectedMemberMissions([]); setMissionContext(null); }}
-                    missionNames={missionContext ? selectedMemberMissions : undefined}
+                    onClose={() => {
+                        setSelectedMember(null);
+                        setSelectedMemberMissions([]);
+                        setMissionContext(null);
+                    }}
+                    missionNames={missionContext
+                        ? selectedMemberMissions
+                        : undefined}
                 />
             )}
         </div>

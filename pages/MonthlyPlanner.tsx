@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabase";
 import { Member } from "../types";
 import MemberProfileModal from "../components/MemberProfileModal";
+import { shouldFilterUnvalidatedMissions } from "../utils/permissions";
 
 interface Task {
     id: string;
@@ -249,16 +250,22 @@ const MonthlyPlanner: React.FC = () => {
         setLoading(true);
         try {
             const userJson = localStorage.getItem("currentUser");
+            let user = null;
             let sector = null;
             if (userJson) {
-                const user = JSON.parse(userJson);
+                user = JSON.parse(userJson);
                 sector = user?.sector;
             }
 
-            // Fetch Global Data (Missões e Indisponibilidades como eram antes)
+            const filterNeeded = await shouldFilterUnvalidatedMissions(user);
+
+            // Fetch Global Data
             let missionsQuery = supabase.from("missions").select(
                 "id, nome, data_inicio, data_fim, equipe, sector",
             );
+            if (filterNeeded) {
+                missionsQuery = missionsQuery.eq("valid", true);
+            }
             let unavailQuery = supabase.from("unavailability").select("*");
             let membersQuery = supabase.from("members").select(
                 "id, name, war_name, rank, abrev, avatar, specialty, sector, last_promotion_date, guia_antiguidade, status",

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../supabase";
+import { canAccessScheduleAndReports } from "../utils/permissions";
 
 const Layout: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
@@ -8,6 +9,7 @@ const Layout: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [newTasks, setNewTasks] = useState<any[]>([]);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [canAccessScheduleReports, setCanAccessScheduleReports] = useState(true);
   const location = useLocation();
   const sidebarRef = useRef<HTMLElement>(null);
   const navigate = useNavigate();
@@ -52,19 +54,18 @@ const Layout: React.FC = () => {
           setCurrentUser(userWithSession);
           checkNotifications(userWithSession);
           localStorage.setItem("currentUser", JSON.stringify(userWithSession));
+          canAccessScheduleAndReports(userWithSession).then(setCanAccessScheduleReports);
         }
       } else {
-        // Fallback to localStorage if no auth session but user was already logged in
-        // (Wait, if RLS is on, the above will fail without a session anyway)
         const localUser = localStorage.getItem("currentUser");
         if (localUser) {
           const parsedUser = JSON.parse(localUser);
           if (parsedUser.user_id) {
-            // If we have a user_id but no session, we should probably re-auth or redirect
             navigate("/");
           } else {
             setCurrentUser(parsedUser);
             checkNotifications(parsedUser);
+            canAccessScheduleAndReports(parsedUser).then(setCanAccessScheduleReports);
           }
         } else {
           navigate("/");
@@ -262,20 +263,24 @@ const Layout: React.FC = () => {
             collapsed={isSidebarCollapsed}
             onMobileClick={() => setIsMobileMenuOpen(false)}
           />
-          <SidebarItem
-            to="/app/schedule"
-            icon="calendar_month"
-            label="Cronograma"
-            collapsed={isSidebarCollapsed}
-            onMobileClick={() => setIsMobileMenuOpen(false)}
-          />
-          <SidebarItem
-            to="/app/reports"
-            icon="analytics"
-            label="Relatórios"
-            collapsed={isSidebarCollapsed}
-            onMobileClick={() => setIsMobileMenuOpen(false)}
-          />
+          {canAccessScheduleReports && (
+            <>
+              <SidebarItem
+                to="/app/schedule"
+                icon="calendar_month"
+                label="Cronograma"
+                collapsed={isSidebarCollapsed}
+                onMobileClick={() => setIsMobileMenuOpen(false)}
+              />
+              <SidebarItem
+                to="/app/reports"
+                icon="analytics"
+                label="Relatórios"
+                collapsed={isSidebarCollapsed}
+                onMobileClick={() => setIsMobileMenuOpen(false)}
+              />
+            </>
+          )}
           <SidebarItem
             to="/app/sdia"
             icon="report"

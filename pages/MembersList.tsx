@@ -202,6 +202,25 @@ const MembersList: React.FC = () => {
         }
     };
 
+    const handleToggleEncarregado = async (member: Member) => {
+        const newEncarregado = !member.encarregado;
+        try {
+            const { error } = await supabase
+                .from("members")
+                .update({ encarregado: newEncarregado })
+                .eq("id", member.id);
+            if (error) throw error;
+            setMembers((prev) =>
+                prev.map((m) =>
+                    m.id === member.id ? { ...m, encarregado: newEncarregado } : m
+                )
+            );
+        } catch (err: any) {
+            console.error("Error toggling encarregado:", err.message);
+            alert("Erro ao alterar status de encarregado: " + err.message);
+        }
+    };
+
     const getInitials = (name: string) => {
         return name.split(" ").map((n) => n[0]).join("").substring(0, 2)
             .toUpperCase();
@@ -635,6 +654,12 @@ const MembersList: React.FC = () => {
                                                                         ? "indigo"
                                                                         : "red";
 
+                                                                const isOfficer = (rStr: string | null, aStr: string | null) => {
+                                                                    const priority = getRankPriority(rStr, aStr);
+                                                                    return priority >= 0 && priority <= 3;
+                                                                };
+                                                                const canDesignateEncarregado = isOfficer(currentUser?.rank, currentUser?.abrev) || !!currentUser?.encarregado;
+
                                                                 return (
                                                                     <MemberRow
                                                                         key={member
@@ -669,6 +694,11 @@ const MembersList: React.FC = () => {
                                                                         )}
                                                                         status={displayedStatus}
                                                                         statusColor={displayedStatusColor}
+                                                                        encarregado={member.encarregado}
+                                                                        canDesignateEncarregado={canDesignateEncarregado}
+                                                                        onToggleEncarregado={() =>
+                                                                            handleToggleEncarregado(member)
+                                                                        }
                                                                         onEdit={() =>
                                                                             handleEdit(
                                                                                 member
@@ -1161,6 +1191,9 @@ const MemberRow = ({
     entry,
     status,
     statusColor,
+    encarregado,
+    canDesignateEncarregado,
+    onToggleEncarregado,
     onEdit,
     onDelete,
     onToggleStatus,
@@ -1206,9 +1239,16 @@ const MemberRow = ({
                             </div>
                         )}
                     <div className="flex flex-col">
-                        <span className="text-sm font-bold text-[#0d141b] dark:text-white">
-                            {name}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-bold text-[#0d141b] dark:text-white">
+                                {name}
+                            </span>
+                            {encarregado && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
+                                    Encarregado
+                                </span>
+                            )}
+                        </div>
                         <span className="text-xs text-[#4c739a]">{email}</span>
                     </div>
                 </div>
@@ -1261,6 +1301,21 @@ const MemberRow = ({
                     className="flex justify-end gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                     onClick={(e) => e.stopPropagation()}
                 >
+                    {canDesignateEncarregado && (
+                        <button
+                            onClick={onToggleEncarregado}
+                            className={`p-2 transition-all active:scale-95 ${
+                                encarregado
+                                    ? "text-blue-600 hover:text-blue-700"
+                                    : "text-slate-400 hover:text-blue-500"
+                            }`}
+                            title="designar encarregado"
+                        >
+                            <span className="material-symbols-outlined text-[20px]">
+                                {encarregado ? "arrow_downward" : "arrow_upward"}
+                            </span>
+                        </button>
+                    )}
                     {canDelegate && (
                         <button
                             onClick={onDelegate}

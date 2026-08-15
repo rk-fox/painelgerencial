@@ -2,6 +2,10 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabase";
 import { formatLocalDate, parseLocalDate } from "../utils/dateUtils";
+import {
+    canAccessScheduleAndReports,
+    shouldFilterUnvalidatedMissions,
+} from "../utils/permissions";
 
 interface Member {
     id: string;
@@ -22,6 +26,7 @@ interface Mission {
     data_fim: string;
     deslocamento: string;
     fav: boolean;
+    valid?: boolean;
     qtd_equipe: number;
     equipe: string[] | null;
     sector?: string;
@@ -99,6 +104,24 @@ const YearlySchedule: React.FC = () => {
         "Dezembro",
     ];
 
+    const [doMustFilterUnvalidated, setDoMustFilterUnvalidated] = useState(
+        false,
+    );
+
+    useEffect(() => {
+        const checkAccess = async () => {
+            const allowed = await canAccessScheduleAndReports(currentUser);
+            if (!allowed) {
+                navigate("/app/dashboard");
+            }
+            const filterNeeded = await shouldFilterUnvalidatedMissions(
+                currentUser,
+            );
+            setDoMustFilterUnvalidated(filterNeeded);
+        };
+        checkAccess();
+    }, [currentUser, navigate]);
+
     useEffect(() => {
         fetchAvailableYears(activeSector);
     }, [activeSector]);
@@ -129,6 +152,7 @@ const YearlySchedule: React.FC = () => {
                 let query = supabase
                     .from("missions")
                     .select("id", { count: "exact", head: true })
+                    .eq("valid", true)
                     .gte("data_inicio", `${year}-01-01`)
                     .lte("data_inicio", `${year}-12-31`);
 
@@ -142,39 +166,39 @@ const YearlySchedule: React.FC = () => {
                 }
             }
 
-            const sortedYears = foundYears.sort((a, b) => b - a);
-            setAvailableYears(
-                sortedYears.length > 0
-                    ? sortedYears
-                    : [new Date().getFullYear()],
-            );
-
-            if (sortedYears.length > 0 && !sortedYears.includes(selectedYear)) {
-                setSelectedYear(sortedYears[0]);
+            if (!foundYears.includes(new Date().getFullYear())) {
+                foundYears.push(new Date().getFullYear());
             }
-        } catch (error) {
-            console.error("Error fetching available years:", error);
+
+            foundYears.sort((a, b) => b - a);
+            setAvailableYears(foundYears);
+        } catch (err) {
+            console.error("Error fetching available years:", err);
         }
     };
 
     const fetchMissions = async (year: number, currentSector: string) => {
-        const startDate = `${year}-01-01`;
-        const endDate = `${year}-12-31`;
+        try {
+            const startDate = `${year}-01-01`;
+            const endDate = `${year}-12-31`;
 
-        let query = supabase
-            .from("missions")
-            .select("*")
-            .gte("data_inicio", startDate)
-            .lte("data_inicio", endDate)
-            .order("data_inicio");
+            let query = supabase
+                .from("missions")
+                .select("*")
+                .gte("data_inicio", startDate)
+                .lte("data_inicio", endDate)
+                .order("data_inicio");
 
-        if (currentSector === "CP" || currentSector === "EA") {
-            query = query.eq("sector", currentSector);
-        }
+            if (currentSector === "CP" || currentSector === "EA") {
+                query = query.eq("sector", currentSector);
+            }
 
-        const { data, error } = await query;
-        if (!error && data) {
-            setMissions(data);
+            const { data, error } = await query;
+            if (!error && data) {
+                setMissions(data);
+            }
+        } catch (err) {
+            console.error("Error fetching missions:", err);
         }
     };
 
@@ -267,6 +291,11 @@ const YearlySchedule: React.FC = () => {
             .getTime();
 
         return missions.filter((m) => {
+            // Se for necessário filtrar não validadas e ela não for válida, oculta do grid principal
+            if (!onlyStartingInMonth && doMustFilterUnvalidated && !m.valid) {
+                return false;
+            }
+
             const startDate = parseLocalDate(m.data_inicio)?.getTime() || 0;
             const endD = parseLocalDate(m.data_fim);
             const endDate = endD
@@ -293,6 +322,8 @@ const YearlySchedule: React.FC = () => {
 
     const getMissionsForDay = (month: number, day: number): Mission[] => {
         return missions.filter((m) => {
+            if (doMustFilterUnvalidated && !m.valid) return false;
+
             // Data do calendário que estamos verificando (Meia-noite Local)
             const checkDate = new Date(selectedYear, month, day).getTime();
 
@@ -350,6 +381,25 @@ const YearlySchedule: React.FC = () => {
 
     const handleEditMission = (missionId: string) => {
         navigate(`/app/schedule/adjustment?id=${missionId}`);
+    };
+
+    const handleToggleValidMission = async (mission: Mission) => {
+        const newValid = !mission.valid;
+        try {
+            const { error } = await supabase
+                .from("missions")
+                .update({ valid: newValid })
+                .eq("id", mission.id);
+            if (error) throw error;
+            setMissions((prev) =>
+                prev.map((
+                    m,
+                ) => (m.id === mission.id ? { ...m, valid: newValid } : m))
+            );
+        } catch (err: any) {
+            console.error("Error toggling mission valid:", err.message);
+            alert("Erro ao alterar validação da missão: " + err.message);
+        }
     };
 
     const handleDeleteClick = (mission: Mission) => {
@@ -630,7 +680,7 @@ const YearlySchedule: React.FC = () => {
                                                                             pessoas)
                                                                         </span>
                                                                     </div>
-                                                                )
+                                                                ),
                                                             )}
                                                             <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900">
                                                             </div>
@@ -756,7 +806,7 @@ const YearlySchedule: React.FC = () => {
                                                                                         >
                                                                                             {name}
                                                                                         </div>
-                                                                                    )
+                                                                                    ),
                                                                                 )}
                                                                                 <div className="absolute top-full left-4 border-4 border-transparent border-t-slate-900">
                                                                                 </div>
@@ -766,6 +816,26 @@ const YearlySchedule: React.FC = () => {
                                                             </td>
                                                             <td className="py-3 px-2">
                                                                 <div className="flex gap-1">
+                                                                    <button
+                                                                        onClick={() =>
+                                                                            handleToggleValidMission(
+                                                                                mission,
+                                                                            )}
+                                                                        className={`size-8 flex items-center justify-center rounded-lg transition-colors ${
+                                                                            mission
+                                                                                    .valid
+                                                                                ? "hover:bg-green-50 text-green-600"
+                                                                                : "hover:bg-amber-50 text-amber-500"
+                                                                        }`}
+                                                                        title="Validar planejamento da missão"
+                                                                    >
+                                                                        <span className="material-symbols-outlined text-lg">
+                                                                            {mission
+                                                                                    .valid
+                                                                                ? "check_circle"
+                                                                                : "cancel"}
+                                                                        </span>
+                                                                    </button>
                                                                     <button
                                                                         onClick={() =>
                                                                             handleEditMission(
@@ -950,6 +1020,26 @@ const YearlySchedule: React.FC = () => {
                                                                     <div className="flex gap-1">
                                                                         <button
                                                                             onClick={() =>
+                                                                                handleToggleValidMission(
+                                                                                    mission,
+                                                                                )}
+                                                                            className={`size-8 flex items-center justify-center rounded-lg transition-colors ${
+                                                                                mission
+                                                                                        .valid
+                                                                                    ? "hover:bg-green-50 text-green-600"
+                                                                                    : "hover:bg-amber-50 text-amber-500"
+                                                                            }`}
+                                                                            title="Validar planejamento da missão"
+                                                                        >
+                                                                            <span className="material-symbols-outlined text-lg">
+                                                                                {mission
+                                                                                        .valid
+                                                                                    ? "check_circle"
+                                                                                    : "cancel"}
+                                                                            </span>
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() =>
                                                                                 handleEditMission(
                                                                                     mission
                                                                                         .id,
@@ -976,7 +1066,7 @@ const YearlySchedule: React.FC = () => {
                                                                     </div>
                                                                 </td>
                                                             </tr>
-                                                        )
+                                                        ),
                                                     )}
                                                 </tbody>
                                             </table>

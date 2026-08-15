@@ -21,6 +21,7 @@ export interface Member {
   courses?: string[];
   sector?: string;
   user_id?: string;
+  encarregado?: boolean;
 }
 
 export interface Task {
