@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../supabase";
 import { parseLocalDate } from "../utils/dateUtils";
+import { canAccessScheduleAndReports } from "../utils/permissions";
 
 interface Member {
     id: string;
@@ -131,6 +132,7 @@ const TaskForm: React.FC = () => {
     const [unavailabilities, setUnavailabilities] = useState<any[]>([]);
     const [annotations, setAnnotations] = useState<any[]>([]);
     const [currentUser, setCurrentUser] = useState<any>(null);
+    const [canViewOfficersState, setCanViewOfficersState] = useState(false);
 
     // Filters
     const [searchTerm, setSearchTerm] = useState("");
@@ -419,6 +421,16 @@ if (tasksData) {
     ];
 
     useEffect(() => {
+        const checkAccess = async () => {
+            const userJson = localStorage.getItem("currentUser");
+            if (userJson) {
+                const userObj = JSON.parse(userJson);
+                const hasAccess = await canAccessScheduleAndReports(userObj);
+                setCanViewOfficersState(hasAccess);
+            }
+        };
+        checkAccess();
+
         const userJson = localStorage.getItem("currentUser");
         if (userJson) {
             setCurrentUser(JSON.parse(userJson));
@@ -1726,22 +1738,9 @@ if (tasksData) {
                                         currentUser?.sector === "CH"
                                     ) return true;
 
-                                    const val = getRankPriority(
-                                        m.rank,
-                                        m.abrev,
-                                    );
-
-                                    // Busca a prioridade do usuário logado atualmente
-                                    const currentUserVal = getRankPriority(
-                                        currentUser?.rank,
-                                        currentUser?.abrev,
-                                    );
-
-                                    // 2. Se o usuário logado for nível <= 3, ele pode ver >= 3 - Tenente pra baixo
-                                    if (currentUserVal <= 3) return val >= 2;
-
-                                    // 3. Os outros (>= 4) veem apenas >= 4 - Suboficial pra baixo
-                                    return val >= 4;
+                                    const isOfficerRank = getRankPriority(m.rank, m.abrev) <= 3;
+                                    if (isOfficerRank && !canViewOfficersState) return false;
+                                    return true;
                                 })
                                 .map((member) => {
                                     const currentMission = getMemberMission(
@@ -3643,10 +3642,27 @@ if (tasksData) {
                                             );
                                         }
 
+                                        let tooltipLines = [];
+                                        if (currentMission) {
+                                            tooltipLines.push(`Viagem: ${currentMission.nome || ''} ${currentMission.local ? `(${currentMission.local})` : ''}`);
+                                        }
+                                        if (isUnavailable && currentUnavail) {
+                                            const details = currentUnavail.detalhes || currentUnavail.atividade || '';
+                                            tooltipLines.push(`Afastamento: ${currentUnavail.type}${details ? ` - ${details}` : ''}`);
+                                        }
+                                        if (memberTasks.length > 0) {
+                                            tooltipLines.push('Atividades:');
+                                            memberTasks.forEach(t => tooltipLines.push(`- ${t.name}`));
+                                        } else {
+                                            tooltipLines.push('Nenhuma atividade em andamento');
+                                        }
+                                        const tooltipText = tooltipLines.join('\n');
+
                                         return (
                                             <div
                                                 key={member.id}
-                                                className={`p-4 rounded-xl border ${cardBg} ${borderAccent} flex flex-col justify-between gap-3 shadow-md backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg`}
+                                                title={tooltipText}
+                                                className={`p-4 rounded-xl border ${cardBg} ${borderAccent} flex flex-col justify-between gap-3 shadow-md backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-help`}
                                             >
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-700 bg-white dark:bg-[#0f192b] flex items-center justify-center font-bold text-xs uppercase text-slate-600 dark:text-slate-300">

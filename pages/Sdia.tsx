@@ -396,6 +396,8 @@ const SdiaPage: React.FC = () => {
                                 : ""
                         }`;
 
+                        const regDateStr = createdSdia.created_at ? createdSdia.created_at.split('T')[0] : new Date().toLocaleDateString("en-CA");
+
                         const newTask = {
                             name: `SDIA ${createdSdia.nr_sdia} respondida`,
                             assigned_to: createdSdia.analista || null,
@@ -403,14 +405,13 @@ const SdiaPage: React.FC = () => {
                             quantidade: 1,
                             specialties: ["BCT", "AIS"],
                             periodicity: "pontual",
-                            start_date: createdSdia.created_at,
-                            end_date: createdSdia.created_at,
-                            completed_at: createdSdia.created_at,
+                            start_date: regDateStr,
+                            end_date: regDateStr,
+                            completed_at: regDateStr,
                             status: "concluida",
                             sector: analystSector,
                             description: taskDescription,
                             recurrence_active: false,
-                            created_at: createdSdia.created_at,
                         };
 
                         const { error: taskError } = await supabase

@@ -485,79 +485,8 @@ const ScheduleAdjustment: React.FC = () => {
 
                 if (error) throw error;
 
-                // Create Task if FAV is false
-                if (fav === false) {
-                    const missionStart = parseLocalDate(dataInicio) ||
-                        new Date();
-                    const missionStartCopy1 = parseLocalDate(dataInicio) ||
-                        new Date();
-                    const missionStartCopy2 = parseLocalDate(dataInicio) ||
-                        new Date();
-
-                    // Start Date: 50 days before (adjusted to previous Friday if weekend)
-                    missionStartCopy1.setDate(missionStartCopy1.getDate() - 50);
-                    const startDateAdjusted = adjustIfWeekend(
-                        missionStartCopy1,
-                    );
-
-                    // End Date: 45 days before
-                    missionStartCopy2.setDate(missionStartCopy2.getDate() - 45);
-
-                    const formatDateBr = (dateStr: string) => {
-                        if (!dateStr) return "";
-                        const [y, m, d] = dateStr.split("-");
-                        return `${d}/${m}/${y}`;
-                    };
-
-                    const equipeNomes = selectedTeam.map((id) => {
-                        const m = members.find((member) => member.id === id);
-                        return m
-                            ? `${m.abrev || m.rank || ""} ${
-                                m.war_name || m.name
-                            }`.trim()
-                            : "";
-                    }).filter(Boolean).join(", ");
-
-                    const detailedDescription =
-                        `Missão: ${nome}\n\nDestino: ${local}\n\nDeslocamento: ${deslocamento}\n\nPeríodo: ${
-                            formatDateBr(dataInicio)
-                        } a ${formatDateBr(dataFim)}\n\nEquipe: ${
-                            equipeNomes || "Não definida"
-                        }`;
-
-                    const newTask = {
-                        name: "Confecção de FAV",
-                        description: detailedDescription,
-                        category: "Confecção de FAV", // Confecção de FAV
-                        periodicity: "pontual",
-                        specialties: ["BCT", "AIS"], // BCT and AIS
-                        recurrence_active: false,
-                        start_date: startDateAdjusted.toISOString(),
-                        end_date: missionStartCopy2.toISOString(),
-                        status: "pendente",
-                        quantidade: 1, // User said 1 or team size, deciding on 1 for document task
-                        created_at: new Date().toISOString(),
-                        sector: currentUser?.sector,
-                        mission_id: createdMission.id,
-                    };
-
-                    const { data: createdTask, error: taskError } =
-                        await supabase
-                            .from("tasks")
-                            .insert([newTask])
-                            .select()
-                            .single();
-
-                    if (taskError) {
-                        console.error("Error creating linked task:", taskError);
-                    } else if (createdTask) {
-                        // Update mission with task_id
-                        await supabase
-                            .from("missions")
-                            .update({ task_id: createdTask.id })
-                            .eq("id", createdMission.id);
-                    }
-                }
+                // Task creation moved to YearlySchedule (handleToggleValidMission)
+                // Task is only created when mission is validated (valid = true)
             }
 
             navigate("/app/schedule");

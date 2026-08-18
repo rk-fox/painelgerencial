@@ -391,6 +391,101 @@ const YearlySchedule: React.FC = () => {
                 .update({ valid: newValid })
                 .eq("id", mission.id);
             if (error) throw error;
+
+            if (newValid && !mission.fav) {
+                // Valid toggled to TRUE and FAV not yet done → create task
+                const adjustIfWeekend = (date: Date): Date => {
+                    const day = date.getDay();
+                    if (day === 0) date.setDate(date.getDate() - 2);
+                    else if (day === 6) date.setDate(date.getDate() - 1);
+                    return date;
+                };
+
+                const missionStartCopy1 = parseLocalDate(mission.data_inicio) || new Date();
+                const missionStartCopy2 = parseLocalDate(mission.data_inicio) || new Date();
+
+                missionStartCopy1.setDate(missionStartCopy1.getDate() - 50);
+                const startDateAdjusted = adjustIfWeekend(missionStartCopy1);
+
+                missionStartCopy2.setDate(missionStartCopy2.getDate() - 45);
+
+                const formatDateBr = (dateStr: string) => {
+                    if (!dateStr) return "";
+                    const [y, m, d] = dateStr.split("T")[0].split("-");
+                    return `${d}/${m}/${y}`;
+                };
+
+                const equipeNomes = (mission.equipe || []).map((id) => {
+                    const m = members.find((member) => member.id === id);
+                    return m
+                        ? `${m.abrev || m.rank || ""} ${m.war_name || m.name}`.trim()
+                        : "";
+                }).filter(Boolean).join(", ");
+
+                const detailedDescription =
+                    `Missão: ${mission.nome}\n\nDestino: ${mission.local}\n\nDeslocamento: ${mission.deslocamento}\n\nPeríodo: ${
+                        formatDateBr(mission.data_inicio)
+                    } a ${formatDateBr(mission.data_fim)}\n\nEquipe: ${
+                        equipeNomes || "Não definida"
+                    }`;
+
+                const newTask = {
+                    name: "Confecção de FAV",
+                    description: detailedDescription,
+                    category: "Confecção de FAV",
+                    periodicity: "pontual",
+                    specialties: ["BCT", "AIS"],
+                    recurrence_active: false,
+                    start_date: startDateAdjusted.toISOString(),
+                    end_date: missionStartCopy2.toISOString(),
+                    status: "pendente",
+                    quantidade: 1,
+                    created_at: new Date().toISOString(),
+                    sector: mission.sector || currentUser?.sector,
+                    mission_id: mission.id,
+                };
+
+                const { data: createdTask, error: taskError } = await supabase
+                    .from("tasks")
+                    .insert([newTask])
+                    .select()
+                    .single();
+
+                if (taskError) {
+                    console.error("Error creating linked task:", taskError);
+                } else if (createdTask) {
+                    await supabase
+                        .from("missions")
+                        .update({ task_id: createdTask.id })
+                        .eq("id", mission.id);
+
+                    setMissions((prev) =>
+                        prev.map((m) =>
+                            m.id === mission.id
+                                ? { ...m, valid: true, task_id: createdTask.id }
+                                : m
+                        )
+                    );
+                    return;
+                }
+            } else if (!newValid && mission.task_id) {
+                // Valid toggled to FALSE → delete linked task
+                await supabase.from("tasks").delete().eq("id", mission.task_id);
+                await supabase
+                    .from("missions")
+                    .update({ task_id: null })
+                    .eq("id", mission.id);
+
+                setMissions((prev) =>
+                    prev.map((m) =>
+                        m.id === mission.id
+                            ? { ...m, valid: false, task_id: undefined }
+                            : m
+                    )
+                );
+                return;
+            }
+
             setMissions((prev) =>
                 prev.map((
                     m,
