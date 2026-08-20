@@ -114,7 +114,12 @@ const Layout: React.FC = () => {
 
   const checkNotifications = async (user: any) => {
     if (!user || (!user.last_login && !user.last_sign_in_at)) return;
-    const lastLogin = user.last_login || user.last_sign_in_at;
+    let lastLogin = user.last_login || user.last_sign_in_at;
+
+    const clearedAt = localStorage.getItem("notificationsClearedAt");
+    if (clearedAt && new Date(clearedAt) > new Date(lastLogin)) {
+      lastLogin = clearedAt;
+    }
 
     try {
       let query = supabase
@@ -385,7 +390,10 @@ const Layout: React.FC = () => {
                     <div className="flex items-center gap-2">
                       {newTasks.length > 0 && (
                         <button
-                          onClick={() => setNewTasks([])}
+                          onClick={() => {
+                            setNewTasks([]);
+                            localStorage.setItem("notificationsClearedAt", new Date().toISOString());
+                          }}
                           className="text-[10px] font-bold text-[#4c739a] hover:text-red-500 transition-colors uppercase tracking-wider"
                           title="Limpar todas as notificações"
                         >
