@@ -15,6 +15,7 @@ import SdiaPage from './pages/Sdia';
 import ResetPassword from './pages/ResetPassword';
 import Shortcuts from './pages/Shortcuts';
 import QuadroBranco from './pages/QuadroBranco';
+import StrategicSummary from './pages/StrategicSummary';
 import Layout from './components/Layout';
 
 const App: React.FC = () => {
@@ -40,6 +41,7 @@ const App: React.FC = () => {
           <Route path="reports/comparative" element={<ReportsComparative />} />
           <Route path="shortcuts" element={<Shortcuts />} />
           <Route path="quadro-branco" element={<QuadroBranco />} />
+          <Route path="strategic-summary" element={<StrategicSummary />} />
 
           {/* Default redirect — CH goes to tasks, others go to dashboard */}
           <Route path="" element={<DefaultRedirect />} />

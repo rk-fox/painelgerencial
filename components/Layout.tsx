@@ -309,6 +309,13 @@ const Layout: React.FC = () => {
               onMobileClick={() => setIsMobileMenuOpen(false)}
             />
           )}
+          <SidebarItem
+            to="/app/strategic-summary"
+            icon="play_arrow"
+            label="Resumo Estratégico"
+            collapsed={isSidebarCollapsed}
+            onMobileClick={() => setIsMobileMenuOpen(false)}
+          />
         </nav>
 
         <div className="p-4 border-t border-[#e7edf3] dark:border-slate-800 space-y-4">
