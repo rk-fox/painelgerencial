@@ -11,6 +11,8 @@ interface Member {
     status?: string;
     sector?: string;
     specialty?: string;
+    last_promotion_date?: string;
+    guia_antiguidade?: number;
 }
 
 interface Task {
@@ -29,6 +31,15 @@ interface Task {
     obs?: string;
     sector?: string;
 }
+
+const getRankPriority = (rank?: string, abrev?: string) => {
+    const hierarchy = [
+        "Cel", "Ten Cel", "Maj", "Cap", "1º Ten", "2º Ten", "Asp",
+        "SO", "1S", "2S", "3S", "Cb", "S1", "S2", "CV"
+    ];
+    const p = hierarchy.indexOf(abrev || "");
+    return p !== -1 ? p : 999;
+};
 
 const StrategicSummary: React.FC = () => {
     const [currentUser, setCurrentUser] = useState<any>(null);
@@ -112,17 +123,51 @@ const StrategicSummary: React.FC = () => {
                 tenDaysLater.setDate(tenDaysLater.getDate() + 10);
                 const tenDaysLaterStr = tenDaysLater.toLocaleDateString("en-CA");
 
-                // 1. Fetch Members
-                let membersQuery = supabase
+                // 1. Fetch & Sort Members (Includes Hierarchy & CH Logic)
+                const { data: membersData } = await supabase
                     .from("members")
-                    .select("id, name, war_name, rank, abrev, avatar, status, sector, specialty")
-                    .order("name", { ascending: true });
+                    .select("id, name, war_name, rank, abrev, avatar, status, sector, specialty, last_promotion_date, guia_antiguidade");
 
-                if (userSector && userSector !== "CH") {
-                    membersQuery = membersQuery.eq("sector", userSector);
+                if (membersData) {
+                    let filtered = membersData;
+                    // Lógica de exibição combinada: Setor Logado + CH
+                    if (userSector === "CP" || userSector === "EA") {
+                        filtered = filtered.filter((m) => m.sector === userSector || m.sector === "CH");
+                    } else if (userSector === "CH") {
+                        filtered = filtered.filter((m) =>
+                            m.sector === "CP" || m.sector === "EA" || m.sector === "CH"
+                        );
+                    }
+
+                    // Ordenação
+                    const sorted = filtered.sort((a, b) => {
+                        // Força CH para o topo
+                        if (a.sector === 'CH' && b.sector !== 'CH') return -1;
+                        if (a.sector !== 'CH' && b.sector === 'CH') return 1;
+
+                        // 1ª Camada: Posto/Graduação (Rank)
+                        const pA = getRankPriority(a.rank, a.abrev);
+                        const pB = getRankPriority(b.rank, b.abrev);
+                        if (pA !== pB) return pA - pB;
+
+                        // 2ª Camada: Data da última promoção (Mais antiga primeiro)
+                        const dateA = new Date(a.last_promotion_date || "9999-12-31").getTime();
+                        const dateB = new Date(b.last_promotion_date || "9999-12-31").getTime();
+                        if (dateA !== dateB) return dateA - dateB;
+
+                        // 3ª Camada: Guia de Antiguidade (Menor número = mais antigo)
+                        const guiaA = a.guia_antiguidade || 999999;
+                        const guiaB = b.guia_antiguidade || 999999;
+                        if (guiaA !== guiaB) return guiaA - guiaB;
+
+                        // Desempate final: Nome de Guerra
+                        const nameA = a.war_name || a.name || "";
+                        const nameB = b.war_name || b.name || "";
+                        return nameA.localeCompare(nameB);
+                    });
+
+                    setMembers(sorted);
                 }
-                const { data: membersData } = await membersQuery;
-                if (membersData) setMembers(membersData);
 
                 // 2. Fetch Missions
                 let missionsQuery = supabase.from("missions").select("*");
@@ -578,6 +623,12 @@ const StrategicSummary: React.FC = () => {
                                             <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">
                                                 {member.name}
                                             </span>
+                                            {/* VISUALIZAÇÃO DO SETOR */}
+                                            {member.sector && (
+                                                <span className="inline-block mt-0.5 px-1.5 py-[1px] rounded bg-slate-200 dark:bg-[#1a283e] text-slate-600 dark:text-slate-300 text-[8px] font-bold uppercase tracking-wider">
+                                                    Setor: {member.sector}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="flex items-center justify-between border-t border-slate-200 dark:border-[#1d2d44]/50 pt-2 mt-1">
@@ -783,7 +834,7 @@ const StrategicSummary: React.FC = () => {
                     );
                 })()}
 
-                {/* SLIDE 3: REUNIÕES DA SEÇÃO */}
+                {/* SLIDE 3: REUNIões DA SEÇÃO */}
                 {currentSlide === 3 && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in duration-300">
                         {meetings.length > 0 ? (
