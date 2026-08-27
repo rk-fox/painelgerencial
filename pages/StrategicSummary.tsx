@@ -32,13 +32,34 @@ interface Task {
     sector?: string;
 }
 
-const getRankPriority = (rank?: string, abrev?: string) => {
-    const hierarchy = [
-        "Cel", "Ten Cel", "Maj", "Cap", "1º Ten", "2º Ten", "Asp",
-        "SO", "1S", "2S", "3S", "Cb", "S1", "S2", "CV"
-    ];
-    const p = hierarchy.indexOf(abrev || "");
-    return p !== -1 ? p : 999;
+// Rank Priority Logic conforme solicitado
+const getRankPriority = (
+    rankStr: string | null | undefined,
+    abrevStr: string | null | undefined,
+): number => {
+    const s = (rankStr || abrevStr || "").toUpperCase().trim();
+    if (s.includes("MAJOR") || s.includes("MAJ")) return 0;
+    if (s.includes("CAPIT")) return 1;
+    if (s.includes("1º TEN") || s.includes("1.º TEN") || s.includes("1TEN")) {
+        return 2;
+    }
+    if (
+        s.includes("2º TEN") || s.includes("2.º TEN") || s.includes("2TEN") ||
+        s.includes("ASP")
+    ) return 3;
+    if (s.includes("SUBOF") || s.includes("SO.")) return 4;
+    if (s.includes("1º SAR") || s.includes("1.º SAR") || s.includes("1SGT")) {
+        return 5;
+    }
+    if (s.includes("2º SAR") || s.includes("2.º SAR") || s.includes("2SGT")) {
+        return 6;
+    }
+    if (s.includes("3º SAR") || s.includes("3.º SAR") || s.includes("3SGT")) {
+        return 7;
+    }
+    if (s.includes("SGT")) return 7;
+    if (s.includes("CIV")) return 8;
+    return 99;
 };
 
 const StrategicSummary: React.FC = () => {
@@ -123,14 +144,14 @@ const StrategicSummary: React.FC = () => {
                 tenDaysLater.setDate(tenDaysLater.getDate() + 10);
                 const tenDaysLaterStr = tenDaysLater.toLocaleDateString("en-CA");
 
-                // 1. Fetch & Sort Members (Includes Hierarchy & CH Logic)
+                // 1. Fetch & Sort Members (Includes Hierarchy Logic)
                 const { data: membersData } = await supabase
                     .from("members")
                     .select("id, name, war_name, rank, abrev, avatar, status, sector, specialty, last_promotion_date, guia_antiguidade");
 
                 if (membersData) {
-                    let filtered = membersData;
-                    // Lógica de exibição combinada: Setor Logado + CH
+                    let filtered = membersData || [];
+                    
                     if (userSector === "CP" || userSector === "EA") {
                         filtered = filtered.filter((m) => m.sector === userSector || m.sector === "CH");
                     } else if (userSector === "CH") {
@@ -139,12 +160,7 @@ const StrategicSummary: React.FC = () => {
                         );
                     }
 
-                    // Ordenação
                     const sorted = filtered.sort((a, b) => {
-                        // Força CH para o topo
-                        if (a.sector === 'CH' && b.sector !== 'CH') return -1;
-                        if (a.sector !== 'CH' && b.sector === 'CH') return 1;
-
                         // 1ª Camada: Posto/Graduação (Rank)
                         const pA = getRankPriority(a.rank, a.abrev);
                         const pB = getRankPriority(b.rank, b.abrev);
@@ -623,12 +639,6 @@ const StrategicSummary: React.FC = () => {
                                             <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">
                                                 {member.name}
                                             </span>
-                                            {/* VISUALIZAÇÃO DO SETOR */}
-                                            {member.sector && (
-                                                <span className="inline-block mt-0.5 px-1.5 py-[1px] rounded bg-slate-200 dark:bg-[#1a283e] text-slate-600 dark:text-slate-300 text-[8px] font-bold uppercase tracking-wider">
-                                                    Setor: {member.sector}
-                                                </span>
-                                            )}
                                         </div>
                                     </div>
                                     <div className="flex items-center justify-between border-t border-slate-200 dark:border-[#1d2d44]/50 pt-2 mt-1">
