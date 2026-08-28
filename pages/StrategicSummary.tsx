@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { supabase } from "../supabase";
+import { compareMembersByRank, getRankPriority } from "../utils/permissions";
 
 interface Member {
     id: string;
@@ -32,35 +33,7 @@ interface Task {
     sector?: string;
 }
 
-// Rank Priority Logic conforme solicitado
-const getRankPriority = (
-    rankStr: string | null | undefined,
-    abrevStr: string | null | undefined,
-): number => {
-    const s = (rankStr || abrevStr || "").toUpperCase().trim();
-    if (s.includes("MAJOR") || s.includes("MAJ")) return 0;
-    if (s.includes("CAPIT")) return 1;
-    if (s.includes("1º TEN") || s.includes("1.º TEN") || s.includes("1TEN")) {
-        return 2;
-    }
-    if (
-        s.includes("2º TEN") || s.includes("2.º TEN") || s.includes("2TEN") ||
-        s.includes("ASP")
-    ) return 3;
-    if (s.includes("SUBOF") || s.includes("SO.")) return 4;
-    if (s.includes("1º SAR") || s.includes("1.º SAR") || s.includes("1SGT")) {
-        return 5;
-    }
-    if (s.includes("2º SAR") || s.includes("2.º SAR") || s.includes("2SGT")) {
-        return 6;
-    }
-    if (s.includes("3º SAR") || s.includes("3.º SAR") || s.includes("3SGT")) {
-        return 7;
-    }
-    if (s.includes("SGT")) return 7;
-    if (s.includes("CIV")) return 8;
-    return 99;
-};
+
 
 const StrategicSummary: React.FC = () => {
     const [currentUser, setCurrentUser] = useState<any>(null);
@@ -160,28 +133,7 @@ const StrategicSummary: React.FC = () => {
                         );
                     }
 
-                    const sorted = filtered.sort((a, b) => {
-                        // 1ª Camada: Posto/Graduação (Rank)
-                        const pA = getRankPriority(a.rank, a.abrev);
-                        const pB = getRankPriority(b.rank, b.abrev);
-                        if (pA !== pB) return pA - pB;
-
-                        // 2ª Camada: Data da última promoção (Mais antiga primeiro)
-                        const dateA = new Date(a.last_promotion_date || "9999-12-31").getTime();
-                        const dateB = new Date(b.last_promotion_date || "9999-12-31").getTime();
-                        if (dateA !== dateB) return dateA - dateB;
-
-                        // 3ª Camada: Guia de Antiguidade (Menor número = mais antigo)
-                        const guiaA = a.guia_antiguidade || 999999;
-                        const guiaB = b.guia_antiguidade || 999999;
-                        if (guiaA !== guiaB) return guiaA - guiaB;
-
-                        // Desempate final: Nome de Guerra
-                        const nameA = a.war_name || a.name || "";
-                        const nameB = b.war_name || b.name || "";
-                        return nameA.localeCompare(nameB);
-                    });
-
+                    const sorted = filtered.sort(compareMembersByRank);
                     setMembers(sorted);
                 }
 

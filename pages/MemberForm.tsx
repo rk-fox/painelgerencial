@@ -35,6 +35,7 @@ const MemberForm: React.FC = () => {
     email: '',
     phone: '',
     sector: '',
+    guia_antiguidade: '' as number | string,
     courses: [] as string[],
   });
 
@@ -73,6 +74,7 @@ const MemberForm: React.FC = () => {
           email: data.email || '',
           phone: data.phone || '',
           sector: data.sector || '',
+          guia_antiguidade: data.guia_antiguidade !== null && data.guia_antiguidade !== undefined ? data.guia_antiguidade : '',
           courses: Array.isArray(data.courses) ? data.courses : [],
         });
         if (data.avatar) {
@@ -159,6 +161,7 @@ const MemberForm: React.FC = () => {
         email: formData.email,
         phone: formData.phone,
         sector: formData.sector,
+        guia_antiguidade: formData.guia_antiguidade !== '' && !isNaN(Number(formData.guia_antiguidade)) ? Number(formData.guia_antiguidade) : null,
         avatar: avatarUrl || 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y',
       };
 
@@ -318,6 +321,20 @@ const MemberForm: React.FC = () => {
                     id="last_promotion_date"
                     type="date"
                     value={formData.last_promotion_date}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-bold text-[#0d141b] dark:text-white" htmlFor="guia_antiguidade">
+                    Guia Antiguidade
+                  </label>
+                  <input
+                    className="rounded-lg border-[#d1d5db] bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-white focus:border-primary focus:ring-primary h-12 px-4 w-full"
+                    id="guia_antiguidade"
+                    type="number"
+                    min="1"
+                    placeholder="Ex: 1, 2, 3..."
+                    value={formData.guia_antiguidade}
                     onChange={handleInputChange}
                   />
                 </div>

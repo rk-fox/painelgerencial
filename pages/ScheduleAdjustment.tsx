@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "../supabase";
 import { parseLocalDate } from "../utils/dateUtils";
+import { compareMembersByRank, getRankPriority } from "../utils/permissions";
 
 interface Member {
     id: string;
@@ -129,37 +130,6 @@ const ScheduleAdjustment: React.FC<ScheduleAdjustmentProps> = ({
         }
     }, [selectedSector, currentUser, currentYear]);
 
-    const getRankPriority = (
-        rank: string | null,
-        abrev: string | null,
-    ): number => {
-        const s = (rank || abrev || "").toUpperCase();
-        if (s.includes("MAJ")) return 0;
-        if (s.includes("CAP")) return 1;
-        if (s.includes("1º TEN") || s.includes("1TEN")) return 2;
-        if (s.includes("2º TEN") || s.includes("2TEN")) return 3;
-        if (s.includes("SUB") || s.includes("SO")) return 4;
-        if (
-            s.includes("1º SAR") || s.includes("1SGT") ||
-            (s.includes("1º") && s.includes("SGT"))
-        ) return 5;
-        if (
-            s.includes("2º SAR") || s.includes("2SGT") ||
-            (s.includes("2º") && s.includes("SGT"))
-        ) return 6;
-        if (
-            s.includes("3º SAR") || s.includes("3SGT") ||
-            (s.includes("3º") && s.includes("SGT"))
-        ) return 7;
-        if (s.includes("CIVIL")) return 8;
-
-        // Fallback checks for simple abbreviations if the specific ones above aren't found
-        if (s.includes("TEN")) return 2;
-        if (s.includes("SGT")) return 7;
-
-        return 9;
-    };
-
     const fetchMembersWithDiarias = async (filterSector?: string) => {
         const year = currentYear || new Date().getFullYear();
         const startDate = `${year}-01-01`;
@@ -234,27 +204,7 @@ const ScheduleAdjustment: React.FC<ScheduleAdjustmentProps> = ({
         setMaxGraduadoDiarias(maxGrad);
 
         // Sort and set
-        const sortedMembers = membersWithDiarias.sort((a, b) => {
-            const pA = getRankPriority(a.rank, a.abrev);
-            const pB = getRankPriority(b.rank, b.abrev);
-            if (pA !== pB) return pA - pB;
-
-            const dateA = a.last_promotion_date
-                ? new Date(a.last_promotion_date).getTime()
-                : Infinity;
-            const dateB = b.last_promotion_date
-                ? new Date(b.last_promotion_date).getTime()
-                : Infinity;
-            if (dateA !== dateB) return dateA - dateB;
-
-            const guiaA = a.guia_antiguidade ?? 9999;
-            const guiaB = b.guia_antiguidade ?? 9999;
-            if (guiaA !== guiaB) return guiaA - guiaB;
-
-            const nameA = a.war_name || a.name || "";
-            const nameB = b.war_name || b.name || "";
-            return nameA.localeCompare(nameB);
-        });
+        const sortedMembers = membersWithDiarias.sort(compareMembersByRank);
 
         setMembers(sortedMembers);
     };

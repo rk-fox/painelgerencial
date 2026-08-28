@@ -1,24 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabase";
 import { Member } from "../types";
 import { formatLocalDate, parseLocalDate } from "../utils/dateUtils";
+import { compareMembersByRank, findSeniorityTies, isOfficer } from "../utils/permissions";
 import MemberProfileModal from "../components/MemberProfileModal";
-
-const getRankPriority = (rankStr: string | null, abrevStr: string | null): number => {
-    const s = (rankStr || abrevStr || '').toUpperCase().trim();
-    if (s.includes('MAJOR') || s.includes('MAJ')) return 0;
-    if (s.includes('CAPIT')) return 1;
-    if (s.includes('1\u00ba TEN') || s.includes('1.\u00ba TEN') || s.includes('1TEN')) return 2;
-    if (s.includes('2\u00ba TEN') || s.includes('2.\u00ba TEN') || s.includes('2TEN') || s.includes('ASP')) return 3;
-    if (s.includes('SUBOF') || s.includes('SO.')) return 4;
-    if (s.includes('1\u00ba SAR') || s.includes('1.\u00ba SAR') || s.includes('1SGT')) return 5;
-    if (s.includes('2\u00ba SAR') || s.includes('2.\u00ba SAR') || s.includes('2SGT')) return 6;
-    if (s.includes('3\u00ba SAR') || s.includes('3.\u00ba SAR') || s.includes('3SGT')) return 7;
-    if (s.includes('SGT')) return 7;
-    if (s.includes('CIV')) return 8;
-    return 99;
-};
+import SeniorityTieModal from "../components/SeniorityTieModal";
 
 const MembersList: React.FC = () => {
     const navigate = useNavigate();
@@ -36,9 +23,36 @@ const MembersList: React.FC = () => {
     );
     const [showDelegationModal, setShowDelegationModal] = useState(false);
     const [currentUser, setCurrentUser] = useState<any>(null);
+    const [isSeniorityModalOpen, setIsSeniorityModalOpen] = useState(false);
 
     const [missions, setMissions] = useState<any[]>([]);
     const [unavailabilities, setUnavailabilities] = useState<any[]>([]);
+
+    const seniorityTies = useMemo(() => findSeniorityTies(members), [members]);
+    const unresolvedTies = useMemo(() => seniorityTies.filter((t) => !t.isResolved), [seniorityTies]);
+
+    const shouldShowTieBanner = useMemo(() => {
+        if (unresolvedTies.length === 0) return false;
+        if (!currentUser) return true;
+
+        // 1. Se o próprio usuário está no empate, exibe
+        const userInTie = unresolvedTies.some((t) => t.members.some((m) => m.id === currentUser.id));
+        if (userInTie) return true;
+
+        // 2. Oficiais e Chefia (CH) sempre visualizam
+        const isUserOfficer = isOfficer(currentUser.rank, currentUser.abrev) || currentUser.sector === "CH";
+        if (isUserOfficer) return true;
+
+        // 3. Regra de Encarregado do setor
+        const userSector = currentUser.sector;
+        if (!userSector) return true;
+
+        const hasEncarregadoInSector = members.some((m) => m.sector === userSector && m.encarregado);
+        if (hasEncarregadoInSector) {
+            return !!currentUser.encarregado;
+        }
+        return true;
+    }, [unresolvedTies, currentUser, members]);
 
     useEffect(() => {
         const user = JSON.parse(localStorage.getItem("currentUser") || "{}");
@@ -90,17 +104,7 @@ const MembersList: React.FC = () => {
 
             if (error) throw error;
 
-            const sorted = (data || []).sort((a, b) => {
-                const pA = getRankPriority(a.rank, a.abrev);
-                const pB = getRankPriority(b.rank, b.abrev);
-                if (pA !== pB) return pA - pB;
-                const dateA = a.last_promotion_date ? new Date(a.last_promotion_date).getTime() : Infinity;
-                const dateB = b.last_promotion_date ? new Date(b.last_promotion_date).getTime() : Infinity;
-                if (dateA !== dateB) return dateA - dateB;
-                const guiaA = a.guia_antiguidade ?? 9999;
-                const guiaB = b.guia_antiguidade ?? 9999;
-                return guiaA - guiaB;
-            });
+            const sorted = (data || []).sort(compareMembersByRank);
 
             setMembers(sorted);
         } catch (err: any) {
@@ -321,6 +325,32 @@ const MembersList: React.FC = () => {
                     color="purple"
                 />
             </div>
+
+            {/* Seniority Tie Alert Banner */}
+            {shouldShowTieBanner && (
+                <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-amber-500/5 dark:from-amber-950/40 dark:to-amber-900/20 border border-amber-300 dark:border-amber-700/60 rounded-2xl p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm mb-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="flex items-start gap-3.5">
+                        <div className="size-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/30">
+                            <span className="material-symbols-outlined text-2xl">military_tech</span>
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-extrabold text-amber-950 dark:text-amber-200 flex items-center gap-2">
+                                Empate de Antiguidade Detectado ({unresolvedTies.length} {unresolvedTies.length === 1 ? 'grupo' : 'grupos'})
+                            </h3>
+                            <p className="text-xs text-amber-800 dark:text-amber-300/80 mt-0.5 max-w-2xl">
+                                Há militares com o mesmo posto e mesma data de promoção aguardando definição de ordem no <strong>Guia de Antiguidade (Almanaque)</strong>.
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => setIsSeniorityModalOpen(true)}
+                        className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-md shadow-amber-600/30 transition-all active:scale-95 flex items-center gap-2 shrink-0 self-start md:self-auto"
+                    >
+                        <span className="material-symbols-outlined text-base">swap_vert</span>
+                        Definir Ordem de Antiguidade
+                    </button>
+                </div>
+            )}
 
             {/* Filters and Search */}
             <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-[#e7edf3] dark:border-slate-800 shadow-sm mb-6">
@@ -654,11 +684,8 @@ const MembersList: React.FC = () => {
                                                                         ? "indigo"
                                                                         : "red";
 
-                                                                const isOfficer = (rStr: string | null, aStr: string | null) => {
-                                                                    const priority = getRankPriority(rStr, aStr);
-                                                                    return priority >= 0 && priority <= 3;
-                                                                };
                                                                 const canDesignateEncarregado = isOfficer(currentUser?.rank, currentUser?.abrev) || !!currentUser?.encarregado;
+                                                                const hasTie = unresolvedTies.some((t) => t.members.some((m) => m.id === member.id));
 
                                                                 return (
                                                                     <MemberRow
@@ -694,6 +721,9 @@ const MembersList: React.FC = () => {
                                                                         )}
                                                                         status={displayedStatus}
                                                                         statusColor={displayedStatusColor}
+                                                                        hasTie={hasTie}
+                                                                        guiaAntiguidade={member.guia_antiguidade}
+                                                                        onOpenSeniorityModal={() => setIsSeniorityModalOpen(true)}
                                                                         encarregado={member.encarregado}
                                                                         canDesignateEncarregado={canDesignateEncarregado}
                                                                         onToggleEncarregado={() =>
@@ -902,6 +932,16 @@ const MembersList: React.FC = () => {
                     onClose={() => setSelectedMember(null)}
                 />
             )}
+
+            {/* Seniority Tie Modal */}
+            <SeniorityTieModal
+                isOpen={isSeniorityModalOpen}
+                onClose={() => setIsSeniorityModalOpen(false)}
+                tieGroups={seniorityTies}
+                onSuccess={() => {
+                    fetchMembers();
+                }}
+            />
         </div>
     );
 };
@@ -1191,6 +1231,9 @@ const MemberRow = ({
     entry,
     status,
     statusColor,
+    hasTie,
+    guiaAntiguidade,
+    onOpenSeniorityModal,
     encarregado,
     canDesignateEncarregado,
     onToggleEncarregado,
@@ -1254,7 +1297,32 @@ const MemberRow = ({
                 </div>
             </td>
             <td className="hidden md:table-cell px-6 py-4 text-sm text-[#4c739a] dark:text-slate-400">
-                {rank}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                    <span>{rank}</span>
+                    {hasTie ? (
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (onOpenSeniorityModal) onOpenSeniorityModal();
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700/60 text-amber-800 dark:text-amber-300 text-[10px] font-bold hover:bg-amber-200 transition-colors"
+                            title="Empate de Antiguidade detectado. Clique para ordenar."
+                        >
+                            <span className="material-symbols-outlined text-[12px]">warning</span>
+                            Empate
+                        </button>
+                    ) : (
+                        guiaAntiguidade !== null && guiaAntiguidade !== undefined && (
+                            <span
+                                className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                                title={`Posição no Guia/Almanaque: ${guiaAntiguidade}º`}
+                            >
+                                Nº {guiaAntiguidade}
+                            </span>
+                        )
+                    )}
+                </div>
             </td>
             <td className="hidden md:table-cell px-6 py-4">
                 {rank !== "Civil" && specialty && (

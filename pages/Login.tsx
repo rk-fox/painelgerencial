@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabase";
+import { compareMembersByRank } from "../utils/permissions";
 
 interface User {
   id: string;
@@ -15,36 +16,6 @@ interface User {
   last_promotion_date?: string;
   guia_antiguidade?: number;
 }
-
-// Rank Priority Logic
-const getRankPriority = (
-  rankStr: string | null,
-  abrevStr: string | null,
-): number => {
-  const s = (rankStr || abrevStr || "").toUpperCase().trim();
-  if (s.includes("MAJOR") || s.includes("MAJ")) return 0;
-  if (s.includes("CAPIT")) return 1;
-  if (s.includes("1º TEN") || s.includes("1.º TEN") || s.includes("1TEN")) {
-    return 2;
-  }
-  if (
-    s.includes("2º TEN") || s.includes("2.º TEN") || s.includes("2TEN") ||
-    s.includes("ASP")
-  ) return 3;
-  if (s.includes("SUBOF") || s.includes("SO.")) return 4;
-  if (s.includes("1º SAR") || s.includes("1.º SAR") || s.includes("1SGT")) {
-    return 5;
-  }
-  if (s.includes("2º SAR") || s.includes("2.º SAR") || s.includes("2SGT")) {
-    return 6;
-  }
-  if (s.includes("3º SAR") || s.includes("3.º SAR") || s.includes("3SGT")) {
-    return 7;
-  }
-  if (s.includes("SGT")) return 7;
-  if (s.includes("CIV")) return 8;
-  return 99;
-};
 
 // Fallback abbreviations for legacy data
 const legacyAbbr: Record<string, string> = {
@@ -64,7 +35,6 @@ const Login: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [password, setPassword] = useState("");
-  const [dontUsePassword, setDontUsePassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,21 +66,7 @@ const Login: React.FC = () => {
 
       if (error) throw error;
 
-      const sortedUsers = (data || []).sort((a, b) => {
-        const pA = getRankPriority(a.rank, a.abrev);
-        const pB = getRankPriority(b.rank, b.abrev);
-        if (pA !== pB) return pA - pB;
-
-        // Sort by last promotion date (oldest to newest)
-        const dateA = a.last_promotion_date ? new Date(a.last_promotion_date).getTime() : Infinity;
-        const dateB = b.last_promotion_date ? new Date(b.last_promotion_date).getTime() : Infinity;
-        if (dateA !== dateB) return dateA - dateB;
-
-        // Tie-breaker: guia_antiguidade
-        const guiaA = a.guia_antiguidade ?? 9999;
-        const guiaB = b.guia_antiguidade ?? 9999;
-        return guiaA - guiaB;
-      });
+      const sortedUsers = (data || []).sort(compareMembersByRank);
       setUsers(sortedUsers);
     } catch (err: any) {
       console.error("Error fetching users:", err.message);
@@ -461,7 +417,7 @@ const Login: React.FC = () => {
             </a>
           </div>
           <p>
-            <i>Desenvolvido por 1S Robson</i>
+            <i>Produto da Subdivisão Estratégica - CGNA/DECEA</i>
           </p>
         </footer>
       </div>

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../supabase";
 import { parseLocalDate } from "../utils/dateUtils";
-import { canAccessScheduleAndReports } from "../utils/permissions";
+import { canAccessScheduleAndReports, compareMembersByRank, getRankPriority, isOfficer } from "../utils/permissions";
 
 interface Member {
     id: string;
@@ -39,35 +39,7 @@ interface Task {
     obs?: string | null;
     prazo_final?: string | null;
 }
-// Rank Priority Logic
-const getRankPriority = (
-    rankStr: string | null,
-    abrevStr: string | null,
-): number => {
-    const s = (rankStr || abrevStr || "").toUpperCase().trim();
-    if (s.includes("MAJOR") || s.includes("MAJ")) return 0;
-    if (s.includes("CAPIT")) return 1;
-    if (s.includes("1º TEN") || s.includes("1.º TEN") || s.includes("1TEN")) {
-        return 2;
-    }
-    if (
-        s.includes("2º TEN") || s.includes("2.º TEN") || s.includes("2TEN") ||
-        s.includes("ASP")
-    ) return 3;
-    if (s.includes("SUBOF") || s.includes("SO.")) return 4;
-    if (s.includes("1º SAR") || s.includes("1.º SAR") || s.includes("1SGT")) {
-        return 5;
-    }
-    if (s.includes("2º SAR") || s.includes("2.º SAR") || s.includes("2SGT")) {
-        return 6;
-    }
-    if (s.includes("3º SAR") || s.includes("3.º SAR") || s.includes("3SGT")) {
-        return 7;
-    }
-    if (s.includes("SGT")) return 7;
-    if (s.includes("CIV")) return 8;
-    return 99;
-};
+
 
 const TaskForm: React.FC = () => {
     const navigate = useNavigate();
@@ -291,56 +263,14 @@ const TaskForm: React.FC = () => {
                 );
             }
 
-            const sorted = filtered.sort((a, b) => {
-                // 1ª Camada: Posto/Graduação (Rank)
-                const pA = getRankPriority(a.rank, a.abrev);
-                const pB = getRankPriority(b.rank, b.abrev);
-                if (pA !== pB) return pA - pB;
-
-                // 2ª Camada: Data da última promoção (Mais antiga primeiro)
-                // Usamos um fallback para uma data muito futura caso esteja nulo
-                const dateA = new Date(a.last_promotion_date || "9999-12-31")
-                    .getTime();
-                const dateB = new Date(b.last_promotion_date || "9999-12-31")
-                    .getTime();
-                if (dateA !== dateB) return dateA - dateB;
-
-                // 3ª Camada: Guia de Antiguidade (Menor número = mais antigo)
-                const guiaA = a.guia_antiguidade || 999999;
-                const guiaB = b.guia_antiguidade || 999999;
-                if (guiaA !== guiaB) return guiaA - guiaB;
-
-                // Desempate final: Nome de Guerra
-                const nameA = a.war_name || a.name || "";
-                const nameB = b.war_name || b.name || "";
-                return nameA.localeCompare(nameB);
-            });
-
+            const sorted = filtered.sort(compareMembersByRank);
             setMembers(sorted);
 
             // Filter all members from CP, EA, and CH for meetings
             let meetingFiltered = (data || []).filter((m) =>
                 m.sector === "CP" || m.sector === "EA" || m.sector === "CH"
             );
-            const sortedMeeting = [...meetingFiltered].sort((a, b) => {
-                const pA = getRankPriority(a.rank, a.abrev);
-                const pB = getRankPriority(b.rank, b.abrev);
-                if (pA !== pB) return pA - pB;
-
-                const dateA = new Date(a.last_promotion_date || "9999-12-31")
-                    .getTime();
-                const dateB = new Date(b.last_promotion_date || "9999-12-31")
-                    .getTime();
-                if (dateA !== dateB) return dateA - dateB;
-
-                const guiaA = a.guia_antiguidade || 999999;
-                const guiaB = b.guia_antiguidade || 999999;
-                if (guiaA !== guiaB) return guiaA - guiaB;
-
-                const nameA = a.war_name || a.name || "";
-                const nameB = b.war_name || b.name || "";
-                return nameA.localeCompare(nameB);
-            });
+            const sortedMeeting = [...meetingFiltered].sort(compareMembersByRank);
             setMeetingAvailableMembers(sortedMeeting);
         } catch (err) {
             console.error("Error fetching members:", err);

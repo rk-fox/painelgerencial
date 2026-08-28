@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../supabase";
-import { canAccessScheduleAndReports } from "../utils/permissions";
+import { canAccessScheduleAndReports, findSeniorityTies, isOfficer } from "../utils/permissions";
 
 const Layout: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [newTasks, setNewTasks] = useState<any[]>([]);
+  const [hasSeniorityTieAlert, setHasSeniorityTieAlert] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [canAccessScheduleReports, setCanAccessScheduleReports] = useState(true);
   const location = useLocation();
@@ -53,23 +54,18 @@ const Layout: React.FC = () => {
           };
           setCurrentUser(userWithSession);
           checkNotifications(userWithSession);
+          checkSeniorityTies(userWithSession);
           localStorage.setItem("currentUser", JSON.stringify(userWithSession));
           canAccessScheduleAndReports(userWithSession).then(setCanAccessScheduleReports);
-        }
-      } else {
-        const localUser = localStorage.getItem("currentUser");
-        if (localUser) {
-          const parsedUser = JSON.parse(localUser);
-          if (parsedUser.user_id) {
-            navigate("/");
-          } else {
-            setCurrentUser(parsedUser);
-            checkNotifications(parsedUser);
-            canAccessScheduleAndReports(parsedUser).then(setCanAccessScheduleReports);
-          }
         } else {
+          // If no profile found for auth user
+          localStorage.removeItem("currentUser");
           navigate("/");
         }
+      } else {
+        // No active Supabase session
+        localStorage.removeItem("currentUser");
+        navigate("/");
       }
     };
 
@@ -141,6 +137,70 @@ const Layout: React.FC = () => {
     } catch (err: any) {
       console.error("Error fetching notifications:", err.message);
     }
+  };
+
+  const checkSeniorityTies = async (user: any) => {
+    if (!user) return;
+    try {
+      const { data: allMembers } = await supabase
+        .from("members")
+        .select("id, name, war_name, rank, abrev, last_promotion_date, guia_antiguidade, sector, encarregado");
+
+      if (allMembers) {
+        const ties = findSeniorityTies(allMembers);
+        const unresolved = ties.filter((t) => !t.isResolved);
+        if (unresolved.length === 0) {
+          setHasSeniorityTieAlert(false);
+          return;
+        }
+
+        // 1. Se o próprio usuário estiver envolvido no empate, sempre notifica
+        const userInTie = unresolved.some((t) => t.members.some((m) => m.id === user.id));
+        if (userInTie) {
+          setHasSeniorityTieAlert(true);
+          return;
+        }
+
+        // 2. Oficiais e Chefia (CH) sempre recebem a notificação
+        const isUserOfficer = isOfficer(user.rank, user.abrev) || user.sector === "CH";
+        if (isUserOfficer) {
+          setHasSeniorityTieAlert(true);
+          return;
+        }
+
+        // 3. Regra por setor (CP, EA)
+        const userSector = user.sector;
+        if (!userSector) {
+          setHasSeniorityTieAlert(true);
+          return;
+        }
+
+        // Verifica se existem empates no setor do usuário
+        const sectorTies = unresolved.filter((t) => t.members.some((m) => m.sector === userSector));
+        if (sectorTies.length === 0) {
+          setHasSeniorityTieAlert(false);
+          return;
+        }
+
+        // Verifica se o setor possui algum encarregado cadastrado
+        const sectorHasEncarregado = allMembers.some((m) => m.sector === userSector && m.encarregado);
+
+        if (sectorHasEncarregado) {
+          // Se tem encarregado, aparece para os encarregados
+          setHasSeniorityTieAlert(!!user.encarregado);
+        } else {
+          // Se não tem encarregado, aparece para todos do setor
+          setHasSeniorityTieAlert(true);
+        }
+      }
+    } catch (e) {
+      console.error("Error checking seniority ties:", e);
+    }
+  };
+
+  const clearNotifications = () => {
+    setNewTasks([]);
+    localStorage.setItem("notificationsClearedAt", new Date().toISOString());
   };
 
   const handleLogout = async () => {
@@ -372,48 +432,64 @@ const Layout: React.FC = () => {
               <button
                 ref={bellButtonRef}
                 className="text-[#4c739a] hover:text-primary transition-all active:scale-95 relative"
-                title="Notificações"
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                title="Notificações"
               >
                 <span className="material-symbols-outlined text-[20px]">
                   notifications
                 </span>
-                {newTasks.length > 0 && (
-                  <span className="absolute top-0 right-0 size-2 bg-red-500 rounded-full border border-white dark:border-slate-900">
-                  </span>
+                {(newTasks.length > 0 || hasSeniorityTieAlert) && (
+                  <span className={`absolute -top-1 -right-1 size-2 rounded-full ring-2 ring-white dark:ring-slate-900 ${hasSeniorityTieAlert ? "bg-amber-500 animate-pulse" : "bg-primary"}`} />
                 )}
               </button>
 
-              {/* Notifications Popup */}
+              {/* Notification Dropdown */}
               {isNotificationsOpen && (
                 <div
                   ref={notificationRef}
-                  className="absolute bottom-full left-0 mb-2 w-72 bg-white dark:bg-slate-900 border border-[#e7edf3] dark:border-slate-800 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                  className="absolute left-0 bottom-full mb-3 w-80 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-[#e7edf3] dark:border-slate-800 z-[110] overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200"
                 >
-                  <div className="p-3 border-b border-[#e7edf3] dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
-                    <h3 className="font-bold text-xs text-[#0d141b] dark:text-white uppercase tracking-wider">
-                      Novas Tarefas
+                  <div className="p-4 border-b border-[#e7edf3] dark:border-slate-800 flex items-center justify-between">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#0d141b] dark:text-white">
+                      Notificações
                     </h3>
                     <div className="flex items-center gap-2">
                       {newTasks.length > 0 && (
                         <button
-                          onClick={() => {
-                            setNewTasks([]);
-                            localStorage.setItem("notificationsClearedAt", new Date().toISOString());
-                          }}
-                          className="text-[10px] font-bold text-[#4c739a] hover:text-red-500 transition-colors uppercase tracking-wider"
-                          title="Limpar todas as notificações"
+                          onClick={clearNotifications}
+                          className="text-[10px] text-[#4c739a] hover:text-primary transition-colors"
                         >
                           Limpar
                         </button>
                       )}
                       <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">
-                        {newTasks.length}
+                        {newTasks.length + (hasSeniorityTieAlert ? 1 : 0)}
                       </span>
                     </div>
                   </div>
-                  <div className="max-h-60 overflow-y-auto">
-                    {newTasks.length === 0
+                  <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                    {hasSeniorityTieAlert && (
+                      <div
+                        className="p-3 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-900/50 hover:bg-amber-100/70 dark:hover:bg-amber-900/40 transition-colors cursor-pointer"
+                        onClick={() => {
+                          navigate("/app/members");
+                          setIsNotificationsOpen(false);
+                        }}
+                      >
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="bg-amber-500 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">
+                            Antiguidade
+                          </span>
+                          <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                            Ação Necessária
+                          </span>
+                        </div>
+                        <p className="text-xs font-bold text-amber-950 dark:text-amber-100 leading-tight">
+                          Empate de antiguidade detectado entre militares. Clique para acessar a equipe e definir a ordem.
+                        </p>
+                      </div>
+                    )}
+                    {newTasks.length === 0 && !hasSeniorityTieAlert
                       ? (
                         <div className="p-4 text-center text-[#4c739a] text-xs italic">
                           Nenhuma nova notificação.
