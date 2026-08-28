@@ -27,11 +27,25 @@ interface MemberWithDiarias extends Member {
     diariasNoAno: number;
 }
 
-const ScheduleAdjustment: React.FC = () => {
+export interface ScheduleAdjustmentProps {
+    missionId?: string | null;
+    isModal?: boolean;
+    onClose?: () => void;
+    onSuccess?: () => void;
+}
+
+const ScheduleAdjustment: React.FC<ScheduleAdjustmentProps> = ({
+    missionId: propsMissionId,
+    isModal = false,
+    onClose,
+    onSuccess,
+}) => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const missionId = searchParams.get("id");
-    const isEditMode = !!missionId;
+    const effectiveMissionId = propsMissionId !== undefined
+        ? propsMissionId
+        : searchParams.get("id");
+    const isEditMode = !!effectiveMissionId;
 
     // Form state
     const [nome, setNome] = useState("");
@@ -88,12 +102,24 @@ const ScheduleAdjustment: React.FC = () => {
             }
         }
 
-        if (isEditMode) {
-            loadMission(missionId);
+        if (effectiveMissionId) {
+            loadMission(effectiveMissionId);
+        } else {
+            setNome("");
+            setDescricao("");
+            setLocal("");
+            setDeslocamento("Aéreo");
+            setQtdEquipeManual(0);
+            setFav(false);
+            setGratrep(false);
+            setGt(false);
+            setDataInicio("");
+            setDataFim("");
+            setSelectedTeam([]);
         }
-    }, [missionId, isEditMode]);
+    }, [effectiveMissionId]);
 
-    // Re-fetch members whenever the effective sector changes
+    // Re-fetch members whenever the effective sector or currentYear changes
     useEffect(() => {
         const activeSector = currentUser?.sector === "CH"
             ? selectedSector
@@ -101,7 +127,7 @@ const ScheduleAdjustment: React.FC = () => {
         if (activeSector) {
             fetchMembersWithDiarias(activeSector);
         }
-    }, [selectedSector, currentUser]);
+    }, [selectedSector, currentUser, currentYear]);
 
     const getRankPriority = (
         rank: string | null,
@@ -135,7 +161,7 @@ const ScheduleAdjustment: React.FC = () => {
     };
 
     const fetchMembersWithDiarias = async (filterSector?: string) => {
-        const year = new Date().getFullYear();
+        const year = currentYear || new Date().getFullYear();
         const startDate = `${year}-01-01`;
         const endDate = `${year}-12-31`;
 
@@ -172,10 +198,11 @@ const ScheduleAdjustment: React.FC = () => {
                 let totalDiarias = 0;
                 if (missionsData) {
                     missionsData.forEach((mission) => {
-                        // Only count mission days if the mission matches the member's sector
-                        // (Usually they match, but this is safer)
+                        // For CH members, count all their missions regardless of sector (CP, EA, CH).
+                        // For CP/EA members, count missions that match their sector.
+                        const isMatch = member.sector === "CH" || mission.sector === member.sector;
                         if (
-                            mission.sector === member.sector &&
+                            isMatch &&
                             mission.equipe && mission.equipe.includes(member.id) &&
                             !mission.gratrep && !mission.gt
                         ) {
@@ -424,11 +451,11 @@ const ScheduleAdjustment: React.FC = () => {
         console.log("Final missionData with sector:", missionData);
 
         try {
-            if (isEditMode) {
+            if (isEditMode && effectiveMissionId) {
                 const { error, data: updatedMission } = await supabase
                     .from("missions")
                     .update(missionData)
-                    .eq("id", missionId)
+                    .eq("id", effectiveMissionId)
                     .select("task_id")
                     .single();
 
@@ -489,12 +516,26 @@ const ScheduleAdjustment: React.FC = () => {
                 // Task is only created when mission is validated (valid = true)
             }
 
-            navigate("/app/schedule");
+            if (onSuccess) {
+                onSuccess();
+            } else if (onClose) {
+                onClose();
+            } else {
+                navigate("/app/schedule");
+            }
         } catch (error) {
             console.error(error);
             alert("Erro ao salvar missão");
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleCancel = () => {
+        if (onClose) {
+            onClose();
+        } else {
+            navigate("/app/schedule");
         }
     };
 
@@ -510,9 +551,9 @@ const ScheduleAdjustment: React.FC = () => {
                         técnica.
                     </p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex items-center gap-3">
                     <button
-                        onClick={() => navigate("/app/schedule")}
+                        onClick={handleCancel}
                         className="px-5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95"
                     >
                         Cancelar
@@ -531,6 +572,15 @@ const ScheduleAdjustment: React.FC = () => {
                                 ? "Salvar Alterações"
                                 : "Finalizar Planejamento")}
                     </button>
+                    {isModal && onClose && (
+                        <button
+                            onClick={onClose}
+                            className="size-10 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors"
+                            title="Fechar"
+                        >
+                            <span className="material-symbols-outlined">close</span>
+                        </button>
+                    )}
                 </div>
             </div>
 

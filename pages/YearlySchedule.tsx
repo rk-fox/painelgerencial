@@ -6,6 +6,7 @@ import {
     canAccessScheduleAndReports,
     shouldFilterUnvalidatedMissions,
 } from "../utils/permissions";
+import ScheduleAdjustment from "./ScheduleAdjustment";
 
 interface Member {
     id: string;
@@ -74,6 +75,9 @@ const YearlySchedule: React.FC = () => {
     const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
     const [isMonthPopupOpen, setIsMonthPopupOpen] = useState(false);
     const [isReviewPopupOpen, setIsReviewPopupOpen] = useState(false);
+    const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
+    const [selectedMissionIdForAdjustment, setSelectedMissionIdForAdjustment] =
+        useState<string | null>(null);
     const [currentUser, setCurrentUser] = useState<any>(() => {
         const userJson = localStorage.getItem("currentUser");
         return userJson ? JSON.parse(userJson) : null;
@@ -380,7 +384,8 @@ const YearlySchedule: React.FC = () => {
     );
 
     const handleEditMission = (missionId: string) => {
-        navigate(`/app/schedule/adjustment?id=${missionId}`);
+        setSelectedMissionIdForAdjustment(missionId);
+        setIsAdjustmentModalOpen(true);
     };
 
     const handleToggleValidMission = async (mission: Mission) => {
@@ -600,7 +605,10 @@ const YearlySchedule: React.FC = () => {
 
                     {/* Botão Cadastrar Nova Viagem ajustado */}
                     <button
-                        onClick={() => navigate("/app/schedule/adjustment")}
+                        onClick={() => {
+                            setSelectedMissionIdForAdjustment(null);
+                            setIsAdjustmentModalOpen(true);
+                        }}
                         className="px-3 md:px-6 py-2 md:py-3 rounded-xl bg-primary text-white text-xs md:text-sm font-bold shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all active:scale-95 flex items-center justify-center gap-1 md:gap-2 flex-1 md:flex-none whitespace-nowrap"
                     >
                         <span className="material-symbols-outlined text-sm md:text-base">
@@ -1180,9 +1188,40 @@ const YearlySchedule: React.FC = () => {
                 </div>
             )}
 
+            {/* Schedule Adjustment Modal */}
+            {isAdjustmentModalOpen && (
+                <div
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-2 md:p-6 overflow-y-auto animate-in fade-in duration-200"
+                    onClick={() => {
+                        setIsAdjustmentModalOpen(false);
+                        setSelectedMissionIdForAdjustment(null);
+                    }}
+                >
+                    <div
+                        className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-7xl w-full max-h-[95vh] overflow-y-auto p-4 md:p-8 scale-100 animate-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <ScheduleAdjustment
+                            missionId={selectedMissionIdForAdjustment}
+                            isModal={true}
+                            onClose={() => {
+                                setIsAdjustmentModalOpen(false);
+                                setSelectedMissionIdForAdjustment(null);
+                            }}
+                            onSuccess={() => {
+                                setIsAdjustmentModalOpen(false);
+                                setSelectedMissionIdForAdjustment(null);
+                                fetchMissions(selectedYear, selectedSector);
+                                fetchMembers(selectedSector);
+                            }}
+                        />
+                    </div>
+                </div>
+            )}
+
             {/* Delete Confirmation Modal */}
             {missionToDelete && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 animate-in fade-in duration-200">
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[120] p-4 animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden scale-100 animate-in zoom-in-95 duration-200">
                         <div className="p-8 flex flex-col items-center text-center">
                             <div className="size-16 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center mb-6">

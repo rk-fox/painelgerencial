@@ -61,6 +61,7 @@ interface Sdia {
     arr?: number | null;
     dep?: number | null;
     r60?: number | null;
+    checked?: boolean;
 }
 
 interface User {
@@ -103,6 +104,7 @@ const SdiaPage: React.FC = () => {
         arr: null,
         dep: null,
         r60: null,
+        checked: false,
     });
 
     const [sdiaToDelete, setSdiaToDelete] = useState<Sdia | null>(null);
@@ -432,9 +434,35 @@ const SdiaPage: React.FC = () => {
             setIsFormOpen(false);
             setEditingSdia(null);
             fetchSdias(selectedYear);
+            fetchCapSdias();
         } catch (error) {
             console.error("Error saving SDIA:", error);
             alert("Erro ao salvar SDIA");
+        }
+    };
+
+    const handleToggleChecked = async (sdia: Sdia) => {
+        const newChecked = !sdia.checked;
+        try {
+            const { error } = await supabase
+                .from("sdia")
+                .update({ checked: newChecked })
+                .eq("id", sdia.id);
+            if (error) throw error;
+
+            setCapSdias((prev) =>
+                prev.map((s) =>
+                    s.id === sdia.id ? { ...s, checked: newChecked } : s
+                )
+            );
+            setSdias((prev) =>
+                prev.map((s) =>
+                    s.id === sdia.id ? { ...s, checked: newChecked } : s
+                )
+            );
+        } catch (error) {
+            console.error("Error toggling checked status:", error);
+            alert("Erro ao alterar status de conferência.");
         }
     };
 
@@ -538,6 +566,7 @@ const SdiaPage: React.FC = () => {
                                 arr: null,
                                 dep: null,
                                 r60: null,
+                                checked: false,
                             });
                             setIsFormOpen(true);
                         }}
@@ -1369,6 +1398,9 @@ const SdiaPage: React.FC = () => {
                                                     <th className="text-center py-3 px-2 font-bold text-slate-500 uppercase text-xs">
                                                         Capacidade Horária
                                                     </th>
+                                                    <th className="text-center py-3 px-2 font-bold text-slate-500 uppercase text-xs">
+                                                        Ações
+                                                    </th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -1395,6 +1427,42 @@ const SdiaPage: React.FC = () => {
                                                                 {sdia.r60 ??
                                                                     "—"}
                                                             </span>
+                                                        </td>
+                                                        <td className="py-3 px-2">
+                                                            <div className="flex items-center justify-center gap-1">
+                                                                <button
+                                                                    onClick={() =>
+                                                                        handleToggleChecked(
+                                                                            sdia,
+                                                                        )}
+                                                                    className={`size-8 flex items-center justify-center rounded-lg transition-colors ${
+                                                                        sdia.checked
+                                                                            ? "hover:bg-green-50 text-green-600"
+                                                                            : "hover:bg-amber-50 text-amber-500"
+                                                                    }`}
+                                                                    title={sdia.checked
+                                                                        ? "Conferida"
+                                                                        : "Não conferida"}
+                                                                >
+                                                                    <span className="material-symbols-outlined text-lg">
+                                                                        {sdia.checked
+                                                                            ? "check_circle"
+                                                                            : "cancel"}
+                                                                    </span>
+                                                                </button>
+                                                                <button
+                                                                    onClick={() =>
+                                                                        handleEditSdia(
+                                                                            sdia,
+                                                                        )}
+                                                                    className="size-8 flex items-center justify-center rounded-lg hover:bg-primary/10 text-primary transition-colors"
+                                                                    title="Editar"
+                                                                >
+                                                                    <span className="material-symbols-outlined text-lg">
+                                                                        edit
+                                                                    </span>
+                                                                </button>
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 ))}

@@ -888,6 +888,11 @@ const StrategicSummary: React.FC = () => {
                                             <h4 className="text-base font-extrabold text-slate-800 dark:text-white leading-tight font-serif">
                                                 {meeting.assunto}
                                             </h4>
+                                            {meeting.detalhes && (
+                                                <p className="mt-2 text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">
+                                                    {meeting.detalhes}
+                                                </p>
+                                            )}
                                             {meeting.link && (
                                                 <div className="mt-2.5 p-2 rounded bg-slate-50 dark:bg-[#0c1424]/40 border border-slate-200 dark:border-[#1a283e] flex items-center gap-1.5">
                                                     <span className="material-symbols-outlined text-[14px] text-primary dark:text-[#cda250]">

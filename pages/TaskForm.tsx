@@ -163,6 +163,7 @@ const TaskForm: React.FC = () => {
     const [showMeetingModal, setShowMeetingModal] = useState(false);
     const [meetingData, setMeetingData] = useState({
         assunto: "",
+        detalhes: "",
         inicio: "",
         fim: "",
         link: "",
@@ -645,6 +646,7 @@ const TaskForm: React.FC = () => {
         try {
             const payload = {
                 assunto: meetingData.assunto,
+                detalhes: meetingData.detalhes || null,
                 inicio: new Date(meetingData.inicio).toISOString(),
                 fim: new Date(meetingData.fim).toISOString(),
                 link: meetingData.link || null,
@@ -665,7 +667,7 @@ const TaskForm: React.FC = () => {
             }
 
             setShowMeetingModal(false);
-            setMeetingData({ assunto: "", inicio: "", fim: "", link: "" });
+            setMeetingData({ assunto: "", detalhes: "", inicio: "", fim: "", link: "" });
             setMeetingMembers([]);
             setEditingMeetingId(null);
             fetchMeetings();
@@ -681,6 +683,7 @@ const TaskForm: React.FC = () => {
         setEditingMeetingId(meeting.id);
         setMeetingData({
             assunto: meeting.assunto,
+            detalhes: meeting.detalhes || "",
             inicio: meeting.inicio.slice(0, 16),
             fim: meeting.fim.slice(0, 16),
             link: meeting.link || "",
@@ -693,6 +696,7 @@ const TaskForm: React.FC = () => {
         setEditingMeetingId(null);
         setMeetingData({
             assunto: `Cópia: ${meeting.assunto}`,
+            detalhes: meeting.detalhes || "",
             inicio: meeting.inicio.slice(0, 16),
             fim: meeting.fim.slice(0, 16),
             link: meeting.link || "",
@@ -2789,6 +2793,7 @@ const TaskForm: React.FC = () => {
                                     setEditingMeetingId(null);
                                     setMeetingData({
                                         assunto: "",
+                                        detalhes: "",
                                         inicio: "",
                                         fim: "",
                                         link: "",
@@ -2823,6 +2828,22 @@ const TaskForm: React.FC = () => {
                                             })}
                                         className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
                                         placeholder="Ex: Reunião de Alinhamento"
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[#0d141b] dark:text-white text-sm font-semibold">
+                                        Detalhes
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={meetingData.detalhes}
+                                        onChange={(e) =>
+                                            setMeetingData({
+                                                ...meetingData,
+                                                detalhes: e.target.value,
+                                            })}
+                                        className="w-full rounded-lg border border-[#cfdbe7] dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary p-3"
+                                        placeholder="Ex: Pauta ou detalhes da reunião"
                                     />
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -3012,6 +3033,7 @@ const TaskForm: React.FC = () => {
                                     setEditingMeetingId(null);
                                     setMeetingData({
                                         assunto: "",
+                                        detalhes: "",
                                         inicio: "",
                                         fim: "",
                                         link: "",
