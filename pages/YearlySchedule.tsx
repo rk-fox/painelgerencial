@@ -55,20 +55,12 @@ const YearlySchedule: React.FC = () => {
         "Dezembro",
     ];
 
-    const [doMustFilterUnvalidated, setDoMustFilterUnvalidated] = useState(
-        false,
-    );
-
     useEffect(() => {
         const checkAccess = async () => {
             const allowed = await canAccessScheduleAndReports(currentUser);
             if (!allowed) {
                 navigate("/app/dashboard");
             }
-            const filterNeeded = await shouldFilterUnvalidatedMissions(
-                currentUser,
-            );
-            setDoMustFilterUnvalidated(filterNeeded);
         };
         checkAccess();
     }, [currentUser, navigate]);
@@ -242,11 +234,6 @@ const YearlySchedule: React.FC = () => {
             .getTime();
 
         return missions.filter((m) => {
-            // Se for necessário filtrar não validadas e ela não for válida, oculta do grid principal
-            if (!onlyStartingInMonth && doMustFilterUnvalidated && !m.valid) {
-                return false;
-            }
-
             const startDate = parseLocalDate(m.data_inicio)?.getTime() || 0;
             const endD = parseLocalDate(m.data_fim);
             const endDate = endD

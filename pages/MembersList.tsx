@@ -114,70 +114,56 @@ const MembersList: React.FC = () => {
         }
     };
 
+    const [deletePassword, setDeletePassword] = useState("");
+    const [deleteError, setDeleteError] = useState<string | null>(null);
+
     const confirmDelete = async () => {
         if (!memberToDelete) return;
 
+        if (!deletePassword) {
+            setDeleteError("Por favor, digite sua senha para confirmar.");
+            return;
+        }
+
         try {
             setLoading(true);
+            setDeleteError(null);
 
-            // Remover referências em outras tabelas para evitar erro de FK
-            
-            // 1. Deletar unavailability (diretamente ligado)
-            await supabase.from("unavailability").delete().eq("member", memberToDelete.id);
-            
-            // 2. Deletar annotations (diretamente ligado)
-            await supabase.from("annotations").delete().eq("member_id", memberToDelete.id);
-            
-            // 3. Remover de tarefas (tasks)
-            await supabase.from("tasks").update({ assigned_to: null }).eq("assigned_to", memberToDelete.id);
-            
-            // 4. Remover de sdia
-            await supabase.from("sdia").update({ analista: null }).eq("analista", memberToDelete.id);
-            
-            // 5. Remover de missions (array equipe)
-            const { data: missions } = await supabase
-                .from("missions")
-                .select("id, equipe")
-                .contains("equipe", [memberToDelete.id]);
-            
-            if (missions && missions.length > 0) {
-                for (const m of missions) {
-                    if (m.equipe) {
-                        const newEquipe = m.equipe.filter((id: string) => id !== memberToDelete.id);
-                        await supabase.from("missions").update({ equipe: newEquipe }).eq("id", m.id);
-                    }
-                }
+            // Reautentica o usuário atual para garantir que tem a senha e a autorização
+            const { data: { user: authUser }, error: userError } = await supabase.auth.getUser();
+            if (userError || !authUser?.email) {
+                setDeleteError("Sessão inválida. Por favor, faça login novamente.");
+                setLoading(false);
+                return;
             }
 
-            // 6. Remover de meetings (array membros) se existir
-            const { data: meetings } = await supabase
-                .from("meeting")
-                .select("id, membros")
-                .contains("membros", [memberToDelete.id]);
-            
-            if (meetings && meetings.length > 0) {
-                for (const mtg of meetings) {
-                    if (mtg.membros) {
-                        const newMembros = mtg.membros.filter((id: string) => id !== memberToDelete.id);
-                        await supabase.from("meeting").update({ membros: newMembros }).eq("id", mtg.id);
-                    }
-                }
+            const { error: authError } = await supabase.auth.signInWithPassword({
+                email: authUser.email,
+                password: deletePassword,
+            });
+
+            if (authError) {
+                setDeleteError("Senha incorreta. Ação não autorizada.");
+                setLoading(false);
+                return;
             }
 
-            // Finalmente, deletar o membro
-            const { error } = await supabase
-                .from("members")
-                .delete()
-                .eq("id", memberToDelete.id);
+            // Executa a exclusão em cascata de forma atômica no banco via RPC
+            const { error: rpcError } = await supabase.rpc("delete_member_cascading", {
+                target_member_id: memberToDelete.id,
+            });
 
-            if (error) throw error;
+            if (rpcError) throw rpcError;
+
             setMembers((prev) =>
                 prev.filter((m) => m.id !== memberToDelete.id)
             );
             setMemberToDelete(null);
+            setDeletePassword("");
+            setDeleteError(null);
         } catch (err: any) {
             console.error("Error deleting member:", err.message);
-            alert("Erro ao deletar membro: " + err.message);
+            setDeleteError("Erro ao deletar membro: " + err.message);
         } finally {
             setLoading(false);
         }
@@ -860,7 +846,7 @@ const MembersList: React.FC = () => {
                 </div>
             </div>
 
-            {/* Custom Confirmation Modal */}
+            {/* Custom Confirmation Modal with Password Challenge */}
             {memberToDelete && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-[#e7edf3] dark:border-slate-800 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
@@ -873,18 +859,56 @@ const MembersList: React.FC = () => {
                             <h3 className="text-xl font-bold text-[#0d141b] dark:text-white mb-2">
                                 Confirmar Exclusão
                             </h3>
-                            <p className="text-[#4c739a] dark:text-slate-400">
+                            <p className="text-[#4c739a] dark:text-slate-400 mb-4">
                                 Tem certeza que deseja deletar o registro de
                                 {" "}
                                 <span className="font-bold text-[#0d141b] dark:text-white">
                                     {memberToDelete.name}
                                 </span>?
-                                <br />Esta ação não pode ser desfeita.
+                                <br /><span className="text-xs text-red-500 font-semibold">Esta ação é irreversível e remove todos os vínculos do militar.</span>
                             </p>
+
+                            <div className="text-left space-y-2 mt-4">
+                                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                    Digite sua senha para autorizar:
+                                </label>
+                                <div className="relative">
+                                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">
+                                        lock
+                                    </span>
+                                    <input
+                                        type="password"
+                                        value={deletePassword}
+                                        onChange={(e) => {
+                                            setDeletePassword(e.target.value);
+                                            setDeleteError(null);
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                                e.preventDefault();
+                                                confirmDelete();
+                                            }
+                                        }}
+                                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 pl-10 pr-4 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-red-500 outline-none text-sm"
+                                        placeholder="Sua senha de acesso"
+                                        autoFocus
+                                    />
+                                </div>
+                                {deleteError && (
+                                    <p className="text-red-500 text-xs font-bold mt-1.5 flex items-center gap-1 animate-in fade-in">
+                                        <span className="material-symbols-outlined text-sm">error</span>
+                                        {deleteError}
+                                    </p>
+                                )}
+                            </div>
                         </div>
                         <div className="flex p-4 gap-3 bg-[#f8fafc] dark:bg-slate-800/50">
                             <button
-                                onClick={() => setMemberToDelete(null)}
+                                onClick={() => {
+                                    setMemberToDelete(null);
+                                    setDeletePassword("");
+                                    setDeleteError(null);
+                                }}
                                 className="flex-1 px-4 py-3 rounded-xl border border-[#cfdbe7] dark:border-slate-700 text-sm font-bold text-[#4c739a] hover:bg-white dark:hover:bg-slate-800 transition-all active:scale-95"
                                 disabled={loading}
                             >
@@ -893,7 +917,7 @@ const MembersList: React.FC = () => {
                             <button
                                 onClick={confirmDelete}
                                 className="flex-1 px-4 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold shadow-lg shadow-red-500/20 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
-                                disabled={loading}
+                                disabled={loading || !deletePassword}
                             >
                                 {loading
                                     ? (

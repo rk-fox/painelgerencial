@@ -406,16 +406,10 @@ const AnnualUnavailability: React.FC = () => {
                 .lte("start_date", endOfYear)
                 .gte("end_date", startOfYear);
 
-            const filterNeeded = await shouldFilterUnvalidatedMissions(currentUser);
-
             let missionsQuery = supabase.from("missions")
                 .select("id, nome, data_inicio, data_fim, equipe, sector")
                 .lte("data_inicio", endOfYear)
                 .gte("data_fim", startOfYear);
-
-            if (filterNeeded) {
-                missionsQuery = missionsQuery.eq("valid", true);
-            }
 
             let annotationsQuery = supabase.from("annotations")
                 .select("*")

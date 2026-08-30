@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../supabase";
-import { canAccessScheduleAndReports, findSeniorityTies, isOfficer } from "../utils/permissions";
+import { canAccessScheduleAndReports, findSeniorityTies, getAuthenticatedUserProfile, isOfficer } from "../utils/permissions";
 
 const Layout: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
@@ -18,58 +18,21 @@ const Layout: React.FC = () => {
   const bellButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+    const syncUserSession = async () => {
+      const profile = await getAuthenticatedUserProfile();
 
-      if (session) {
-        // Fetch full profile from members using user_id
-        const { data: profile, error } = await supabase
-          .from("members")
-          .select("*")
-          .eq("user_id", session.user.id)
-          .single();
-
-        if (profile) {
-          // Check for active CH delegations
-          let effectiveSector = profile.sector;
-          const today = new Date().toISOString().split("T")[0];
-
-          const { data: delegation } = await supabase
-            .from("ch_delegations")
-            .select("*")
-            .eq("beneficiary_id", profile.id)
-            .eq("is_active", true)
-            .lte("start_date", today)
-            .or(`end_date.is.null,end_date.gte.${today}`)
-            .maybeSingle();
-
-          if (delegation) {
-            effectiveSector = "CH";
-          }
-
-          const userWithSession = {
-            ...profile,
-            sector: effectiveSector,
-            last_login: session.user.last_sign_in_at,
-          };
-          setCurrentUser(userWithSession);
-          checkNotifications(userWithSession);
-          checkSeniorityTies(userWithSession);
-          localStorage.setItem("currentUser", JSON.stringify(userWithSession));
-          canAccessScheduleAndReports(userWithSession).then(setCanAccessScheduleReports);
-        } else {
-          // If no profile found for auth user
-          localStorage.removeItem("currentUser");
-          navigate("/");
-        }
+      if (profile) {
+        setCurrentUser(profile);
+        checkNotifications(profile);
+        checkSeniorityTies(profile);
+        canAccessScheduleAndReports(profile).then(setCanAccessScheduleReports);
       } else {
-        // No active Supabase session
         localStorage.removeItem("currentUser");
         navigate("/");
       }
     };
 
-    getSession();
+    syncUserSession();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -94,6 +57,9 @@ const Layout: React.FC = () => {
         !bellButtonRef.current.contains(event.target as Node)
       ) {
         setIsNotificationsOpen(false);
+        if (sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
+          setIsSidebarCollapsed(true);
+        }
       }
     };
 
@@ -270,12 +236,16 @@ const Layout: React.FC = () => {
       <aside
         ref={sidebarRef}
         onMouseEnter={() => setIsSidebarCollapsed(false)}
-        onMouseLeave={() => setIsSidebarCollapsed(true)}
+        onMouseLeave={() => {
+          if (!isNotificationsOpen) {
+            setIsSidebarCollapsed(true);
+          }
+        }}
         className={`
           bg-white dark:bg-slate-900 border-r border-[#e7edf3] dark:border-slate-800 flex flex-col h-screen z-50 shrink-0 transition-all duration-300
           fixed md:sticky top-0
           ${isMobileMenuOpen ? "translate-x-0 w-64" : "-translate-x-full w-64"}
-          md:translate-x-0 ${isSidebarCollapsed ? "md:w-20" : "md:w-64"}
+          md:translate-x-0 ${isSidebarCollapsed && !isNotificationsOpen ? "md:w-20" : "md:w-64"}
         `}
       >
         <div
@@ -432,7 +402,13 @@ const Layout: React.FC = () => {
               <button
                 ref={bellButtonRef}
                 className="text-[#4c739a] hover:text-primary transition-all active:scale-95 relative"
-                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                onClick={() => {
+                  const nextState = !isNotificationsOpen;
+                  setIsNotificationsOpen(nextState);
+                  if (nextState) {
+                    setIsSidebarCollapsed(false);
+                  }
+                }}
                 title="Notificações"
               >
                 <span className="material-symbols-outlined text-[20px]">

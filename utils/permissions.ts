@@ -154,3 +154,54 @@ export const shouldFilterUnvalidatedMissions = async (user: any): Promise<boolea
     // Se o setor tem encarregado, então filtramos as missões não validadas para este usuário
     return hasEncarregado;
 };
+
+/**
+ * Obtém o perfil do usuário autenticado diretamente do Supabase Auth e da tabela members,
+ * verificando inclusive delegações ativas para a Chefia (CH).
+ * Evita confiar cegamente no localStorage.
+ */
+export const getAuthenticatedUserProfile = async (): Promise<Member | null> => {
+    try {
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+        if (authError || !authUser) return null;
+
+        const { data: profile, error: profileError } = await supabase
+            .from("members")
+            .select("*")
+            .eq("user_id", authUser.id)
+            .single();
+
+        if (profileError || !profile) return null;
+
+        // Verificar delegação ativa para a Chefia (CH)
+        let effectiveSector = profile.sector;
+        const today = new Date().toISOString().split("T")[0];
+
+        const { data: delegation } = await supabase
+            .from("ch_delegations")
+            .select("*")
+            .eq("beneficiary_id", profile.id)
+            .eq("is_active", true)
+            .lte("start_date", today)
+            .or(`end_date.is.null,end_date.gte.${today}`)
+            .maybeSingle();
+
+        if (delegation) {
+            effectiveSector = "CH";
+        }
+
+        const userProfile = {
+            ...profile,
+            sector: effectiveSector,
+            email: authUser.email || profile.email,
+        };
+
+        // Atualiza o localStorage como cache de UI sincronizado
+        localStorage.setItem("currentUser", JSON.stringify(userProfile));
+
+        return userProfile;
+    } catch (err) {
+        console.error("Erro ao buscar perfil autenticado do usuário:", err);
+        return null;
+    }
+};

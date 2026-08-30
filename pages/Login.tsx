@@ -62,7 +62,7 @@ const Login: React.FC = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from("members")
-        .select("*");
+        .select("id, name, war_name, rank, abrev, avatar, specialty, sector, email, last_promotion_date, guia_antiguidade");
 
       if (error) throw error;
 
