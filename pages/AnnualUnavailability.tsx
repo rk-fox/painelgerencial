@@ -391,8 +391,6 @@ const AnnualUnavailability: React.FC = () => {
 
     const fetchData = async () => {
         setLoading(true);
-        const fetchData = async () => {
-        setLoading(true);
         try {
             const sector = currentUser?.sector || null;
             const startOfYear = `${selectedYear}-01-01`;
