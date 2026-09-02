@@ -260,7 +260,7 @@ const YearlySchedule: React.FC = () => {
 
     const getMissionsForDay = (month: number, day: number): Mission[] => {
         return missions.filter((m) => {
-            if (doMustFilterUnvalidated && !m.valid) return false;
+            if (!m.valid) return false;
 
             // Data do calendário que estamos verificando (Meia-noite Local)
             const checkDate = new Date(selectedYear, month, day).getTime();
