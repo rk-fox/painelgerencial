@@ -259,19 +259,17 @@ const YearlySchedule: React.FC = () => {
     };
 
     const getMissionsForDay = (month: number, day: number): Mission[] => {
-        return missions.filter((m) => {
-            if (!m.valid) return false;
+    return missions.filter((m) => {
+        // Data do calendário que estamos verificando (Meia-noite Local)
+        const checkDate = new Date(selectedYear, month, day).getTime();
 
-            // Data do calendário que estamos verificando (Meia-noite Local)
-            const checkDate = new Date(selectedYear, month, day).getTime();
+        // Pega as datas de inicio e fim
+        const startDate = parseLocalDate(m.data_inicio)?.getTime() || 0;
+        const endDate = parseLocalDate(m.data_fim)?.getTime() || 0;
 
-            // Pega as datas de inicio e fim
-            const startDate = parseLocalDate(m.data_inicio)?.getTime() || 0;
-            const endDate = parseLocalDate(m.data_fim)?.getTime() || 0;
-
-            return checkDate >= startDate && checkDate <= endDate;
-        });
-    };
+        return checkDate >= startDate && checkDate <= endDate;
+    });
+};
 
     const getHeatmapDataForMonth = (month: number): number[] => {
         const daysWithMissions: number[] = [];
