@@ -391,10 +391,14 @@ const AnnualUnavailability: React.FC = () => {
 
     const fetchData = async () => {
         setLoading(true);
+        const fetchData = async () => {
+        setLoading(true);
         try {
             const sector = currentUser?.sector || null;
             const startOfYear = `${selectedYear}-01-01`;
             const endOfYear = `${selectedYear}-12-31`;
+
+            const filterNeeded = await shouldFilterUnvalidatedMissions(currentUser);
 
             let membersQuery = supabase.from("members")
                 .select(
@@ -411,6 +415,10 @@ const AnnualUnavailability: React.FC = () => {
                 .lte("data_inicio", endOfYear)
                 .gte("data_fim", startOfYear);
 
+            if (filterNeeded) {
+                missionsQuery = missionsQuery.eq("valid", true);
+            }
+
             let annotationsQuery = supabase.from("annotations")
                 .select("*")
                 .lte("date", endOfYear)
@@ -421,6 +429,7 @@ const AnnualUnavailability: React.FC = () => {
                 unavailQuery = unavailQuery.eq("sector", sector);
                 missionsQuery = missionsQuery.eq("sector", sector);
             }
+
 
             const [membersRes, unavailRes, missionsRes, annotationsRes] =
                 await Promise.all([
