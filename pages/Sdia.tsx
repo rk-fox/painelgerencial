@@ -51,7 +51,29 @@ const SdiaPage: React.FC = () => {
     const [members, setMembers] = useState<Member[]>([]);
     const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
     const [isMonthPopupOpen, setIsMonthPopupOpen] = useState(false);
-    const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [currentUser, setCurrentUser] = useState<User | null>(() => {
+        const userStr = localStorage.getItem("currentUser");
+        if (userStr) {
+            try {
+                return JSON.parse(userStr);
+            } catch (e) {
+                console.error("Error parsing user", e);
+            }
+        }
+        return null;
+    });
+    const [activeSector, setActiveSector] = useState<string>(() => {
+        const userStr = localStorage.getItem("currentUser");
+        if (userStr) {
+            try {
+                const user = JSON.parse(userStr);
+                return user.sector === "EA" ? "EA" : "CP";
+            } catch (e) {
+                console.error("Error parsing user", e);
+            }
+        }
+        return "CP";
+    });
     const [isReviewReducPopupOpen, setIsReviewReducPopupOpen] = useState(false);
     const [capSdias, setCapSdias] = useState<Sdia[]>([]);
 
@@ -96,31 +118,16 @@ const SdiaPage: React.FC = () => {
         "Dezembro",
     ];
 
-    useEffect(() => {
-        fetchAvailableYears();
-        fetchMembers();
-        const userStr = localStorage.getItem("currentUser");
-        if (userStr) {
-            try {
-                setCurrentUser(JSON.parse(userStr));
-            } catch (e) {
-                console.error("Error parsing user", e);
-            }
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    useEffect(() => {
-        if (selectedYear) {
-            fetchSdias(selectedYear);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedYear]);
-
-    const fetchAvailableYears = useCallback(async () => {
-        const { data, error } = await supabase
+    const fetchAvailableYears = useCallback(async (currentSector?: string) => {
+        let query = supabase
             .from("sdia")
             .select("data_inicio");
+
+        if (currentSector === "CP" || currentSector === "EA") {
+            query = query.eq("sector", currentSector);
+        }
+
+        const { data, error } = await query;
         if (!error && data) {
             const years = [
                 ...new Set(data.map((m) => {
@@ -139,15 +146,11 @@ const SdiaPage: React.FC = () => {
         } else {
             setAvailableYears([new Date().getFullYear()]);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [selectedYear]);
 
-    const fetchSdias = useCallback(async (year: number) => {
+    const fetchSdias = useCallback(async (year: number, currentSector?: string) => {
         const startDate = `${year}-01-01`;
         const endDate = `${year}-12-31`;
-
-        const userJson = localStorage.getItem("currentUser");
-        const sector = userJson ? JSON.parse(userJson).sector : null;
 
         let query = supabase
             .from("sdia")
@@ -156,8 +159,8 @@ const SdiaPage: React.FC = () => {
             .lte("data_inicio", endDate)
             .order("data_inicio");
 
-        if (sector && (sector === "CP" || sector === "EA")) {
-            query = query.eq("sector", sector);
+        if (currentSector === "CP" || currentSector === "EA") {
+            query = query.eq("sector", currentSector);
         }
 
         const { data, error } = await query;
@@ -166,16 +169,13 @@ const SdiaPage: React.FC = () => {
         }
     }, []);
 
-    const fetchMembers = useCallback(async () => {
-        const userJson = localStorage.getItem("currentUser");
-        const sector = userJson ? JSON.parse(userJson).sector : null;
-
+    const fetchMembers = useCallback(async (currentSector?: string) => {
         let query = supabase
             .from("members")
             .select("id, name, war_name, rank, abrev");
 
-        if (sector && (sector === "CP" || sector === "EA")) {
-            query = query.eq("sector", sector);
+        if (currentSector === "CP" || currentSector === "EA") {
+            query = query.eq("sector", currentSector);
         }
 
         const { data, error } = await query;
@@ -185,31 +185,42 @@ const SdiaPage: React.FC = () => {
         }
     }, []);
 
-    const getAnalystName = (id: string): string => {
-        const member = members.find((m) => m.id === id);
-        return member
-            ? `${member.abrev || ""} ${member.war_name || member.name}`
-            : "Desconhecido";
-    };
-
-    const fetchCapSdias = async () => {
-        const userJson = localStorage.getItem("currentUser");
-        const sector = userJson ? JSON.parse(userJson).sector : null;
-
+    const fetchCapSdias = useCallback(async (currentSector?: string) => {
         let query = supabase
             .from("sdia")
             .select("*")
             .eq("cap", true)
             .order("data_inicio", { ascending: false });
 
-        if (sector && (sector === "CP" || sector === "EA")) {
-            query = query.eq("sector", sector);
+        if (currentSector === "CP" || currentSector === "EA") {
+            query = query.eq("sector", currentSector);
         }
 
         const { data, error } = await query;
         if (!error && data) {
             setCapSdias(data);
         }
+    }, []);
+
+    useEffect(() => {
+        fetchAvailableYears(activeSector);
+    }, [activeSector, fetchAvailableYears]);
+
+    useEffect(() => {
+        if (activeSector) {
+            fetchMembers(activeSector);
+            if (selectedYear) {
+                fetchSdias(selectedYear, activeSector);
+            }
+            fetchCapSdias(activeSector);
+        }
+    }, [activeSector, selectedYear, fetchMembers, fetchSdias, fetchCapSdias]);
+
+    const getAnalystName = (id: string): string => {
+        const member = members.find((m) => m.id === id);
+        return member
+            ? `${member.abrev || ""} ${member.war_name || member.name}`
+            : "Desconhecido";
     };
 
     const formatDateString = (dateString: string): string => {
@@ -398,8 +409,8 @@ const SdiaPage: React.FC = () => {
             }
             setIsFormOpen(false);
             setEditingSdia(null);
-            fetchSdias(selectedYear);
-            fetchCapSdias();
+            fetchSdias(selectedYear, activeSector);
+            fetchCapSdias(activeSector);
         } catch (error) {
             console.error("Error saving SDIA:", error);
             alert("Erro ao salvar SDIA");
@@ -451,10 +462,11 @@ const SdiaPage: React.FC = () => {
             .delete()
             .eq("id", sdiaToDelete.id);
         if (!error) {
-            fetchSdias(selectedYear);
+            fetchSdias(selectedYear, activeSector);
+            fetchCapSdias(activeSector);
             setSdiaToDelete(null);
         }
-    }, [sdiaToDelete, selectedYear, fetchSdias]);
+    }, [sdiaToDelete, selectedYear, activeSector, fetchSdias, fetchCapSdias]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -494,9 +506,36 @@ const SdiaPage: React.FC = () => {
                             <option key={year} value={year}>{year}</option>
                         ))}
                     </select>
+
+                    {/* Abas com flex-1 para esticar junto com os outros botões no mobile */}
+                    {currentUser?.sector === "CH" && (
+                        <div className="flex flex-1 md:flex-none bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <button
+                                onClick={() => setActiveSector("CP")}
+                                className={`px-4 py-2 flex-1 md:flex-none rounded-lg text-xs font-bold transition-all ${
+                                    activeSector === "CP"
+                                        ? "bg-white dark:bg-slate-700 text-primary shadow-sm"
+                                        : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                                }`}
+                            >
+                                CAPACIDADE
+                            </button>
+                            <button
+                                onClick={() => setActiveSector("EA")}
+                                className={`px-4 py-2 flex-1 md:flex-none rounded-lg text-xs font-bold transition-all ${
+                                    activeSector === "EA"
+                                        ? "bg-white dark:bg-slate-700 text-primary shadow-sm"
+                                        : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                                }`}
+                            >
+                                ESPAÇO AÉREO
+                            </button>
+                        </div>
+                    )}
+
                     <button
                         onClick={() => {
-                            fetchCapSdias();
+                            fetchCapSdias(activeSector);
                             setIsReviewReducPopupOpen(true);
                         }}
                         className="px-3 md:px-6 py-2 md:py-3 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs md:text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all active:scale-95 flex items-center gap-1 md:gap-2 flex-1 md:flex-none justify-center whitespace-nowrap"
@@ -525,7 +564,9 @@ const SdiaPage: React.FC = () => {
                                 data_fim: new Date().toLocaleDateString(
                                     "en-CA",
                                 ),
-                                sector: "",
+                                sector: currentUser?.sector === "CH"
+                                    ? activeSector
+                                    : (currentUser?.sector || ""),
                                 cap: false,
                                 clsd: false,
                                 arr: null,

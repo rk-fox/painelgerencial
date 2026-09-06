@@ -5,9 +5,7 @@ import { Member, Mission } from "../types";
 import { formatLocalDate, parseLocalDate } from "../utils/dateUtils";
 import {
     canAccessScheduleAndReports,
-    compareMembersByRank,
     getRankPriority,
-    shouldFilterUnvalidatedMissions,
 } from "../utils/permissions";
 import ScheduleAdjustment from "./ScheduleAdjustment";
 
@@ -509,7 +507,7 @@ const YearlySchedule: React.FC = () => {
                                         : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                                 }`}
                             >
-                                CAPACIDADE (CP)
+                                CAPACIDADE
                             </button>
                             <button
                                 onClick={() => setActiveSector("EA")}
@@ -519,7 +517,7 @@ const YearlySchedule: React.FC = () => {
                                         : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                                 }`}
                             >
-                                ESPAÇO AÉREO (EA)
+                                ESPAÇO AÉREO
                             </button>
                         </div>
                     )}

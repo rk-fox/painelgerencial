@@ -1,6 +1,11 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { supabase } from "../supabase";
-import { compareMembersByRank, getRankPriority } from "../utils/permissions";
+import {
+    compareMembersByRank,
+    getRankPriority,
+    getAuthenticatedUserProfile,
+    shouldFilterUnvalidatedMissions,
+} from "../utils/permissions";
 
 interface Member {
     id: string;
@@ -36,7 +41,13 @@ interface Task {
 
 
 const StrategicSummary: React.FC = () => {
-    const [currentUser, setCurrentUser] = useState<any>(null);
+    const [currentUser, setCurrentUser] = useState<any>(() => {
+        const userJson = localStorage.getItem("currentUser");
+        return userJson ? JSON.parse(userJson) : null;
+    });
+    const [selectedSectorFilter, setSelectedSectorFilter] = useState<
+        "Ambos" | "Capacidade" | "Espaço Aéreo"
+    >("Ambos");
     const [members, setMembers] = useState<Member[]>([]);
     const [missions, setMissions] = useState<any[]>([]);
     const [unavailabilities, setUnavailabilities] = useState<any[]>([]);
@@ -44,6 +55,9 @@ const StrategicSummary: React.FC = () => {
     const [sdiaEvents, setSdiaEvents] = useState<any[]>([]);
     const [pendingTasks, setPendingTasks] = useState<Task[]>([]);
     const [meetings, setMeetings] = useState<any[]>([]);
+    const [memberSectorMap, setMemberSectorMap] = useState<Map<string, string>>(
+        new Map(),
+    );
     const [loading, setLoading] = useState(true);
 
     const [currentSlide, setCurrentSlide] = useState(0);
@@ -83,39 +97,33 @@ const StrategicSummary: React.FC = () => {
         return { timeStr, dateStr: capitalizedDateStr };
     };
 
-    const getMemberMission = (memberId: string) => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return missions.find((miss) => {
-            if (!miss.equipe || !miss.equipe.includes(memberId)) return false;
-            const start = parseLocalDate(miss.data_inicio);
-            const endD = parseLocalDate(miss.data_fim);
-            const end = endD
-                ? new Date(endD.getFullYear(), endD.getMonth(), endD.getDate(), 23, 59, 59)
-                : null;
-            if (!start || !end) return false;
-            return today >= start && today <= end;
-        });
-    };
-
-    const getMemberUnavailToday = (memberId: string) => {
-        return unavailabilities.find((u) => u.member === memberId);
-    };
+    const userSector = currentUser?.sector || "SE";
 
     // Load User & All Data
     useEffect(() => {
         const loadAllData = async () => {
             try {
                 setLoading(true);
-                const userJson = localStorage.getItem("currentUser");
-                const userObj = userJson ? JSON.parse(userJson) : null;
-                setCurrentUser(userObj);
+                let userObj = currentUser;
+                if (!userObj) {
+                    const profile = await getAuthenticatedUserProfile();
+                    if (profile) {
+                        userObj = profile;
+                        setCurrentUser(profile);
+                    } else {
+                        const userJson = localStorage.getItem("currentUser");
+                        userObj = userJson ? JSON.parse(userJson) : null;
+                        if (userObj) setCurrentUser(userObj);
+                    }
+                }
 
-                const userSector = userObj?.sector;
+                const effSector = userObj?.sector;
                 const today = new Date().toLocaleDateString("en-CA");
                 const tenDaysLater = new Date();
                 tenDaysLater.setDate(tenDaysLater.getDate() + 10);
                 const tenDaysLaterStr = tenDaysLater.toLocaleDateString("en-CA");
+
+                const filterNeeded = await shouldFilterUnvalidatedMissions(userObj);
 
                 // 1. Fetch & Sort Members (Includes Hierarchy Logic)
                 const { data: membersData } = await supabase
@@ -125,9 +133,9 @@ const StrategicSummary: React.FC = () => {
                 if (membersData) {
                     let filtered = membersData || [];
                     
-                    if (userSector === "CP" || userSector === "EA") {
-                        filtered = filtered.filter((m) => m.sector === userSector || m.sector === "CH");
-                    } else if (userSector === "CH") {
+                    if (effSector === "CP" || effSector === "EA") {
+                        filtered = filtered.filter((m) => m.sector === effSector || m.sector === "CH");
+                    } else if (effSector === "CH") {
                         filtered = filtered.filter((m) =>
                             m.sector === "CP" || m.sector === "EA" || m.sector === "CH"
                         );
@@ -139,8 +147,11 @@ const StrategicSummary: React.FC = () => {
 
                 // 2. Fetch Missions
                 let missionsQuery = supabase.from("missions").select("*");
-                if (userSector && (userSector === "CP" || userSector === "EA")) {
-                    missionsQuery = missionsQuery.eq("sector", userSector);
+                if (filterNeeded) {
+                    missionsQuery = missionsQuery.eq("valid", true);
+                }
+                if (effSector && (effSector === "CP" || effSector === "EA")) {
+                    missionsQuery = missionsQuery.eq("sector", effSector);
                 }
                 const { data: missionsData } = await missionsQuery;
                 if (missionsData) setMissions(missionsData);
@@ -158,8 +169,8 @@ const StrategicSummary: React.FC = () => {
                     .from("tasks")
                     .select("*")
                     .neq("status", "concluida");
-                if (userSector && userSector !== "CH") {
-                    activeTasksQuery = activeTasksQuery.eq("sector", userSector);
+                if (effSector && effSector !== "CH") {
+                    activeTasksQuery = activeTasksQuery.eq("sector", effSector);
                 }
                 const { data: activeTasksData } = await activeTasksQuery;
                 if (activeTasksData) {
@@ -183,8 +194,8 @@ const StrategicSummary: React.FC = () => {
                     .lte("data_inicio", tenDaysLaterStr)
                     .order("data_inicio", { ascending: true });
 
-                if (userSector && userSector !== "CH") {
-                    sdiaQuery = sdiaQuery.eq("sector", userSector);
+                if (effSector && effSector !== "CH") {
+                    sdiaQuery = sdiaQuery.eq("sector", effSector);
                 }
                 const { data: sdiaData } = await sdiaQuery;
                 if (sdiaData) setSdiaEvents(sdiaData);
@@ -196,8 +207,8 @@ const StrategicSummary: React.FC = () => {
                     .order("created_at", { ascending: false })
                     .limit(5000);
 
-                if (userSector && userSector !== "CH") {
-                    tasksQuery = tasksQuery.eq("sector", userSector);
+                if (effSector && effSector !== "CH") {
+                    tasksQuery = tasksQuery.eq("sector", effSector);
                 }
                 const { data: tasksData } = await tasksQuery;
 
@@ -262,22 +273,17 @@ const StrategicSummary: React.FC = () => {
                     .from("members")
                     .select("id, sector");
 
-                if (meetingsData && allMembersData && userSector) {
-                    const memberSectorMap = new Map<string, string>();
+                if (allMembersData) {
+                    const map = new Map<string, string>();
                     allMembersData.forEach((m: any) => {
-                        if (m.sector) memberSectorMap.set(m.id, m.sector);
+                        if (m.sector) map.set(m.id, m.sector);
                     });
+                    setMemberSectorMap(map);
+                }
 
-                    const filteredMeetings = meetingsData.filter((m: any) => {
-                        const isUpcoming = m.inicio >= today;
-                        if (!isUpcoming) return false;
-                        if (userSector === "CH") return true;
-                        return m.membros?.some((memberId: string) => memberSectorMap.get(memberId) === userSector);
-                    });
-                    setMeetings(filteredMeetings);
-                } else if (meetingsData) {
-                    const filteredMeetings = meetingsData.filter((m: any) => m.inicio >= today);
-                    setMeetings(filteredMeetings);
+                if (meetingsData) {
+                    const upcomingMeetings = meetingsData.filter((m: any) => m.inicio >= today);
+                    setMeetings(upcomingMeetings);
                 }
             } catch (err) {
                 console.error("Error loading strategic summary data:", err);
@@ -288,6 +294,122 @@ const StrategicSummary: React.FC = () => {
 
         loadAllData();
     }, []);
+
+    // === FILTROS DINÂMICOS PARA O SELETOR DE SETOR DA CHEFIA (CH) ===
+    // Para CH: "CP" mostra CP+CH, "EA" mostra EA+CH e "Ambos" mostra todos.
+    // Para setores CP ou EA (não-CH): mantém comportamento inalterado.
+
+    const filteredMembers = useMemo(() => {
+        if (userSector === "CH") {
+            if (selectedSectorFilter === "Capacidade") {
+                return members.filter((m) => m.sector === "CP" || m.sector === "CH");
+            }
+            if (selectedSectorFilter === "Espaço Aéreo") {
+                return members.filter((m) => m.sector === "EA" || m.sector === "CH");
+            }
+            return members.filter((m) => m.sector === "CP" || m.sector === "EA" || m.sector === "CH");
+        }
+        return members;
+    }, [members, userSector, selectedSectorFilter]);
+
+    const filteredActiveAssignedTasks = useMemo(() => {
+        if (userSector === "CH") {
+            if (selectedSectorFilter === "Capacidade") {
+                return activeAssignedTasks.filter((t) => t.sector === "CP" || t.sector === "CH");
+            }
+            if (selectedSectorFilter === "Espaço Aéreo") {
+                return activeAssignedTasks.filter((t) => t.sector === "EA" || t.sector === "CH");
+            }
+            return activeAssignedTasks;
+        }
+        return activeAssignedTasks;
+    }, [activeAssignedTasks, userSector, selectedSectorFilter]);
+
+    const filteredMissions = useMemo(() => {
+        if (userSector === "CH") {
+            if (selectedSectorFilter === "Capacidade") {
+                return missions.filter((m) => m.sector === "CP" || m.sector === "CH");
+            }
+            if (selectedSectorFilter === "Espaço Aéreo") {
+                return missions.filter((m) => m.sector === "EA" || m.sector === "CH");
+            }
+            return missions;
+        }
+        return missions;
+    }, [missions, userSector, selectedSectorFilter]);
+
+    const filteredPendingTasks = useMemo(() => {
+        if (userSector === "CH") {
+            if (selectedSectorFilter === "Capacidade") {
+                return pendingTasks.filter((t) => t.sector === "CP" || t.sector === "CH");
+            }
+            if (selectedSectorFilter === "Espaço Aéreo") {
+                return pendingTasks.filter((t) => t.sector === "EA" || t.sector === "CH");
+            }
+            return pendingTasks;
+        }
+        return pendingTasks;
+    }, [pendingTasks, userSector, selectedSectorFilter]);
+
+    const filteredSdiaEvents = useMemo(() => {
+        if (userSector === "CH") {
+            if (selectedSectorFilter === "Capacidade") {
+                return sdiaEvents.filter((s) => s.sector === "CP" || s.sector === "CH" || !s.sector);
+            }
+            if (selectedSectorFilter === "Espaço Aéreo") {
+                return sdiaEvents.filter((s) => s.sector === "EA" || s.sector === "CH" || !s.sector);
+            }
+            return sdiaEvents;
+        }
+        return sdiaEvents;
+    }, [sdiaEvents, userSector, selectedSectorFilter]);
+
+    const filteredMeetings = useMemo(() => {
+        if (userSector === "CH") {
+            if (selectedSectorFilter === "Capacidade") {
+                return meetings.filter((m: any) => {
+                    if (m.sector === "CP" || m.sector === "CH") return true;
+                    return m.membros?.some((id: string) => {
+                        const sec = memberSectorMap.get(id);
+                        return sec === "CP" || sec === "CH";
+                    });
+                });
+            }
+            if (selectedSectorFilter === "Espaço Aéreo") {
+                return meetings.filter((m: any) => {
+                    if (m.sector === "EA" || m.sector === "CH") return true;
+                    return m.membros?.some((id: string) => {
+                        const sec = memberSectorMap.get(id);
+                        return sec === "EA" || sec === "CH";
+                    });
+                });
+            }
+            return meetings;
+        }
+        return meetings.filter((m: any) => {
+            if (m.sector === userSector || m.sector === "CH") return true;
+            return m.membros?.some((id: string) => memberSectorMap.get(id) === userSector);
+        });
+    }, [meetings, userSector, selectedSectorFilter, memberSectorMap]);
+
+    const getMemberMission = (memberId: string) => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return filteredMissions.find((miss) => {
+            if (!miss.equipe || !miss.equipe.includes(memberId)) return false;
+            const start = parseLocalDate(miss.data_inicio);
+            const endD = parseLocalDate(miss.data_fim);
+            const end = endD
+                ? new Date(endD.getFullYear(), endD.getMonth(), endD.getDate(), 23, 59, 59)
+                : null;
+            if (!start || !end) return false;
+            return today >= start && today <= end;
+        });
+    };
+
+    const getMemberUnavailToday = (memberId: string) => {
+        return unavailabilities.find((u) => u.member === memberId);
+    };
 
     // Real-time Clock & Slideshow loop
     useEffect(() => {
@@ -333,7 +455,6 @@ const StrategicSummary: React.FC = () => {
     }, []);
 
     const { timeStr, dateStr } = getUTC3DateTime(currentTime);
-    const userSector = currentUser?.sector || "SE";
     const sectorFullName = userSector === "CP"
         ? "SEÇÃO DE CAPACIDADE ATC"
         : userSector === "EA"
@@ -401,6 +522,48 @@ const StrategicSummary: React.FC = () => {
 
                 {/* Controls */}
                 <div className="flex items-center gap-3">
+                    {/* Seletor de Setor Exclusivo para CHEFIA (CH) */}
+                    {userSector === "CH" && (
+                        <div className="flex bg-slate-100 dark:bg-[#132039] border border-slate-200 dark:border-[#1d2d44] p-1 rounded-xl shadow-inner">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedSectorFilter("Ambos")}
+                                className={`px-3 py-1 rounded-lg text-[10px] font-black transition-all uppercase tracking-wider ${
+                                    selectedSectorFilter === "Ambos"
+                                        ? "bg-white dark:bg-slate-700 text-primary dark:text-[#cda250] shadow-sm"
+                                        : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                                }`}
+                                title="Visualizar todos os setores (CP + EA + CH)"
+                            >
+                                Ambos
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedSectorFilter("Capacidade")}
+                                className={`px-3 py-1 rounded-lg text-[10px] font-black transition-all uppercase tracking-wider ${
+                                    selectedSectorFilter === "Capacidade"
+                                        ? "bg-white dark:bg-slate-700 text-primary dark:text-[#cda250] shadow-sm"
+                                        : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                                }`}
+                                title="Visualizar Capacidade e Chefia (CP + CH)"
+                            >
+                                Capacidade
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedSectorFilter("Espaço Aéreo")}
+                                className={`px-3 py-1 rounded-lg text-[10px] font-black transition-all uppercase tracking-wider ${
+                                    selectedSectorFilter === "Espaço Aéreo"
+                                        ? "bg-white dark:bg-slate-700 text-primary dark:text-[#cda250] shadow-sm"
+                                        : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                                }`}
+                                title="Visualizar Espaço Aéreo e Chefia (EA + CH)"
+                            >
+                                Espaço Aéreo
+                            </button>
+                        </div>
+                    )}
+
                     <div className="flex items-center bg-slate-100 dark:bg-[#132039] border border-slate-200 dark:border-[#1d2d44] rounded-lg p-1">
                         <button
                             onClick={() => setCurrentSlide((prev) => (prev - 1 + 4) % 4)}
@@ -487,22 +650,35 @@ const StrategicSummary: React.FC = () => {
             </div>
 
             {/* Title and Subtitle Block */}
-            <div className="px-8 pt-6 pb-3 relative z-10 flex flex-col gap-1">
-                <h2 className="text-2xl md:text-3xl font-serif font-bold text-slate-800 dark:text-white tracking-wide">
-                    {currentSlide === 0 && "Controle do Efetivo"}
-                    {currentSlide === 1 && "Tarefas em Andamento"}
-                    {currentSlide === 2 && "D-10 — Eventos dos Próximos 10 Dias"}
-                    {currentSlide === 3 && "Reuniões da Seção"}
-                </h2>
-                <p className="text-xs md:text-sm text-primary dark:text-[#cda250] font-medium tracking-wide">
-                    {currentSlide === 0 && "Status operacional e disponibilidade dos militares no momento"}
-                    {currentSlide === 1 && "Atividades sob responsabilidade da seção neste mês"}
-                    {currentSlide === 2 &&
-                        `Janela: ${new Date().toLocaleDateString("pt-BR")} a ${new Date(
-                            new Date().setDate(new Date().getDate() + 10)
-                        ).toLocaleDateString("pt-BR")}`}
-                    {currentSlide === 3 && "Próximos compromissos agendados"}
-                </p>
+            <div className="px-8 pt-6 pb-3 relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                <div className="flex flex-col gap-1">
+                    <h2 className="text-2xl md:text-3xl font-serif font-bold text-slate-800 dark:text-white tracking-wide">
+                        {currentSlide === 0 && "Controle do Efetivo"}
+                        {currentSlide === 1 && "Tarefas em Andamento"}
+                        {currentSlide === 2 && "D-10 — Eventos dos Próximos 10 Dias"}
+                        {currentSlide === 3 && "Reuniões da Seção"}
+                    </h2>
+                    <p className="text-xs md:text-sm text-primary dark:text-[#cda250] font-medium tracking-wide">
+                        {currentSlide === 0 && "Status operacional e disponibilidade dos militares no momento"}
+                        {currentSlide === 1 && "Atividades sob responsabilidade da seção neste mês"}
+                        {currentSlide === 2 &&
+                            `Janela: ${new Date().toLocaleDateString("pt-BR")} a ${new Date(
+                                new Date().setDate(new Date().getDate() + 10)
+                            ).toLocaleDateString("pt-BR")}`}
+                        {currentSlide === 3 && "Próximos compromissos agendados"}
+                    </p>
+                </div>
+                {userSector === "CH" && (
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider bg-primary/10 dark:bg-[#cda250]/15 text-primary dark:text-[#cda250] border border-primary/20 dark:border-[#cda250]/30 shadow-sm">
+                            {selectedSectorFilter === "Ambos"
+                                ? "Visualizando: Todos"
+                                : selectedSectorFilter === "Capacidade"
+                                ? "Visualizando: Capacidade"
+                                : "Visualizando: Espaço Aéreo"}
+                        </span>
+                    </div>
+                )}
             </div>
 
             {/* Slide Content Area */}
@@ -510,106 +686,112 @@ const StrategicSummary: React.FC = () => {
                 {/* SLIDE 0: CONTROLE EFETIVO */}
                 {currentSlide === 0 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 animate-in fade-in duration-300">
-                        {members.map((member) => {
-                            const currentMission = getMemberMission(member.id);
-                            const currentUnavail = getMemberUnavailToday(member.id);
-                            const isUnavailable = member.status === "Indisponível" || !!currentUnavail;
-                            const memberTasks = activeAssignedTasks.filter((t) => t.assigned_to === member.id);
+                        {filteredMembers.length > 0 ? (
+                            filteredMembers.map((member) => {
+                                const currentMission = getMemberMission(member.id);
+                                const currentUnavail = getMemberUnavailToday(member.id);
+                                const isUnavailable = member.status === "Indisponível" || !!currentUnavail;
+                                const memberTasks = filteredActiveAssignedTasks.filter((t) => t.assigned_to === member.id);
 
-                            let cardBg = "bg-white dark:bg-[#131f37] border-slate-200 dark:border-[#1d2d44]";
-                            let borderAccent = "border-l-4 border-l-[#38bdf8]";
-                            let statusBadge = (
-                                <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-500/10 text-blue-500 dark:text-blue-400 border border-blue-500/20">
-                                    Disponível
-                                </span>
-                            );
-
-                            if (currentMission) {
-                                cardBg = "bg-blue-50/70 dark:bg-[#1a2035] border-blue-200 dark:border-[#252f4c]";
-                                borderAccent = "border-l-4 border-l-[#cda250]";
-                                statusBadge = (
-                                    <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-primary/10 dark:bg-[#cda250]/15 text-primary dark:text-[#cda250] border border-primary/20 dark:border-[#cda250]/20">
-                                        Em Viagem
+                                let cardBg = "bg-white dark:bg-[#131f37] border-slate-200 dark:border-[#1d2d44]";
+                                let borderAccent = "border-l-4 border-l-[#38bdf8]";
+                                let statusBadge = (
+                                    <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-500/10 text-blue-500 dark:text-blue-400 border border-blue-500/20">
+                                        Disponível
                                     </span>
                                 );
-                            } else if (isUnavailable && currentUnavail?.type === "Atividade") {
-                                cardBg = "bg-emerald-50/70 dark:bg-[#142337] border-emerald-200 dark:border-[#1f3552]";
-                                borderAccent = "border-l-4 border-l-[#10b981]";
-                                statusBadge = (
-                                    <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-green-500/15 text-green-600 dark:text-green-400 border border-green-500/25">
-                                        Atividade Interna
-                                    </span>
-                                );
-                            } else if (isUnavailable) {
-                                cardBg = "bg-red-50/70 dark:bg-[#221c29] border-red-200 dark:border-[#382b43]";
-                                borderAccent = "border-l-4 border-l-red-500";
-                                statusBadge = (
-                                    <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/25">
-                                        {currentUnavail ? currentUnavail.type : "Indisponível"}
-                                    </span>
-                                );
-                            }
 
-                            const tooltipLines = [];
-                            if (currentMission) {
-                                tooltipLines.push(`Viagem: ${currentMission.nome || ""} ${currentMission.local ? `(${currentMission.local})` : ""}`);
-                            }
-                            if (isUnavailable && currentUnavail) {
-                                const details = currentUnavail.detalhes || currentUnavail.atividade || "";
-                                tooltipLines.push(`Afastamento: ${currentUnavail.type}${details ? ` - ${details}` : ""}`);
-                            }
-                            if (memberTasks.length > 0) {
-                                tooltipLines.push("Atividades:");
-                                memberTasks.forEach((t) => tooltipLines.push(`- ${t.name}`));
-                            } else {
-                                tooltipLines.push("Nenhuma atividade em andamento");
-                            }
-                            const tooltipText = tooltipLines.join("\n");
+                                if (currentMission) {
+                                    cardBg = "bg-blue-50/70 dark:bg-[#1a2035] border-blue-200 dark:border-[#252f4c]";
+                                    borderAccent = "border-l-4 border-l-[#cda250]";
+                                    statusBadge = (
+                                        <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-primary/10 dark:bg-[#cda250]/15 text-primary dark:text-[#cda250] border border-primary/20 dark:border-[#cda250]/20">
+                                            Em Viagem
+                                        </span>
+                                    );
+                                } else if (isUnavailable && currentUnavail?.type === "Atividade") {
+                                    cardBg = "bg-emerald-50/70 dark:bg-[#142337] border-emerald-200 dark:border-[#1f3552]";
+                                    borderAccent = "border-l-4 border-l-[#10b981]";
+                                    statusBadge = (
+                                        <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-green-500/15 text-green-600 dark:text-green-400 border border-green-500/25">
+                                            Atividade Interna
+                                        </span>
+                                    );
+                                } else if (isUnavailable) {
+                                    cardBg = "bg-red-50/70 dark:bg-[#221c29] border-red-200 dark:border-[#382b43]";
+                                    borderAccent = "border-l-4 border-l-red-500";
+                                    statusBadge = (
+                                        <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/25">
+                                            {currentUnavail ? currentUnavail.type : "Indisponível"}
+                                        </span>
+                                    );
+                                }
 
-                            return (
-                                <div
-                                    key={member.id}
-                                    title={tooltipText}
-                                    className={`p-4 rounded-xl border ${cardBg} ${borderAccent} flex flex-col justify-between gap-3 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md cursor-help`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0f192b] flex items-center justify-center font-bold text-xs uppercase text-slate-600 dark:text-slate-300">
-                                            {member.avatar ? (
-                                                <img
-                                                    src={member.avatar}
-                                                    alt={member.name}
-                                                    className="w-full h-full object-cover"
-                                                />
-                                            ) : (
-                                                member.name.substring(0, 2)
-                                            )}
+                                const tooltipLines = [];
+                                if (currentMission) {
+                                    tooltipLines.push(`Viagem: ${currentMission.nome || ""} ${currentMission.local ? `(${currentMission.local})` : ""}`);
+                                }
+                                if (isUnavailable && currentUnavail) {
+                                    const details = currentUnavail.detalhes || currentUnavail.atividade || "";
+                                    tooltipLines.push(`Afastamento: ${currentUnavail.type}${details ? ` - ${details}` : ""}`);
+                                }
+                                if (memberTasks.length > 0) {
+                                    tooltipLines.push("Atividades:");
+                                    memberTasks.forEach((t) => tooltipLines.push(`- ${t.name}`));
+                                } else {
+                                    tooltipLines.push("Nenhuma atividade em andamento");
+                                }
+                                const tooltipText = tooltipLines.join("\n");
+
+                                return (
+                                    <div
+                                        key={member.id}
+                                        title={tooltipText}
+                                        className={`p-4 rounded-xl border ${cardBg} ${borderAccent} flex flex-col justify-between gap-3 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md cursor-help`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0f192b] flex items-center justify-center font-bold text-xs uppercase text-slate-600 dark:text-slate-300">
+                                                {member.avatar ? (
+                                                    <img
+                                                        src={member.avatar}
+                                                        alt={member.name}
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                ) : (
+                                                    member.name.substring(0, 2)
+                                                )}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <h4 className="text-sm font-extrabold text-slate-800 dark:text-white truncate">
+                                                    {member.abrev} {member.war_name}
+                                                </h4>
+                                                <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">
+                                                    {member.name}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                            <h4 className="text-sm font-extrabold text-slate-800 dark:text-white truncate">
-                                                {member.abrev} {member.war_name}
-                                            </h4>
-                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">
-                                                {member.name}
+                                        <div className="flex items-center justify-between border-t border-slate-200 dark:border-[#1d2d44]/50 pt-2 mt-1">
+                                            {statusBadge}
+                                            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">
+                                                {memberTasks.length} {memberTasks.length === 1 ? "Atividade" : "Atividades"}
                                             </span>
                                         </div>
                                     </div>
-                                    <div className="flex items-center justify-between border-t border-slate-200 dark:border-[#1d2d44]/50 pt-2 mt-1">
-                                        {statusBadge}
-                                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">
-                                            {memberTasks.length} {memberTasks.length === 1 ? "Atividade" : "Atividades"}
-                                        </span>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            })
+                        ) : (
+                            <div className="col-span-full py-12 text-center text-slate-500 text-sm">
+                                Nenhum militar encontrado para o setor selecionado.
+                            </div>
+                        )}
                     </div>
                 )}
 
                 {/* SLIDE 1: TAREFAS EM ANDAMENTO */}
                 {currentSlide === 1 && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in duration-300">
-                        {pendingTasks.length > 0 ? (
-                            pendingTasks.map((task, idx) => {
+                        {filteredPendingTasks.length > 0 ? (
+                            filteredPendingTasks.map((task, idx) => {
                                 const respMember = members.find((m) => m.id === task.assigned_to);
                                 const isEven = idx % 2 === 0;
                                 return (
@@ -699,7 +881,7 @@ const StrategicSummary: React.FC = () => {
                             {next10Days.map((date, index) => {
                                 const dateStrFormatted = date.toLocaleDateString("en-CA");
 
-                                const dayEvents = sdiaEvents.filter((sdia) => {
+                                const dayEvents = filteredSdiaEvents.filter((sdia) => {
                                     if (!sdia.data_inicio) return false;
                                     const dataInicioPura = sdia.data_inicio.split("T")[0];
                                     const dataFimPura = sdia.data_fim ? sdia.data_fim.split("T")[0] : dataInicioPura;
@@ -796,11 +978,11 @@ const StrategicSummary: React.FC = () => {
                     );
                 })()}
 
-                {/* SLIDE 3: REUNIões DA SEÇÃO */}
+                {/* SLIDE 3: REUNIÕES DA SEÇÃO */}
                 {currentSlide === 3 && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in duration-300">
-                        {meetings.length > 0 ? (
-                            meetings.map((meeting, idx) => {
+                        {filteredMeetings.length > 0 ? (
+                            filteredMeetings.map((meeting, idx) => {
                                 const startDate = new Date(meeting.inicio);
                                 const meetingStartTime = startDate.toLocaleTimeString("pt-BR", {
                                     hour: "2-digit",
