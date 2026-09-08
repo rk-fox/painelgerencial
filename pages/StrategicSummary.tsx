@@ -979,103 +979,131 @@ const StrategicSummary: React.FC = () => {
                 })()}
 
                 {/* SLIDE 3: REUNIÕES DA SEÇÃO */}
-                {currentSlide === 3 && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in duration-300">
-                        {filteredMeetings.length > 0 ? (
-                            filteredMeetings.map((meeting, idx) => {
-                                const startDate = new Date(meeting.inicio);
-                                const meetingStartTime = startDate.toLocaleTimeString("pt-BR", {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                });
-                                const dayMonthStr = startDate.toLocaleDateString("pt-BR", {
-                                    day: "2-digit",
-                                    month: "2-digit",
-                                });
-                                const rawWeekday = startDate.toLocaleDateString("pt-BR", {
-                                    weekday: "short",
-                                });
-                                const weekdayStr =
-                                    rawWeekday.charAt(0).toUpperCase() + rawWeekday.slice(1).replace(".", "");
-                                const formattedDate = `${dayMonthStr} - ${weekdayStr}`;
+{currentSlide === 3 && (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in duration-300">
+        {filteredMeetings.length > 0 ? (
+            filteredMeetings.map((meeting, idx) => {
+                const startDate = new Date(meeting.inicio);
+                const endDate = meeting.fim ? new Date(meeting.fim) : null;
 
-                                const summonedMembers = meeting.membros || [];
-                                const summonedDetails = members.filter((m) => summonedMembers.includes(m.id));
-                                const isEven = idx % 2 === 0;
+                const meetingStartTime = startDate.toLocaleTimeString("pt-BR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                });
 
-                                return (
-                                    <div
-                                        key={meeting.id}
-                                        className={`p-5 rounded-xl border border-slate-200 dark:border-[#1d2d44] bg-white dark:bg-[#131f37] flex flex-col justify-between gap-4 shadow-sm transition-all duration-300 hover:border-slate-500 ${
-                                            isEven ? "border-l-4 border-l-[#cda250]" : "border-l-4 border-l-[#3b82f6]"
-                                        }`}
-                                    >
-                                        <div>
-                                            <div className="flex items-center justify-between gap-2 mb-2">
-                                                <span className="text-sm font-bold text-primary dark:text-[#cda250] font-mono leading-none">
-                                                    {meetingStartTime}
-                                                </span>
-                                                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
-                                                    {formattedDate}
-                                                </span>
-                                            </div>
-                                            <h4 className="text-base font-extrabold text-slate-800 dark:text-white leading-tight font-serif">
-                                                {meeting.assunto}
-                                            </h4>
-                                            {meeting.detalhes && (
-                                                <p className="mt-2 text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">
-                                                    {meeting.detalhes}
-                                                </p>
-                                            )}
-                                            {meeting.link && (
-                                                <div className="mt-2.5 p-2 rounded bg-slate-50 dark:bg-[#0c1424]/40 border border-slate-200 dark:border-[#1a283e] flex items-center gap-1.5">
-                                                    <span className="material-symbols-outlined text-[14px] text-primary dark:text-[#cda250]">
-                                                        link
-                                                    </span>
-                                                    <a
-                                                        href={meeting.link}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-xs text-primary truncate hover:underline cursor-pointer"
-                                                    >
-                                                        {meeting.link}
-                                                    </a>
-                                                </div>
-                                            )}
-                                        </div>
+                const meetingEndTime = endDate
+                    ? endDate.toLocaleTimeString("pt-BR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                      })
+                    : null;
 
-                                        <div className="border-t border-slate-200 dark:border-[#1d2d44]/50 pt-3">
-                                            <span className="text-[9px] text-primary dark:text-[#cda250] font-bold uppercase tracking-wider block mb-2">
-                                                Convocados
-                                            </span>
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {summonedDetails.length > 0 ? (
-                                                    summonedDetails.map((m) => (
-                                                        <span
-                                                            key={m.id}
-                                                            className="px-2 py-0.5 rounded bg-slate-100 dark:bg-[#0c1424] text-slate-600 dark:text-slate-300 text-[10px] font-semibold border border-slate-200 dark:border-[#1a283e]"
-                                                        >
-                                                            {m.abrev} {m.war_name}
-                                                        </span>
-                                                    ))
-                                                ) : (
-                                                    <span className="text-xs text-slate-500 italic">
-                                                        Nenhum membro listado
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })
-                        ) : (
-                            <div className="col-span-2 py-12 text-center text-slate-500 text-sm">
-                                Nenhuma reunião agendada a partir de hoje.
+                const displayTime = meetingEndTime
+                    ? `${meetingStartTime} - ${meetingEndTime}`
+                    : meetingStartTime;
+
+                const startDayMonth = startDate.toLocaleDateString("pt-BR", {
+                    day: "2-digit",
+                    month: "2-digit",
+                });
+
+                const endDayMonth = endDate
+                    ? endDate.toLocaleDateString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                      })
+                    : "";
+
+                const rawWeekday = startDate.toLocaleDateString("pt-BR", {
+                    weekday: "short",
+                });
+                const weekdayStr =
+                    rawWeekday.charAt(0).toUpperCase() + rawWeekday.slice(1).replace(".", "");
+
+                const isSameDay = endDate
+                    ? startDate.toLocaleDateString("pt-BR") === endDate.toLocaleDateString("pt-BR")
+                    : true;
+
+                const displayDate = isSameDay
+                    ? `${startDayMonth} - ${weekdayStr}`
+                    : `de ${startDayMonth} a ${endDayMonth}`;
+
+                const summonedMembers = meeting.membros || [];
+                const summonedDetails = members.filter((m) => summonedMembers.includes(m.id));
+                const isEven = idx % 2 === 0;
+
+                return (
+                    <div
+                        key={meeting.id}
+                        className={`p-5 rounded-xl border border-slate-200 dark:border-[#1d2d44] bg-white dark:bg-[#131f37] flex flex-col justify-between gap-4 shadow-sm transition-all duration-300 hover:border-slate-500 ${
+                            isEven ? "border-l-4 border-l-[#cda250]" : "border-l-4 border-l-[#3b82f6]"
+                        }`}
+                    >
+                        <div>
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                                <span className="text-sm font-bold text-primary dark:text-[#cda250] font-mono leading-none">
+                                    {displayTime}
+                                </span>
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
+                                    {displayDate}
+                                </span>
                             </div>
-                        )}
+                            <h4 className="text-base font-extrabold text-slate-800 dark:text-white leading-tight font-serif">
+                                {meeting.assunto}
+                            </h4>
+                            {meeting.detalhes && (
+                                <p className="mt-2 text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">
+                                    {meeting.detalhes}
+                                </p>
+                            )}
+                            {meeting.link && (
+                                <div className="mt-2.5 p-2 rounded bg-slate-50 dark:bg-[#0c1424]/40 border border-slate-200 dark:border-[#1a283e] flex items-center gap-1.5">
+                                    <span className="material-symbols-outlined text-[14px] text-primary dark:text-[#cda250]">
+                                        link
+                                    </span>
+                                    <a
+                                        href={meeting.link}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs text-primary truncate hover:underline cursor-pointer"
+                                    >
+                                        {meeting.link}
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="border-t border-slate-200 dark:border-[#1d2d44]/50 pt-3">
+                            <span className="text-[9px] text-primary dark:text-[#cda250] font-bold uppercase tracking-wider block mb-2">
+                                Convocados
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                                {summonedDetails.length > 0 ? (
+                                    summonedDetails.map((m) => (
+                                        <span
+                                            key={m.id}
+                                            className="px-2 py-0.5 rounded bg-slate-100 dark:bg-[#0c1424] text-slate-600 dark:text-slate-300 text-[10px] font-semibold border border-slate-200 dark:border-[#1a283e]"
+                                        >
+                                            {m.abrev} {m.war_name}
+                                        </span>
+                                    ))
+                                ) : (
+                                    <span className="text-xs text-slate-500 italic">
+                                        Nenhum membro listado
+                                    </span>
+                                )}
+                            </div>
+                        </div>
                     </div>
-                )}
+                );
+            })
+        ) : (
+            <div className="col-span-2 py-12 text-center text-slate-500 text-sm">
+                Nenhuma reunião agendada a partir de hoje.
             </div>
+        )}
+    </div>
+)}
 
             {/* Animation CSS */}
             <style>
