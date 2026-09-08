@@ -1104,6 +1104,7 @@ const StrategicSummary: React.FC = () => {
         )}
     </div>
 )}
+</div>
 
             {/* Animation CSS */}
             <style>
