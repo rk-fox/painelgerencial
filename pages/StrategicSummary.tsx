@@ -63,7 +63,16 @@ const StrategicSummary: React.FC = () => {
     const [currentSlide, setCurrentSlide] = useState(0);
     const [isSlidePaused, setIsSlidePaused] = useState(false);
     const [currentTime, setCurrentTime] = useState(new Date());
-    const [isFullscreen, setIsFullscreen] = useState(false);
+    const [isPresentationMode, setIsPresentationMode] = useState<boolean>(() => {
+        const hashQuery = window.location.hash.includes("?")
+            ? new URLSearchParams(window.location.hash.split("?")[1])
+            : null;
+        if (hashQuery?.get("presentation") === "true") return true;
+        const searchParams = new URLSearchParams(window.location.search);
+        if (searchParams.get("presentation") === "true") return true;
+        const saved = localStorage.getItem("strategicSummary_presentationMode");
+        return saved === "true";
+    });
 
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -419,8 +428,10 @@ const StrategicSummary: React.FC = () => {
             const now = new Date();
             setCurrentTime(now);
 
-            // Auto reload on day change
+            // Auto reload on day change (meia-noite)
             if (now.getDate() !== initialDay) {
+                // Preserva e garante ativação do Modo Apresentação no reload automático da meia-noite
+                localStorage.setItem("strategicSummary_presentationMode", "true");
                 window.location.reload();
             }
         }, 1000);
@@ -438,21 +449,51 @@ const StrategicSummary: React.FC = () => {
         };
     }, [isSlidePaused]);
 
-    const toggleFullscreen = () => {
-        if (!document.fullscreenElement) {
-            containerRef.current?.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
-        } else {
-            document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
-        }
+    // Alternador do Modo Apresentação interno (independente do fullscreen do navegador)
+    const togglePresentationMode = () => {
+        setIsPresentationMode((prev) => {
+            const next = !prev;
+            localStorage.setItem("strategicSummary_presentationMode", String(next));
+            // Opcionalmente requisita fullscreen da API caso suporte e ativando
+            if (next) {
+                if (!document.fullscreenElement && containerRef.current?.requestFullscreen) {
+                    containerRef.current.requestFullscreen().catch(() => {});
+                }
+            } else {
+                if (document.fullscreenElement && document.exitFullscreen) {
+                    document.exitFullscreen().catch(() => {});
+                }
+            }
+            return next;
+        });
     };
 
+    // Atalho de teclado (ESC) para sair do Modo Apresentação
     useEffect(() => {
-        const onFullscreenChange = () => {
-            setIsFullscreen(!!document.fullscreenElement);
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape" && isPresentationMode) {
+                setIsPresentationMode(false);
+                localStorage.setItem("strategicSummary_presentationMode", "false");
+                if (document.fullscreenElement && document.exitFullscreen) {
+                    document.exitFullscreen().catch(() => {});
+                }
+            }
         };
-        document.addEventListener("fullscreenchange", onFullscreenChange);
-        return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
-    }, []);
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [isPresentationMode]);
+
+    // Oculta barras de rolagem do body quando no Modo Apresentação para enquadramento perfeito
+    useEffect(() => {
+        if (isPresentationMode) {
+            document.body.style.overflow = "hidden";
+        } else {
+            document.body.style.overflow = "";
+        }
+        return () => {
+            document.body.style.overflow = "";
+        };
+    }, [isPresentationMode]);
 
     const { timeStr, dateStr } = getUTC3DateTime(currentTime);
     const sectorFullName = userSector === "CP"
@@ -487,7 +528,7 @@ const StrategicSummary: React.FC = () => {
         <div
             ref={containerRef}
             className={`flex flex-col w-full bg-slate-50 dark:bg-[#0c1322] text-slate-800 dark:text-white rounded-2xl border border-slate-200 dark:border-[#1d2d44] shadow-xl overflow-hidden relative font-sans transition-all duration-300 ${
-                isFullscreen ? "fixed inset-0 z-[9999] rounded-none border-none h-screen" : "min-h-[calc(100vh-8rem)]"
+                isPresentationMode ? "fixed inset-0 z-[9999] rounded-none border-none h-screen w-screen m-0" : "min-h-[calc(100vh-8rem)]"
             }`}
         >
             {/* Background Glows */}
@@ -591,12 +632,16 @@ const StrategicSummary: React.FC = () => {
                     </div>
 
                     <button
-                        onClick={toggleFullscreen}
-                        className="p-2 rounded-lg bg-slate-100 dark:bg-[#132039] hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-[#1d2d44] transition-colors"
-                        title={isFullscreen ? "Sair da Tela Cheia" : "Modo Apresentação (Tela Cheia)"}
+                        onClick={togglePresentationMode}
+                        className={`p-2 rounded-lg border transition-colors ${
+                            isPresentationMode
+                                ? "bg-primary/10 text-primary border-primary/30 dark:bg-[#cda250]/20 dark:text-[#cda250] dark:border-[#cda250]/40 shadow-sm"
+                                : "bg-slate-100 dark:bg-[#132039] hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-[#1d2d44]"
+                        }`}
+                        title={isPresentationMode ? "Sair do Modo Apresentação" : "Modo Apresentação (Tela Cheia)"}
                     >
                         <span className="material-symbols-outlined text-[20px] block">
-                            {isFullscreen ? "fullscreen_exit" : "fullscreen"}
+                            {isPresentationMode ? "fullscreen_exit" : "fullscreen"}
                         </span>
                     </button>
                 </div>
