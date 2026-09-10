@@ -16,6 +16,7 @@ import ResetPassword from './pages/ResetPassword';
 import Shortcuts from './pages/Shortcuts';
 import QuadroBranco from './pages/QuadroBranco';
 import StrategicSummary from './pages/StrategicSummary';
+import Meetings from './pages/Meetings';
 import Layout from './components/Layout';
 
 const App: React.FC = () => {
@@ -32,6 +33,7 @@ const App: React.FC = () => {
           <Route path="members/new" element={<MemberForm />} />
           <Route path="members/edit/:id" element={<MemberForm />} />
           <Route path="tasks/new" element={<TaskForm />} />
+          <Route path="meetings" element={<Meetings />} />
           <Route path="tasks/planner" element={<MonthlyPlanner />} />
           <Route path="tasks/unavailability" element={<AnnualUnavailability />} />
           <Route path="schedule" element={<YearlySchedule />} />

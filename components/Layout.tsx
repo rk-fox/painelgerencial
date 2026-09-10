@@ -292,6 +292,13 @@ const Layout: React.FC = () => {
             onMobileClick={() => setIsMobileMenuOpen(false)}
           />
           <SidebarItem
+            to="/app/meetings"
+            icon="event"
+            label="Reuniões"
+            collapsed={isSidebarCollapsed}
+            onMobileClick={() => setIsMobileMenuOpen(false)}
+          />
+          <SidebarItem
             to="/app/members"
             icon="group"
             label="Membros"
